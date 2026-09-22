@@ -1,0 +1,141 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1080" viewBox="0 0 1000 900" role="img" aria-labelledby="title description">
+  <title id="title">KeyboarDeer — a little wild, a little wired</title>
+  <desc id="description">A warmly shaded, storybook-style stag looks straight at the viewer, its front hooves resting on a mechanical keyboard on a wooden desk. Natural branching antlers frame its expressive face.</desc>
+  <defs>
+    <radialGradient id="backdrop" cx="50%" cy="43%" r="65%">
+      <stop stop-color="#365e53"/><stop offset="1" stop-color="#142e29"/>
+    </radialGradient>
+    <linearGradient id="antler" x1="0" y1="0" x2=".8" y2="1">
+      <stop stop-color="#f1d9ac"/><stop offset=".5" stop-color="#c49c69"/><stop offset="1" stop-color="#856444"/>
+    </linearGradient>
+    <linearGradient id="coat" x1=".1" y1="0" x2=".85" y2="1">
+      <stop stop-color="#d5a06a"/><stop offset=".48" stop-color="#b97b48"/><stop offset="1" stop-color="#71432f"/>
+    </linearGradient>
+    <radialGradient id="face" cx="44%" cy="28%" r="80%">
+      <stop stop-color="#e3b77c"/><stop offset=".55" stop-color="#bb814e"/><stop offset="1" stop-color="#774730"/>
+    </radialGradient>
+    <linearGradient id="cream" x1="0" y1="0" x2=".5" y2="1">
+      <stop stop-color="#fff0d1"/><stop offset="1" stop-color="#cbb18a"/>
+    </linearGradient>
+    <linearGradient id="ear" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#563b32"/><stop offset=".65" stop-color="#ac7860"/><stop offset="1" stop-color="#dab28c"/>
+    </linearGradient>
+    <linearGradient id="hoof" x1="0" y1="0" x2=".8" y2="1">
+      <stop stop-color="#65574a"/><stop offset=".5" stop-color="#3e3933"/><stop offset="1" stop-color="#242926"/>
+    </linearGradient>
+    <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#b58b5d"/><stop offset="1" stop-color="#775238"/>
+    </linearGradient>
+    <linearGradient id="case" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#e3e4d5"/><stop offset="1" stop-color="#89978c"/>
+    </linearGradient>
+    <linearGradient id="key" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#fff3d9"/><stop offset="1" stop-color="#d1c3a6"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#061c17" flood-opacity=".28"/>
+    </filter>
+    <g id="left-antler">
+      <path d="M435 327C421 289 394 262 366 239C337 215 315 184 302 151C288 116 287 83 294 53C296 46 301 45 302 53C299 91 308 127 324 154C335 142 342 124 344 107C345 100 350 100 352 108C354 132 346 155 335 172C347 190 363 207 381 220C393 201 398 181 397 163C397 155 402 154 405 162C412 185 405 213 395 232C421 255 441 281 450 308Z" fill="url(#antler)" stroke="#765b40" stroke-width="3"/>
+      <path d="M340 197C310 189 281 177 257 157C234 138 221 113 220 92C220 85 224 84 227 91C237 120 253 138 280 151C277 135 279 122 284 112C287 106 290 108 289 115C287 132 290 148 295 159L326 171Z" fill="url(#antler)" stroke="#765b40" stroke-width="3"/>
+      <path d="M294 65C293 123 322 184 369 222M232 105C245 139 275 159 309 171" fill="none" stroke="#ffe9be" stroke-width="4" stroke-linecap="round" opacity=".48"/>
+      <path d="M398 261L408 256M409 274L419 269M420 289L430 284M427 303L439 298" fill="none" stroke="#765b40" stroke-width="3" opacity=".45"/>
+    </g>
+    <g id="left-ear">
+      <path d="M415 351C360 356 312 335 282 303C269 289 259 267 261 258C303 256 351 266 384 292C402 306 414 325 415 351Z" fill="url(#coat)" stroke="#603e2d" stroke-width="4"/>
+      <path d="M398 336C346 329 306 309 279 274C325 278 370 295 398 336Z" fill="url(#ear)"/>
+      <path d="M283 277C311 300 345 316 381 326L368 316L385 323" fill="none" stroke="#ebc99a" stroke-width="5" stroke-linecap="round"/>
+    </g>
+    <g id="eye">
+      <path d="M408 392Q432 374 451 396Q432 416 411 404Z" fill="#f5dfb8"/>
+      <path d="M414 395Q432 383 445 396Q433 410 417 403Z" fill="#2b251f"/>
+      <ellipse cx="431" cy="397" rx="8" ry="10" fill="#68482c"/>
+      <ellipse cx="433" cy="397" rx="5" ry="9" fill="#171e1b"/>
+      <circle cx="435" cy="392" r="3" fill="#fff8e7"/>
+      <path d="M410 393Q432 376 449 395" fill="none" stroke="#513626" stroke-width="5" stroke-linecap="round"/>
+      <path d="M409 378Q426 367 443 378" fill="none" stroke="#f3cc94" stroke-width="6" stroke-linecap="round"/>
+    </g>
+    <g id="keycap">
+      <rect width="30" height="25" rx="4" fill="#727b70"/>
+      <rect x="1" y="0" width="28" height="21" rx="4" fill="url(#key)"/>
+      <path d="M8 6H14" stroke="#9d927c" stroke-width="2" stroke-linecap="round"/>
+    </g>
+    <g id="keyrow">
+      <use href="#keycap"/><use href="#keycap" x="35"/><use href="#keycap" x="70"/>
+      <use href="#keycap" x="105"/><use href="#keycap" x="140"/><use href="#keycap" x="175"/>
+      <use href="#keycap" x="210"/><use href="#keycap" x="245"/><use href="#keycap" x="280"/>
+      <use href="#keycap" x="315"/><use href="#keycap" x="350"/><use href="#keycap" x="385"/>
+    </g>
+  </defs>
+
+  <!-- The quiet forest medallion separates the silhouette from any page theme. -->
+  <circle cx="500" cy="442" r="368" fill="url(#backdrop)"/>
+  <circle cx="500" cy="442" r="352" fill="none" stroke="#cfb77d" stroke-opacity=".22"/>
+  <g fill="#d8bd83" opacity=".65">
+    <path d="M183 379L186 386L193 389L186 392L183 399L180 392L173 389L180 386Z"/>
+    <path d="M799 339L802 346L809 349L802 352L799 359L796 352L789 349L796 346Z"/>
+    <circle cx="247" cy="448" r="2.5"/><circle cx="747" cy="422" r="2.5"/>
+    <circle cx="208" cy="325" r="2"/><circle cx="816" cy="470" r="2"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <use href="#left-antler"/>
+    <use href="#left-antler" transform="translate(1000 0) scale(-1 1)"/>
+    <!-- Seated shoulders and the pale throat have softer, fur-shaped contours. -->
+    <path d="M332 722L337 606C338 565 363 540 412 521L441 484H559L588 521C637 540 662 565 663 606L668 722Z" fill="url(#coat)" stroke="#603e2d" stroke-width="4"/>
+    <path d="M450 489C452 522 422 545 422 582L434 576L427 607L441 598L439 632L453 622L461 663L473 650L500 687L527 650L539 663L547 622L561 632L559 598L573 607L566 576L578 582C578 545 548 522 550 489Z" fill="url(#cream)"/>
+    <path d="M358 592Q374 569 395 561M647 594Q632 571 613 564" fill="none" stroke="#ecc28b" stroke-width="5" stroke-linecap="round" opacity=".35"/>
+    <use href="#left-ear"/><use href="#left-ear" transform="translate(1000 0) scale(-1 1)"/>
+
+    <!-- Elongated cheeks and muzzle preserve deer anatomy without photorealism. -->
+    <path d="M500 284C450 277 405 301 397 342C391 369 399 399 408 423L401 433L416 432L412 448L426 445C437 465 448 501 465 520C480 539 520 539 535 520C552 501 563 465 574 445L588 448L584 432L599 433L592 423C601 399 609 369 603 342C595 301 550 277 500 284Z" fill="url(#face)" stroke="#603e2d" stroke-width="4"/>
+    <path d="M480 305L491 295L497 310L507 297L514 315L528 305" fill="none" stroke="#f0c990" stroke-width="4" stroke-linecap="round" opacity=".65"/>
+    <path d="M478 336C485 364 480 391 469 421L458 447C479 437 487 428 500 427C513 428 521 437 542 447L531 421C520 391 515 364 522 336C510 347 490 347 478 336Z" fill="#dca66c" opacity=".65"/>
+    <use href="#eye"/><use href="#eye" transform="translate(1000 0) scale(-1 1)"/>
+    <path d="M423 417L433 429M432 415L441 431M577 417L567 429M568 415L559 431" stroke="#e3b67b" stroke-width="3" stroke-linecap="round"/>
+    <path d="M469 451C457 458 447 477 453 497C458 520 478 532 500 532C522 532 542 520 547 497C553 477 543 458 531 451C519 461 481 461 469 451Z" fill="url(#cream)"/>
+    <path d="M467 456C479 445 521 445 533 456C539 463 527 479 515 484C507 488 493 488 485 484C473 479 461 463 467 456Z" fill="url(#hoof)" stroke="#332d26" stroke-width="3"/>
+    <path d="M477 457Q496 451 513 455" fill="none" stroke="#b7a18b" stroke-width="4" stroke-linecap="round" opacity=".65"/>
+    <path d="M472 468L480 471M528 468L520 471" fill="none" stroke="#201f1c" stroke-width="5" stroke-linecap="round"/>
+    <path d="M500 487V501M479 502Q500 514 521 502" fill="none" stroke="#6e503c" stroke-width="3" stroke-linecap="round"/>
+    <g fill="#93765a" opacity=".65">
+      <circle cx="467" cy="488" r="1.8"/><circle cx="474" cy="495" r="1.5"/>
+      <circle cx="533" cy="488" r="1.8"/><circle cx="526" cy="495" r="1.5"/>
+    </g>
+
+    <!-- The crop ends at the tabletop; no desk legs or lower body. -->
+    <path d="M163 690H837L909 768H91Z" fill="url(#wood)" stroke="#563f2d" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M91 768H909V791Q909 801 898 801H102Q91 801 91 791Z" fill="#684832"/>
+    <path d="M103 773H897" stroke="#d6aa70" stroke-width="3" opacity=".55"/>
+    <g fill="none" stroke="#edc692" stroke-width="2" opacity=".22">
+      <path d="M172 708H295M714 705H825M135 746Q199 740 258 746M737 749Q806 739 874 751"/>
+      <path d="M163 727Q199 733 241 726M756 720H836"/>
+    </g>
+    <ellipse cx="500" cy="749" rx="247" ry="20" fill="#392f25" opacity=".28"/>
+    <!-- A full keybed, gently foreshortened, anchors the typing pose. -->
+    <path d="M285 660H715L750 741V757Q750 765 740 765H260Q250 765 250 757V741Z" fill="#72887c" stroke="#304a40" stroke-width="4"/>
+    <path d="M285 660H715L750 741Q752 746 740 746H260Q248 746 250 741Z" fill="url(#case)" stroke="#42594d" stroke-width="3"/>
+    <g transform="translate(291 670) scale(1 .64)">
+      <use href="#keyrow"/>
+      <use href="#keyrow" x="-7" y="31"/>
+      <use href="#keyrow" x="-14" y="62"/>
+      <use href="#keycap" x="-21" y="93"/><use href="#keycap" x="14" y="93"/>
+      <rect x="50" y="93" width="231" height="25" rx="4" fill="#727b70"/>
+      <rect x="51" y="93" width="229" height="21" rx="4" fill="url(#key)"/>
+      <use href="#keycap" x="287" y="93"/><use href="#keycap" x="322" y="93"/>
+      <use href="#keycap" x="357" y="93"/><use href="#keycap" x="392" y="93"/>
+      <rect x="1" y="0" width="28" height="21" rx="4" fill="#bd744e"/>
+      <rect x="385" y="31" width="35" height="52" rx="4" fill="#557e6e"/>
+    </g>
+    <path d="M679 755H698" stroke="#d2bc7e" stroke-width="3" stroke-linecap="round"/>
+
+    <!-- Forelegs are placed over the keyboard, ending in recognizably split hooves. -->
+    <path d="M359 564C340 588 342 622 333 649L323 674C321 691 335 702 356 704C379 706 393 696 393 679L396 643L410 590" fill="url(#coat)" stroke="#603e2d" stroke-width="4" stroke-linecap="round"/>
+    <path d="M641 564C660 588 658 622 667 649L677 674C679 691 665 702 644 704C621 706 607 696 607 679L604 643L590 590" fill="url(#coat)" stroke="#603e2d" stroke-width="4" stroke-linecap="round"/>
+    <path d="M353 590Q359 625 344 656M647 590Q641 625 656 656" fill="none" stroke="#e4b780" stroke-width="6" stroke-linecap="round" opacity=".55"/>
+    <path d="M328 667L338 663L346 668L355 664L365 670L375 666L391 670L392 687Q389 706 359 708Q325 706 322 689Z" fill="url(#hoof)" stroke="#3e342a" stroke-width="3"/>
+    <path d="M672 667L662 663L654 668L645 664L635 670L625 666L609 670L608 687Q611 706 641 708Q675 706 678 689Z" fill="url(#hoof)" stroke="#3e342a" stroke-width="3"/>
+    <path d="M356 682L353 704M644 682L647 704" stroke="#1c2521" stroke-width="4" stroke-linecap="round"/>
+    <path d="M332 679L346 682M619 680L633 683" stroke="#a0927c" stroke-width="3" stroke-linecap="round" opacity=".5"/>
+  </g>
+</svg>
