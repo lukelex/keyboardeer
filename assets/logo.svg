@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1080" viewBox="0 0 1000 900" role="img" aria-labelledby="title description">
   <title id="title">KeyboarDeer — a little wild, a little wired</title>
-  <desc id="description">A warmly shaded, storybook-style stag looks straight at the viewer, its front hooves resting on a mechanical keyboard on a wooden desk. Natural branching antlers frame its expressive face.</desc>
+  <desc id="description">A warmly shaded, storybook-style stag gives the viewer a mischievous smirk, resting its tilted head in one hoof with its elbow on a wooden desk. Its other hoof presses a key on a mechanical keyboard shifted to the right.</desc>
   <defs>
     <radialGradient id="backdrop" cx="50%" cy="43%" r="65%">
       <stop stop-color="#365e53"/><stop offset="1" stop-color="#142e29"/>
@@ -46,14 +46,18 @@
       <path d="M398 336C346 329 306 309 279 274C325 278 370 295 398 336Z" fill="url(#ear)"/>
       <path d="M283 277C311 300 345 316 381 326L368 316L385 323" fill="none" stroke="#ebc99a" stroke-width="5" stroke-linecap="round"/>
     </g>
+    <clipPath id="eye-opening">
+      <path d="M409 390Q429 390 450 398Q432 415 412 403Z"/>
+    </clipPath>
     <g id="eye">
-      <path d="M408 392Q432 374 451 396Q432 416 411 404Z" fill="#f5dfb8"/>
-      <path d="M414 395Q432 383 445 396Q433 410 417 403Z" fill="#2b251f"/>
-      <ellipse cx="431" cy="397" rx="8" ry="10" fill="#68482c"/>
-      <ellipse cx="433" cy="397" rx="5" ry="9" fill="#171e1b"/>
-      <circle cx="435" cy="392" r="3" fill="#fff8e7"/>
-      <path d="M410 393Q432 376 449 395" fill="none" stroke="#513626" stroke-width="5" stroke-linecap="round"/>
-      <path d="M409 378Q426 367 443 378" fill="none" stroke="#f3cc94" stroke-width="6" stroke-linecap="round"/>
+      <path d="M409 390Q429 390 450 398Q432 415 412 403Z" fill="#f5dfb8"/>
+      <g clip-path="url(#eye-opening)">
+        <ellipse cx="432" cy="398" rx="11" ry="14" fill="#2b251f"/>
+        <ellipse cx="433" cy="398" rx="8" ry="12" fill="#68482c"/>
+        <ellipse cx="434" cy="398" rx="5" ry="11" fill="#171e1b"/>
+        <circle cx="436" cy="396" r="2.5" fill="#fff8e7"/>
+      </g>
+      <path d="M409 390Q429 390 450 398" fill="none" stroke="#513626" stroke-width="5" stroke-linecap="round"/>
     </g>
     <g id="keycap">
       <rect width="30" height="25" rx="4" fill="#727b70"/>
@@ -79,28 +83,35 @@
   </g>
 
   <g filter="url(#shadow)">
-    <use href="#left-antler"/>
-    <use href="#left-antler" transform="translate(1000 0) scale(-1 1)"/>
     <!-- Seated shoulders and the pale throat have softer, fur-shaped contours. -->
     <path d="M332 722L337 606C338 565 363 540 412 521L441 484H559L588 521C637 540 662 565 663 606L668 722Z" fill="url(#coat)" stroke="#603e2d" stroke-width="4"/>
     <path d="M450 489C452 522 422 545 422 582L434 576L427 607L441 598L439 632L453 622L461 663L473 650L500 687L527 650L539 663L547 622L561 632L559 598L573 607L566 576L578 582C578 545 548 522 550 489Z" fill="url(#cream)"/>
     <path d="M358 592Q374 569 395 561M647 594Q632 571 613 564" fill="none" stroke="#ecc28b" stroke-width="5" stroke-linecap="round" opacity=".35"/>
+    <!-- The whole head leans into the supporting hoof. -->
+    <g transform="translate(-12 8) rotate(-9 500 520)">
+    <use href="#left-antler"/>
+    <use href="#left-antler" transform="translate(1000 0) scale(-1 1)"/>
     <use href="#left-ear"/><use href="#left-ear" transform="translate(1000 0) scale(-1 1)"/>
 
     <!-- Elongated cheeks and muzzle preserve deer anatomy without photorealism. -->
     <path d="M500 284C450 277 405 301 397 342C391 369 399 399 408 423L401 433L416 432L412 448L426 445C437 465 448 501 465 520C480 539 520 539 535 520C552 501 563 465 574 445L588 448L584 432L599 433L592 423C601 399 609 369 603 342C595 301 550 277 500 284Z" fill="url(#face)" stroke="#603e2d" stroke-width="4"/>
     <path d="M480 305L491 295L497 310L507 297L514 315L528 305" fill="none" stroke="#f0c990" stroke-width="4" stroke-linecap="round" opacity=".65"/>
     <path d="M478 336C485 364 480 391 469 421L458 447C479 437 487 428 500 427C513 428 521 437 542 447L531 421C520 391 515 364 522 336C510 347 490 347 478 336Z" fill="#dca66c" opacity=".65"/>
-    <use href="#eye"/><use href="#eye" transform="translate(1000 0) scale(-1 1)"/>
+    <use href="#eye"/><use href="#eye" transform="translate(1000 79.4) scale(-1 .8)"/>
+    <path d="M409 365Q424 343 447 371M554 386Q574 383 592 377" fill="none" stroke="#f3cc94" stroke-width="6" stroke-linecap="round"/>
     <path d="M423 417L433 429M432 415L441 431M577 417L567 429M568 415L559 431" stroke="#e3b67b" stroke-width="3" stroke-linecap="round"/>
     <path d="M469 451C457 458 447 477 453 497C458 520 478 532 500 532C522 532 542 520 547 497C553 477 543 458 531 451C519 461 481 461 469 451Z" fill="url(#cream)"/>
     <path d="M467 456C479 445 521 445 533 456C539 463 527 479 515 484C507 488 493 488 485 484C473 479 461 463 467 456Z" fill="url(#hoof)" stroke="#332d26" stroke-width="3"/>
     <path d="M477 457Q496 451 513 455" fill="none" stroke="#b7a18b" stroke-width="4" stroke-linecap="round" opacity=".65"/>
     <path d="M472 468L480 471M528 468L520 471" fill="none" stroke="#201f1c" stroke-width="5" stroke-linecap="round"/>
-    <path d="M500 487V501M479 502Q500 514 521 502" fill="none" stroke="#6e503c" stroke-width="3" stroke-linecap="round"/>
+    <path d="M500 487V504" fill="none" stroke="#6e503c" stroke-width="3" stroke-linecap="round"/>
+    <path d="M472 505C491 503 514 515 537 487C535 505 520 516 502 513C490 511 482 508 472 508Z" fill="#51392e" stroke="#6e503c" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M502 506C514 506 525 500 533 492C529 503 518 509 507 509Z" fill="#fff0d1"/>
+    <path d="M530 488Q537 482 541 489" fill="none" stroke="#93765a" stroke-width="2.5" stroke-linecap="round"/>
     <g fill="#93765a" opacity=".65">
       <circle cx="467" cy="488" r="1.8"/><circle cx="474" cy="495" r="1.5"/>
       <circle cx="533" cy="488" r="1.8"/><circle cx="526" cy="495" r="1.5"/>
+    </g>
     </g>
 
     <!-- The crop ends at the tabletop; no desk legs or lower body. -->
@@ -111,8 +122,10 @@
       <path d="M172 708H295M714 705H825M135 746Q199 740 258 746M737 749Q806 739 874 751"/>
       <path d="M163 727Q199 733 241 726M756 720H836"/>
     </g>
+    <ellipse cx="362" cy="727" rx="55" ry="13" fill="#392f25" opacity=".22"/>
+    <g transform="translate(210 137) scale(.82)">
     <ellipse cx="500" cy="749" rx="247" ry="20" fill="#392f25" opacity=".28"/>
-    <!-- A full keybed, gently foreshortened, anchors the typing pose. -->
+    <!-- The keyboard sits off-center, leaving room for the propped elbow. -->
     <path d="M285 660H715L750 741V757Q750 765 740 765H260Q250 765 250 757V741Z" fill="#72887c" stroke="#304a40" stroke-width="4"/>
     <path d="M285 660H715L750 741Q752 746 740 746H260Q248 746 250 741Z" fill="url(#case)" stroke="#42594d" stroke-width="3"/>
     <g transform="translate(291 670) scale(1 .64)">
@@ -128,14 +141,24 @@
       <rect x="385" y="31" width="35" height="52" rx="4" fill="#557e6e"/>
     </g>
     <path d="M679 755H698" stroke="#d2bc7e" stroke-width="3" stroke-linecap="round"/>
+    </g>
 
-    <!-- Forelegs are placed over the keyboard, ending in recognizably split hooves. -->
-    <path d="M359 564C340 588 342 622 333 649L323 674C321 691 335 702 356 704C379 706 393 696 393 679L396 643L410 590" fill="url(#coat)" stroke="#603e2d" stroke-width="4" stroke-linecap="round"/>
-    <path d="M641 564C660 588 658 622 667 649L677 674C679 691 665 702 644 704C621 706 607 696 607 679L604 643L590 590" fill="url(#coat)" stroke="#603e2d" stroke-width="4" stroke-linecap="round"/>
-    <path d="M353 590Q359 625 344 656M647 590Q641 625 656 656" fill="none" stroke="#e4b780" stroke-width="6" stroke-linecap="round" opacity=".55"/>
-    <path d="M328 667L338 663L346 668L355 664L365 670L375 666L391 670L392 687Q389 706 359 708Q325 706 322 689Z" fill="url(#hoof)" stroke="#3e342a" stroke-width="3"/>
-    <path d="M672 667L662 663L654 668L645 664L635 670L625 666L609 670L608 687Q611 706 641 708Q675 706 678 689Z" fill="url(#hoof)" stroke="#3e342a" stroke-width="3"/>
-    <path d="M356 682L353 704M644 682L647 704" stroke="#1c2521" stroke-width="4" stroke-linecap="round"/>
-    <path d="M332 679L346 682M619 680L633 683" stroke="#a0927c" stroke-width="3" stroke-linecap="round" opacity=".5"/>
+    <!-- Bent foreleg: elbow planted on the desk, hoof cupping the cheek. -->
+    <path d="M361 570C337 590 326 626 325 660L327 700C328 722 341 733 356 731C376 729 385 712 383 690L384 638C385 619 394 602 406 590" fill="url(#coat)" stroke="#603e2d" stroke-width="4" stroke-linecap="round"/>
+    <path d="M410 532C399 565 386 601 373 636C362 663 347 683 336 694C326 705 329 721 341 729C359 741 383 728 394 698L445 553" fill="url(#coat)" stroke="#603e2d" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M353 716C365 703 378 651 391 612L417 550" fill="none" stroke="#e4b780" stroke-width="7" stroke-linecap="round" opacity=".55"/>
+    <path d="M409 548C401 534 400 513 407 499C411 489 418 488 423 499C431 515 445 532 462 536C471 539 478 538 483 535C489 533 490 540 484 545C474 554 457 559 440 562L430 556L421 557Z" fill="url(#hoof)" stroke="#3e342a" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M414 505Q417 523 428 535" fill="none" stroke="#a0927c" stroke-width="4" stroke-linecap="round" opacity=".55"/>
+    <path d="M449 534L440 550" stroke="#1c2521" stroke-width="4" stroke-linecap="round"/>
+
+    <!-- A recessed accent key under one extended half of the typing hoof. -->
+    <rect x="672" y="706" width="28" height="16" rx="3" fill="#465d50"/>
+    <rect x="675" y="712" width="22" height="8" rx="2.5" fill="#d5a365"/>
+    <path d="M637 563C651 585 652 618 665 641L684 668C692 680 687 695 672 699C654 704 641 697 635 683L609 637L593 591" fill="url(#coat)" stroke="#603e2d" stroke-width="4" stroke-linecap="round"/>
+    <path d="M637 590Q640 627 662 652" fill="none" stroke="#e4b780" stroke-width="6" stroke-linecap="round" opacity=".55"/>
+    <path d="M640 676L650 672L660 676L669 672L680 677C690 685 695 697 695 710Q692 718 682 716L669 701Q660 710 649 701Q640 696 640 676Z" fill="url(#hoof)" stroke="#3e342a" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M662 686L670 702" stroke="#1c2521" stroke-width="4" stroke-linecap="round"/>
+    <path d="M648 684L658 687" stroke="#a0927c" stroke-width="3" stroke-linecap="round" opacity=".5"/>
+    <path d="M707 700L714 695M710 710H718" stroke="#e7c789" stroke-width="3" stroke-linecap="round"/>
   </g>
 </svg>

@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 256 256" role="img" aria-labelledby="title description">
+  <title id="title">KeyboarDeer app icon</title>
+  <desc id="description">A chestnut deer with branching antlers, a raised eyebrow, and a mischievous crooked grin above a small cream keyboard on a rounded forest-green background.</desc>
+  <defs>
+    <linearGradient id="forest" x2="0" y2="1">
+      <stop stop-color="#30574a"/><stop offset="1" stop-color="#142e29"/>
+    </linearGradient>
+    <linearGradient id="coat" x2=".8" y2="1">
+      <stop stop-color="#dfb17a"/><stop offset="1" stop-color="#b97b48"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="248" height="248" rx="55" fill="url(#forest)"/>
+  <!-- Few broad branches give the antlers a clean silhouette at small sizes. -->
+  <g fill="none" stroke="#d7b581" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M105 99C100 77 76 65 71 46L67 26M78 59L51 49L43 36M71 43L85 30"/>
+    <path d="M151 99C156 77 180 65 185 46L189 26M178 59L205 49L213 36M185 43L171 30"/>
+  </g>
+  <!-- The ears are wide enough to distinguish the deer from a fox or dog. -->
+  <path d="M94 114C69 116 51 102 47 83C70 81 89 91 99 104ZM162 114C187 116 205 102 209 83C186 81 167 91 157 104Z" fill="#c68e58"/>
+  <path d="M62 92Q73 105 91 106Q80 95 62 92ZM194 92Q183 105 165 106Q176 95 194 92Z" fill="#80513b"/>
+  <path d="M128 83C95 83 78 101 81 130L90 163C96 186 109 202 128 202S160 186 166 163L175 130C178 101 161 83 128 83Z" fill="url(#coat)" stroke="#142e29" stroke-width="5"/>
+  <path d="M119 151C109 155 103 168 108 181Q113 196 128 196Q145 196 151 180C155 169 147 157 138 151Z" fill="#fff0d1"/>
+  <!-- Asymmetric brows and half-lidded eyes retain the full logo's attitude. -->
+  <g fill="none" stroke="#ffe1ae" stroke-width="5" stroke-linecap="round">
+    <path d="M93 116Q101 105 112 115M145 119L162 114"/>
+  </g>
+  <path d="M91 131L114 136Q104 148 93 140ZM142 136L164 130Q162 145 150 143Z" fill="#fff0d1"/>
+  <path d="M101 134L108 135L107 143Q101 145 101 139ZM148 135L155 133L155 141Q149 145 148 139Z" fill="#25352b"/>
+  <g fill="none" stroke="#51392e" stroke-width="4" stroke-linecap="round">
+    <path d="M91 131L114 136M142 136L164 130"/>
+  </g>
+  <path d="M117 157Q128 152 139 157Q143 164 128 169Q113 164 117 157Z" fill="#34392f"/>
+  <path d="M128 169V179" fill="none" stroke="#684832" stroke-width="2.5"/>
+  <path d="M114 180C124 177 137 184 146 171Q144 188 130 186Z" fill="#51392e"/>
+  <path d="M129 181Q137 181 143 176Q138 184 131 183Z" fill="#fff0d1"/>
+  <!-- A keybed, not a full desk scene: large shapes survive downsampling. -->
+  <path d="M65 207H191L201 231Q202 236 196 236H60Q54 236 55 231Z" fill="#142e29" stroke="#142e29" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M65 207H191L201 231Q202 234 196 234H60Q54 234 55 231Z" fill="#afbeb0"/>
+  <g fill="#fff0d1">
+    <rect x="70" y="214" width="16" height="7" rx="2"/>
+    <rect x="95" y="214" width="16" height="7" rx="2"/>
+    <rect x="120" y="214" width="16" height="7" rx="2"/>
+    <rect x="145" y="214" width="16" height="7" rx="2"/>
+    <rect x="170" y="214" width="16" height="7" rx="2"/>
+    <rect x="94" y="225" width="68" height="5" rx="2"/>
+  </g>
+</svg>
