@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/icon.png" alt="KeyboarDeer: a smirking deer above a keyboard on forest green." width="256" />
+<img src="assets/logo.png" alt="A smirking storybook stag rests its head in one hoof while pressing a key with the other, at a wooden desk." width="640" />
 
 # KeyboarDeer
 
@@ -56,8 +56,6 @@ the keyboards running.**
 
 ## Meet the deer
 
-<img src="assets/logo.png" alt="A smirking storybook stag rests its head in one hoof while pressing a key with the other, at a wooden desk." width="640" />
-
 One raised eyebrow. A proper set of antlers. One very deliberate keypress.
 
 The KeyboarDeer mascot mixes natural deer features with a warm, illustrated
@@ -81,6 +79,8 @@ The [editable SVG](assets/logo.svg) is the source artwork. The
 See [the artwork notes](assets/README.md) for export instructions.
 
 ### Small icon, same attitude
+
+<img src="assets/icon.png" alt="Simplified KeyboarDeer app icon: a smirking deer above a keyboard on forest green." width="128" />
 
 The [app icon](assets/icon.svg) keeps the antlers, crooked grin, and keyboard
 in a compact silhouette for smaller placements.
