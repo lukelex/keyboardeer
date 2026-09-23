@@ -44,6 +44,8 @@
   let profileBusy = false;
   let previewBusy = false;
   let profilePreview: ProfilePreview | null = null;
+  let previewTimer: ReturnType<typeof setTimeout> | undefined;
+  let previewGeneration = 0;
   let operation: Operation | null = null;
   let loading = false;
   let identifyBusy = false;
@@ -200,7 +202,7 @@
       profiles = [...profiles, activeProfile];
       selectedSourceKey = activeProfile.geometry.source_keys[0] ?? "";
       view = "editor";
-      void previewDraft(activeProfile);
+      schedulePreview(activeProfile);
     } catch (error) {
       feedback = explain(error);
     } finally {
@@ -228,21 +230,31 @@
       profiles = profiles.map((profile) =>
         profile.id === saved.id ? saved : profile,
       );
-      void previewDraft(saved);
+      schedulePreview(saved);
     } catch (error) {
       feedback = explain(error);
     } finally {
       profileBusy = false;
     }
   }
-  async function previewDraft(draft: Profile) {
+  function schedulePreview(draft: Profile) {
+    if (previewTimer) clearTimeout(previewTimer);
+    const generation = ++previewGeneration;
+    previewBusy = true;
+    previewTimer = setTimeout(() => {
+      previewTimer = undefined;
+      void previewDraft(draft, generation);
+    }, 250);
+  }
+  async function previewDraft(draft: Profile, generation: number) {
     if (
       !capabilities.find(
         (capability) => capability.name === "candidate_validation",
       )?.available
-    )
+    ) {
+      if (generation === previewGeneration) previewBusy = false;
       return;
-    previewBusy = true;
+    }
     try {
       const result = await PreviewProfile(draft.id);
       if (
@@ -259,7 +271,7 @@
         feedback = explain(error);
       }
     } finally {
-      previewBusy = false;
+      if (generation === previewGeneration) previewBusy = false;
     }
   }
   async function pollOperation() {
@@ -324,6 +336,7 @@
   });
   onDestroy(() => {
     clearPolling();
+    if (previewTimer) clearTimeout(previewTimer);
     stopWorkspaceEvents?.();
   });
 </script>
