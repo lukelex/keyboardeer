@@ -288,6 +288,35 @@ func (a *App) ApplyProfile(id string) (ProfileApplyResult, error) {
 	return ProfileApplyResult{Profile: linked, Operation: operation}, nil
 }
 
+// SetConfigurationEnabled starts or stops a manager-owned binding. External
+// configurations remain read-only in KeyboarDeer. A fresh snapshot supplies
+// the expected revision, so the manager rejects any competing lifecycle edit.
+func (a *App) SetConfigurationEnabled(configurationID string, enabled bool) (managerapi.Operation, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := a.canUse(ctx, "managed_configurations"); err != nil {
+		return managerapi.Operation{}, err
+	}
+	snapshot, err := a.manager.SnapshotGet(ctx)
+	if err != nil {
+		return managerapi.Operation{}, err
+	}
+	for _, configuration := range snapshot.Configurations {
+		if configuration.ID != configurationID {
+			continue
+		}
+		if configuration.Ownership != "managed" {
+			return managerapi.Operation{}, fmt.Errorf("external configurations are read-only in KeyboarDeer")
+		}
+		return a.manager.ConfigurationSetEnabled(ctx, managerapi.ConfigurationSetEnabledParams{
+			ConfigurationID:  configuration.ID,
+			ExpectedRevision: configuration.DesiredRevision,
+			Enabled:          enabled,
+		})
+	}
+	return managerapi.Operation{}, fmt.Errorf("manager configuration %q does not exist", configurationID)
+}
+
 func (a *App) RecoverCorruptProfileStore() (string, error) {
 	store, err := a.profileStore()
 	if err != nil {

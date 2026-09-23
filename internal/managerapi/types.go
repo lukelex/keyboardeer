@@ -233,3 +233,16 @@ type ConfigurationWriteParams struct {
 type ConfigurationWriteResult struct {
 	Operation Operation `json:"operation"`
 }
+
+// ConfigurationSetEnabledParams is a lifecycle operation for an existing
+// manager-owned configuration. ExpectedRevision prevents changing a newer
+// runtime state observed by another client.
+type ConfigurationSetEnabledParams struct {
+	ConfigurationID  string `json:"configuration_id"`
+	ExpectedRevision uint64 `json:"expected_revision"`
+	Enabled          bool   `json:"enabled"`
+}
+
+type ConfigurationSetEnabledResult struct {
+	Operation Operation `json:"operation"`
+}

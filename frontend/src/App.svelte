@@ -11,6 +11,7 @@
     PreviewProfile,
     Profiles,
     SaveProfile,
+    SetConfigurationEnabled,
     Workspace,
     type AppInfo,
     type Capability,
@@ -51,6 +52,8 @@
   let applyBusy = false;
   let applyConfirmed = false;
   let applyOperation: Operation | null = null;
+  let lifecycleBusyID = "";
+  let pendingLifecycleID = "";
   let operation: Operation | null = null;
   let loading = false;
   let identifyBusy = false;
@@ -77,6 +80,11 @@
     workspace.status.state === "ready" && deviceIdentification.available;
   $: devices = workspace.snapshot?.devices ?? [];
   $: configurations = workspace.snapshot?.configurations ?? [];
+  $: pendingLifecycle = pendingLifecycleID
+    ? configurations.find(
+        (configuration) => configuration.id === pendingLifecycleID,
+      )
+    : undefined;
   $: managedConfigurations =
     capabilities.find((item) => item.name === "managed_configurations") ??
     unavailableCapability("managed_configurations");
@@ -120,10 +128,34 @@
       "cancelled",
     ].includes(state);
   }
-  function configurationForDevice(device: Device): Configuration | undefined {
-    return configurations.find(
+  function configurationsForDevice(device: Device): Configuration[] {
+    return configurations.filter(
       (configuration) => configuration.device_id === device.id,
     );
+  }
+  function requestLifecycleChange(configuration: Configuration) {
+    if (configuration.ownership !== "managed" || lifecycleBusyID) return;
+    feedback = "";
+    pendingLifecycleID = configuration.id;
+  }
+  async function confirmLifecycleChange() {
+    if (!pendingLifecycle || lifecycleBusyID) return;
+    lifecycleBusyID = pendingLifecycle.id;
+    feedback = "";
+    const enabled = !pendingLifecycle.enabled;
+    try {
+      const result = await SetConfigurationEnabled(
+        pendingLifecycle.id,
+        enabled,
+      );
+      pendingLifecycleID = "";
+      await refresh();
+      feedback = `Manager ${enabled ? "enabled" : "disabled"} bindings: ${result.reason}`;
+    } catch (error) {
+      feedback = explain(error);
+    } finally {
+      lifecycleBusyID = "";
+    }
   }
   function profileForDevice(device: Device): Profile | undefined {
     return profiles.find((profile) => profile.device_id === device.id);
@@ -504,6 +536,42 @@
               : "Waiting for manager capability"}</span
           >
         </div>
+        {#if pendingLifecycle}
+          <section class="lifecycle-confirmation" aria-live="polite">
+            <div>
+              <p class="eyebrow">MANAGED BINDINGS</p>
+              <h2>
+                {pendingLifecycle.enabled
+                  ? "Disable this keyboard’s bindings?"
+                  : "Enable this keyboard’s bindings?"}
+              </h2>
+              <p>
+                {pendingLifecycle.enabled
+                  ? "The manager will stop this configuration’s KMonad process. The saved draft and managed configuration remain available to enable later."
+                  : "The manager will resume supervising this saved configuration when the keyboard is available."}
+              </p>
+            </div>
+            <div class="lifecycle-actions">
+              <button
+                class="button secondary"
+                type="button"
+                disabled={!!lifecycleBusyID}
+                on:click={() => (pendingLifecycleID = "")}>Cancel</button
+              >
+              <button
+                class="button primary"
+                type="button"
+                disabled={!!lifecycleBusyID}
+                on:click={confirmLifecycleChange}
+                >{lifecycleBusyID
+                  ? "Changing…"
+                  : pendingLifecycle.enabled
+                    ? "Disable bindings"
+                    : "Enable bindings"}</button
+              >
+            </div>
+          </section>
+        {/if}
         {#if canShowDevices && devices.length === 0}
           <section class="empty-state">
             <span aria-hidden="true">⌨</span>
@@ -516,7 +584,7 @@
         {:else if canShowDevices}
           <div class="device-list">
             {#each devices as device (device.id)}
-              {@const configuration = configurationForDevice(device)}
+              {@const deviceConfigurations = configurationsForDevice(device)}
               <article class:offline={!isConnected(device)} class="device-card">
                 <div class="device-glyph" aria-hidden="true">⌨</div>
                 <div class="device-copy">
@@ -537,14 +605,15 @@
                         ", ",
                       )}</small
                     >{/if}
-                  {#if configuration}
+                  {#each deviceConfigurations as configuration (configuration.id)}
                     <small
                       >{configuration.ownership} configuration ·
+                      {configuration.enabled ? "enabled" : "disabled"} ·
                       {humanize(configuration.runtime.phase)} · desired
                       {configuration.desired_revision} / active
                       {configuration.active_revision}</small
                     >
-                  {/if}
+                  {/each}
                 </div>
                 <div class="device-actions">
                   <button
@@ -570,6 +639,25 @@
                       ? "Edit draft"
                       : "Set up"}</button
                   >
+                  {#each deviceConfigurations.filter((item) => item.ownership === "managed") as configuration (configuration.id)}
+                    <button
+                      class="button text"
+                      type="button"
+                      on:click={() => requestLifecycleChange(configuration)}
+                      disabled={!!lifecycleBusyID ||
+                        !managedConfigurations.available}
+                      title={!managedConfigurations.available
+                        ? managedConfigurations.reason
+                        : configuration.enabled
+                          ? "Stop this keyboard’s managed bindings"
+                          : "Resume this keyboard’s managed bindings"}
+                      >{lifecycleBusyID === configuration.id
+                        ? "Changing…"
+                        : configuration.enabled
+                          ? "Disable bindings"
+                          : "Enable bindings"}</button
+                    >
+                  {/each}
                 </div>
               </article>
             {/each}
@@ -604,6 +692,9 @@
           KeyboarDeer does not inspect input devices or supervise mappings. The
           manager owns those responsibilities.
         </p>
+        {#if feedback}<p class="inline-feedback" role="status">
+            {feedback}
+          </p>{/if}
       </section>
     {:else if view === "identify" && selectedDevice}
       <section aria-labelledby="identify-title" class="identify-page">

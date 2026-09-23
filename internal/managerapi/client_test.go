@@ -167,6 +167,33 @@ func TestConfigurationWritesUseExplicitCreateAndRevisionCheckedUpdate(t *testing
 	}
 }
 
+func TestConfigurationSetEnabledUsesTheObservedRevision(t *testing.T) {
+	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
+		switch request.Method {
+		case "session.hello":
+			writeResult(t, rw, request.ID, `{"selected_version":1,"server_id":"server","manager_version":"test"}`)
+		case "configuration.set_enabled":
+			var params ConfigurationSetEnabledParams
+			if err := json.Unmarshal(request.Params, &params); err != nil {
+				t.Error(err)
+				return
+			}
+			if params.ConfigurationID != "cfg-1" || params.ExpectedRevision != 7 || params.Enabled {
+				t.Errorf("unexpected lifecycle parameters: %#v", params)
+			}
+			writeResult(t, rw, request.ID, `{"operation":{"id":"op-1","kind":"lifecycle","state":"succeeded","resource":{"kind":"configuration","id":"cfg-1"},"reason_code":"operation_succeeded","reason":"configuration disabled and its KMonad process stopped","configuration_revision":8}}`)
+		default:
+			t.Errorf("unexpected method %s", request.Method)
+		}
+	})
+	client := New(Options{Endpoint: socket})
+	defer client.Close()
+	operation, err := client.ConfigurationSetEnabled(context.Background(), ConfigurationSetEnabledParams{ConfigurationID: "cfg-1", ExpectedRevision: 7, Enabled: false})
+	if err != nil || operation.State != "succeeded" || operation.ConfigurationRevision != 8 {
+		t.Fatalf("set enabled = %#v, %v", operation, err)
+	}
+}
+
 func TestWorkspaceDoesNotFetchSnapshotWhenManagerGetIsUnsupported(t *testing.T) {
 	var methods []string
 	var methodsMu sync.Mutex

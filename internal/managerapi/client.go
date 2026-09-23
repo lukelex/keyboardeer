@@ -438,3 +438,8 @@ func (c *APIClient) ConfigurationUpdate(ctx context.Context, params Configuratio
 	err := c.call(ctx, "configuration.update", params, &result)
 	return result.Operation, err
 }
+func (c *APIClient) ConfigurationSetEnabled(ctx context.Context, params ConfigurationSetEnabledParams) (Operation, error) {
+	var result ConfigurationSetEnabledResult
+	err := c.call(ctx, "configuration.set_enabled", params, &result)
+	return result.Operation, err
+}

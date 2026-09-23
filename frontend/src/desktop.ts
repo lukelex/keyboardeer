@@ -177,6 +177,10 @@ type AppBindings = {
   CompileProfile?: (id: string) => Promise<CompileResult>;
   PreviewProfile?: (id: string) => Promise<ProfilePreview>;
   ApplyProfile?: (id: string) => Promise<ProfileApplyResult>;
+  SetConfigurationEnabled?: (
+    configurationID: string,
+    enabled: boolean,
+  ) => Promise<Operation>;
   RecoverCorruptProfileStore?: () => Promise<string>;
   IdentifyStart?: (deviceID: string, timeoutMS: number) => Promise<Operation>;
   IdentifyCancel?: (operationID: string) => Promise<Operation>;
@@ -240,6 +244,13 @@ export const PreviewProfile = (id: string) =>
   binding<(id: string) => Promise<ProfilePreview>>("PreviewProfile")(id);
 export const ApplyProfile = (id: string) =>
   binding<(id: string) => Promise<ProfileApplyResult>>("ApplyProfile")(id);
+export const SetConfigurationEnabled = (
+  configurationID: string,
+  enabled: boolean,
+) =>
+  binding<(configurationID: string, enabled: boolean) => Promise<Operation>>(
+    "SetConfigurationEnabled",
+  )(configurationID, enabled);
 export const RecoverCorruptProfileStore = () =>
   binding<() => Promise<string>>("RecoverCorruptProfileStore")();
 export const IdentifyStart = (id: string, timeout: number) =>

@@ -36,7 +36,25 @@ const workspace: ManagerWorkspace = {
         reason: "Connected",
       },
     ],
-    configurations: null,
+    configurations: [
+      {
+        id: "cfg-1",
+        name: "Managed fixture",
+        ownership: "managed",
+        enabled: true,
+        device_id: "device-1",
+        desired_revision: 7,
+        active_revision: 7,
+        runtime: {
+          phase: "running",
+          reason_code: "runtime_running",
+          reason: "Running",
+          connected: true,
+          healthy: true,
+          failure_count: 0,
+        },
+      },
+    ],
     operations: null,
     health: {
       healthy: true,
@@ -132,6 +150,26 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
               },
             };
           },
+          SetConfigurationEnabled: async (configurationID, enabled) => {
+            const configuration = workspace.snapshot?.configurations?.find(
+              (item) => item.id === configurationID,
+            );
+            if (configuration) {
+              configuration.enabled = enabled;
+              configuration.desired_revision += 1;
+            }
+            return {
+              id: "op-lifecycle-1",
+              kind: "lifecycle",
+              state: "succeeded",
+              resource: { kind: "configuration", id: configurationID },
+              reason_code: "operation_succeeded",
+              reason: enabled
+                ? "configuration enabled"
+                : "configuration disabled and its KMonad process stopped",
+              configuration_revision: 8,
+            };
+          },
         },
       },
     };
@@ -141,6 +179,24 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   await expect(
     page.getByRole("button", { name: "Identify", exact: true }),
   ).toBeEnabled();
+  await page
+    .getByRole("button", { name: "Disable bindings", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Disable this keyboard’s bindings?" }),
+  ).toBeVisible();
+  await page
+    .locator(".lifecycle-confirmation")
+    .getByRole("button", { name: "Disable bindings", exact: true })
+    .click();
+  await expect(
+    page.getByText(
+      "Manager disabled bindings: configuration disabled and its KMonad process stopped",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Enable bindings", exact: true }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Set up", exact: true }).click();
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
   await expect(page.locator(".editor-key")).toHaveCount(1);
