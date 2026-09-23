@@ -318,7 +318,7 @@ func (c *APIClient) rawCallOnConnection(ctx context.Context, connection *ClientC
 	connection.pending[id] = waiter
 	connection.pendingMu.Unlock()
 	connection.writeMu.Lock()
-	_, err = connection.conn.Write(append(payload, '\n'))
+	err = writeFrame(connection.conn, append(payload, '\n'))
 	connection.writeMu.Unlock()
 	if err != nil {
 		connection.pendingMu.Lock()
@@ -342,6 +342,24 @@ func (c *APIClient) rawCallOnConnection(ctx context.Context, connection *ClientC
 		connection.pendingMu.Unlock()
 		return nil, ctx.Err()
 	}
+}
+
+// writeFrame handles short writes so each API request remains one complete JSON
+// Lines frame even when a transport accepts only part of a write at a time.
+func writeFrame(connection net.Conn, frame []byte) error {
+	for len(frame) != 0 {
+		written, err := connection.Write(frame)
+		if written > 0 {
+			frame = frame[written:]
+		}
+		if err != nil {
+			return err
+		}
+		if written == 0 {
+			return io.ErrShortWrite
+		}
+	}
+	return nil
 }
 
 func (c *APIClient) ensureHello(ctx context.Context) (*ClientConnection, error) {

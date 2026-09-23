@@ -32,7 +32,7 @@ explains sequencing; this file is the place to track completion.
   scaffold the Svelte 5 TypeScript app and document Linux development prerequisites.
 - [x] **APP-02** Establish formatting, lint/type checks, unit-test commands,
   build commands, lockfiles, and CI from a clean checkout.
-- [ ] **API-01** Implement a Go socket client: endpoint discovery, JSON Lines,
+- [x] **API-01** Implement a Go socket client: endpoint discovery, JSON Lines,
   bounded frames, request correlation, deadlines, transport failures, reconnect
   backoff, and resource cleanup on GUI exit.
 - [ ] **API-02** Negotiate hello on every connection, track server identity,

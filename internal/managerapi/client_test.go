@@ -19,6 +19,18 @@ type capturedRequest struct {
 	Params json.RawMessage `json:"params"`
 }
 
+type shortWriteConn struct {
+	net.Conn
+	maximum int
+}
+
+func (c shortWriteConn) Write(data []byte) (int, error) {
+	if len(data) > c.maximum {
+		data = data[:c.maximum]
+	}
+	return c.Conn.Write(data)
+}
+
 func testSocket(t *testing.T, handler func(*bufio.ReadWriter, capturedRequest)) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "manager.sock")
@@ -91,6 +103,33 @@ func TestClientNegotiatesBeforeDeviceList(t *testing.T) {
 	defer methodsMu.Unlock()
 	if len(methods) != 2 || methods[0] != "session.hello" || methods[1] != "device.list" {
 		t.Fatalf("request order = %v", methods)
+	}
+}
+
+func TestClientCompletesAFrameAfterShortWrites(t *testing.T) {
+	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
+		switch request.Method {
+		case "session.hello":
+			writeResult(t, rw, request.ID, `{"selected_version":1,"server_id":"server-1","manager_version":"test"}`)
+		case "device.list":
+			writeResult(t, rw, request.ID, `{"devices":[]}`)
+		default:
+			t.Errorf("unexpected method %s", request.Method)
+		}
+	})
+	client := New(Options{
+		Endpoint: socket,
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			connection, err := (&net.Dialer{}).DialContext(ctx, network, address)
+			if err != nil {
+				return nil, err
+			}
+			return shortWriteConn{Conn: connection, maximum: 3}, nil
+		},
+	})
+	defer client.Close()
+	if _, err := client.DeviceList(context.Background()); err != nil {
+		t.Fatalf("device list over short-writing connection: %v", err)
 	}
 }
 

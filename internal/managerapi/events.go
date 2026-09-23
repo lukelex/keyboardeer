@@ -112,7 +112,7 @@ func (c *APIClient) subscriptionRequest(ctx context.Context, connection net.Conn
 	if len(payload)+1 > MaxFrameBytes {
 		return ErrFrameTooLarge
 	}
-	if _, err := connection.Write(append(payload, '\n')); err != nil {
+	if err := writeFrame(connection, append(payload, '\n')); err != nil {
 		return fmt.Errorf("write %s: %w", method, err)
 	}
 	line, err := reader.ReadSlice('\n')
