@@ -1,3 +1,11 @@
 .DS_Store
 Thumbs.db
 *~
+
+# Desktop and frontend build artifacts
+build/bin/
+frontend/node_modules/
+frontend/dist/*
+!frontend/dist/.gitkeep
+
+/keyboardeer

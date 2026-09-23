@@ -1,0 +1,18 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "KeyboarDeer",
+  "outputfilename": "keyboardeer",
+  "frontend:install": "npm ci",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "KeyboarDeer contributors"
+  },
+  "info": {
+    "companyName": "KeyboarDeer",
+    "productName": "KeyboarDeer",
+    "productVersion": "0.1.0-dev",
+    "comments": "Visual keyboard configuration companion for kmonad-device-manager"
+  }
+}
