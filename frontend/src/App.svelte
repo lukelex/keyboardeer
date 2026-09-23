@@ -168,6 +168,19 @@
     (device) => device.role === undefined || device.role === "input",
   );
   $: configurations = workspace.snapshot?.configurations ?? [];
+  $: setUpBoards = visibleBoards.filter(
+    (device) =>
+      profiles.some((profile) => profile.device_id === device.id) ||
+      configurations.some(
+        (configuration) =>
+          configuration.device_id === device.id &&
+          configuration.ownership === "managed",
+      ),
+  );
+  $: unconfiguredBoards = visibleBoards.filter(
+    (device) => !setUpBoards.some((setUpDevice) => setUpDevice.id === device.id),
+  );
+  $: sortedBoards = [...setUpBoards, ...unconfiguredBoards];
   $: managedConfigurations =
     capabilities.find((item) => item.name === "managed_configurations") ??
     unavailableCapability("managed_configurations");
@@ -880,7 +893,10 @@
           </section>
         {:else if canShowDevices}
           <div class="device-list">
-            {#each visibleBoards as device (device.id)}
+            {#each sortedBoards as device, index (device.id)}
+              {#if index === setUpBoards.length && unconfiguredBoards.length}
+                <div class="device-list-section">Not set up yet</div>
+              {/if}
               {@const deviceConfigurations = configurationsForDevice(device)}
               <article class:offline={!isConnected(device)} class="device-card">
                 <div class="device-glyph" aria-hidden="true">⌨</div>
@@ -1183,6 +1199,64 @@
               </p>{/if}
           </div>
           <section class="key-palette" aria-label="Basic key assignments">
+            <div class="palette-toolbar">
+              <div class="selected-key-context">
+                <strong>{selectedSourceKey || "Select a key"}</strong>
+                <span
+                  >{activeLayer ? `${activeLayer.name} layer` : "No active layer"}</span
+                >
+              </div>
+              <div class="layer-tabs" role="tablist" aria-label="Keymap layers">
+                {#each activeProfile.layers as layer (layer.id)}
+                  <button
+                    class:active={selectedLayerID === layer.id}
+                    class="button secondary layer-tab"
+                    role="tab"
+                    aria-selected={selectedLayerID === layer.id}
+                    on:click={() => (selectedLayerID = layer.id)}
+                    >{layer.name}</button
+                  >
+                {/each}
+              </div>
+              <div class="complex-actions">
+                <button
+                  class="button secondary"
+                  on:click={() => openBehaviorDialog("tap_hold")}
+                  disabled={!selectedSourceKey || profileBusy}>Tap &amp; hold</button
+                >
+                <button
+                  class="button secondary"
+                  on:click={() => openBehaviorDialog("layer")}
+                  disabled={!selectedSourceKey || profileBusy}>Layer action</button
+                >
+                <button
+                  class="button secondary"
+                  on:click={() => openBehaviorDialog("alias")}
+                  disabled={!selectedSourceKey || profileBusy}>Alias</button
+                >
+                <button
+                  class="button secondary"
+                  on:click={() => openBehaviorDialog("macro")}
+                  disabled={!selectedSourceKey || profileBusy}>Macro</button
+                >
+                {#each Object.keys(activeProfile.aliases ?? {}).sort() as name}
+                  <button
+                    class="button secondary declaration-action"
+                    on:click={() => assignBehavior({ kind: "alias", target: name })}
+                    disabled={!selectedSourceKey || profileBusy}
+                    title={`Assign alias ${name}`}>@{name}</button
+                  >
+                {/each}
+                {#each Object.keys(activeProfile.macros ?? {}).sort() as name}
+                  <button
+                    class="button secondary declaration-action"
+                    on:click={() => assignBehavior({ kind: "macro", target: name })}
+                    disabled={!selectedSourceKey || profileBusy}
+                    title={`Assign macro ${name}`}>#{name}</button
+                  >
+                {/each}
+              </div>
+            </div>
             <div class="palette-buttons">
               {#each paletteKeyOptions as key (key.source_key)}
                 <button
@@ -1192,18 +1266,27 @@
                       kind: "key",
                       key: key.source_key,
                     })}
-                  disabled={profileBusy}
+                  disabled={profileBusy || !selectedSourceKey}
                   title={`Assign ${key.label} (${key.source_key})`}
                   ><span>{paletteLabel(key)}</span><small
                     >{key.source_key}</small
                   ></button
                 >
               {/each}
-              <button
-                class="button secondary palette-disable"
-                on:click={() => assignBehavior({ kind: "disabled" })}
-                disabled={profileBusy}>Disable selected key</button
-              >
+              <div class="palette-utility">
+                <button
+                  class="button secondary palette-disable"
+                  on:click={() => assignBehavior({ kind: "disabled" })}
+                  disabled={profileBusy || !selectedSourceKey}
+                  >Disable selected key</button
+                >
+                <button
+                  class="button secondary palette-restore"
+                  on:click={restoreSelectedKey}
+                  disabled={profileBusy || !selectedSourceKey}
+                  >Restore original</button
+                >
+              </div>
             </div>
           </section>
         {:else}
@@ -1225,6 +1308,214 @@
       </section>
     {/if}
   </main>
+  {#if behaviorDialog && activeProfile}
+    <div class="behavior-dialog-backdrop">
+      <dialog
+        class="behavior-dialog"
+        open
+        aria-labelledby="behavior-dialog-title"
+      >
+        <button
+          class="behavior-dialog-close"
+          on:click={closeBehaviorDialog}
+          aria-label="Close complex action dialog"
+          title="Close">×</button
+        >
+        <p class="eyebrow">COMPLEX ACTION · {selectedSourceKey}</p>
+        {#if behaviorDialog === "tap_hold"}
+          <h2 id="behavior-dialog-title">Tap &amp; hold</h2>
+          <p class="dialog-intro">
+            Choose what happens for a quick tap and what happens while the key
+            is held. The manager validates the complete draft before it can be
+            applied.
+          </p>
+          <form class="behavior-form" on:submit|preventDefault={assignTapHold}>
+            <label for="tap-key">Tap</label>
+            <select id="tap-key" bind:value={tapKey}>
+              {#each paletteKeyOptions as key (key.source_key)}
+                <option value={key.source_key}>{key.label}</option>
+              {/each}
+            </select>
+            <label for="hold-type">Hold</label>
+            <select id="hold-type" bind:value={tapHoldMode}>
+              <option value="key">Send a key</option>
+              <option value="layer">Hold a layer</option>
+            </select>
+            {#if tapHoldMode === "key"}
+              <label for="hold-key">Held key</label>
+              <select id="hold-key" bind:value={holdKey}>
+                {#each paletteKeyOptions as key (key.source_key)}
+                  <option value={key.source_key}>{key.label}</option>
+                {/each}
+              </select>
+            {:else}
+              <label for="tap-hold-layer">Layer while held</label>
+              <select id="tap-hold-layer" bind:value={tapHoldLayerID}>
+                {#each activeProfile.layers as layer (layer.id)}
+                  <option value={layer.id}>{layer.name}</option>
+                {/each}
+              </select>
+            {/if}
+            <label for="tap-hold-timeout">Tap timeout (milliseconds)</label>
+            <input
+              id="tap-hold-timeout"
+              type="number"
+              bind:value={tapHoldTimeoutMS}
+              min="1"
+              max="1000"
+              required
+            />
+            <div class="behavior-form-actions">
+              <button
+                class="button secondary"
+                type="button"
+                on:click={closeBehaviorDialog}>Cancel</button
+              >
+              <button class="button primary" disabled={profileBusy} type="submit"
+                >Assign tap &amp; hold</button
+              >
+            </div>
+          </form>
+        {:else if behaviorDialog === "layer"}
+          <h2 id="behavior-dialog-title">Layer action</h2>
+          <p class="dialog-intro">
+            Hold a layer temporarily, or switch to it until another layer action
+            changes the active layer.
+          </p>
+          <form
+            class="behavior-form"
+            on:submit|preventDefault={assignLayerAction}
+          >
+            <label for="layer-action">When this key is pressed</label>
+            <select id="layer-action" bind:value={layerAction}>
+              <option value="hold_layer">Hold this layer</option>
+              <option value="switch_layer">Switch to this layer</option>
+            </select>
+            <label for="layer-target">Target layer</label>
+            <select id="layer-target" bind:value={layerTargetID}>
+              {#each activeProfile.layers as layer (layer.id)}
+                <option value={layer.id}>{layer.name}</option>
+              {/each}
+            </select>
+            <div class="new-layer-control">
+              <label for="new-layer-name">Or add a layer</label>
+              <div>
+                <input
+                  id="new-layer-name"
+                  bind:value={newLayerName}
+                  maxlength="40"
+                  placeholder="Navigation"
+                />
+                <button
+                  class="button secondary"
+                  type="button"
+                  disabled={profileBusy || !newLayerName.trim()}
+                  on:click={createLayer}>Add layer</button
+                >
+              </div>
+            </div>
+            <div class="behavior-form-actions">
+              <button
+                class="button secondary"
+                type="button"
+                on:click={closeBehaviorDialog}>Cancel</button
+              >
+              <button class="button primary" disabled={profileBusy} type="submit"
+                >Assign layer action</button
+              >
+            </div>
+          </form>
+        {:else if behaviorDialog === "alias"}
+          <h2 id="behavior-dialog-title">Named alias</h2>
+          <p class="dialog-intro">
+            Save a reusable name for a key action, then assign that alias to the
+            selected key.
+          </p>
+          <form class="behavior-form" on:submit|preventDefault={createAlias}>
+            <label for="alias-name">Alias name</label>
+            <input
+              id="alias-name"
+              bind:value={aliasName}
+              maxlength="40"
+              pattern="[A-Za-z][A-Za-z0-9-]*"
+              placeholder="escape-key"
+              required
+            />
+            <label for="alias-key">Action</label>
+            <select id="alias-key" bind:value={aliasKey}>
+              {#each paletteKeyOptions as key (key.source_key)}
+                <option value={key.source_key}>{key.label}</option>
+              {/each}
+            </select>
+            <div class="behavior-form-actions">
+              <button
+                class="button secondary"
+                type="button"
+                on:click={closeBehaviorDialog}>Cancel</button
+              >
+              <button class="button primary" disabled={profileBusy} type="submit"
+                >Create and assign alias</button
+              >
+            </div>
+          </form>
+        {:else}
+          <h2 id="behavior-dialog-title">Macro sequence</h2>
+          <p class="dialog-intro">
+            Build an ordered sequence of key presses. It will be saved as a named
+            macro and assigned to the selected key.
+          </p>
+          <form class="behavior-form" on:submit|preventDefault={createMacro}>
+            <label for="macro-name">Macro name</label>
+            <input
+              id="macro-name"
+              bind:value={macroName}
+              maxlength="40"
+              pattern="[A-Za-z][A-Za-z0-9-]*"
+              placeholder="paste-line"
+              required
+            />
+            <label for="macro-next-key">Add a key press</label>
+            <div class="macro-step-control">
+              <select id="macro-next-key" bind:value={macroNextKey}>
+                {#each paletteKeyOptions as key (key.source_key)}
+                  <option value={key.source_key}>{key.label}</option>
+                {/each}
+              </select>
+              <button class="button secondary" type="button" on:click={addMacroStep}
+                >Add</button
+              >
+            </div>
+            <ol class="macro-steps" aria-label="Macro key sequence">
+              {#each macroSteps as step, index (`${step}-${index}`)}
+                <li>
+                  <span>{step}</span>
+                  <button
+                    type="button"
+                    on:click={() =>
+                      (macroSteps = macroSteps.filter(
+                        (_, stepIndex) => stepIndex !== index,
+                      ))}>Remove</button
+                  >
+                </li>
+              {/each}
+            </ol>
+            <div class="behavior-form-actions">
+              <button
+                class="button secondary"
+                type="button"
+                on:click={closeBehaviorDialog}>Cancel</button
+              >
+              <button
+                class="button primary"
+                disabled={profileBusy || !macroSteps.length}
+                type="submit">Create and assign macro</button
+              >
+            </div>
+          </form>
+        {/if}
+      </dialog>
+    </div>
+  {/if}
   {#if identifyOpen && selectedDevice}
     <div class="identify-dialog-backdrop">
       <dialog class="identify-dialog" open aria-labelledby="identify-title">

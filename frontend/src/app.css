@@ -270,6 +270,28 @@ h1 {
   gap: 12px;
   margin-top: 16px;
 }
+.device-list-section {
+  align-items: center;
+  color: #718076;
+  display: flex;
+  font-size: 10px;
+  font-weight: 750;
+  gap: 12px;
+  letter-spacing: 1.15px;
+  margin-top: 12px;
+  padding: 9px 0 8px;
+  text-transform: uppercase;
+}
+.device-list-section::before,
+.device-list-section::after {
+  background: #dfe5d6;
+  content: "";
+  flex: 1;
+  height: 1px;
+}
+.device-list-section:first-child {
+  margin-top: 0;
+}
 .device-card {
   align-items: center;
   background: #fffdf8;
@@ -794,6 +816,51 @@ h1 {
   padding: 12px clamp(22px, 6vw, 88px);
   width: 100%;
 }
+.palette-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-bottom: 11px;
+}
+.selected-key-context {
+  align-items: baseline;
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+.selected-key-context strong {
+  color: #315541;
+  font-size: 12px;
+}
+.selected-key-context span {
+  color: #73846b;
+  font-size: 10px;
+}
+.layer-tabs,
+.complex-actions,
+.palette-utility {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.layer-tabs {
+  border-left: 1px solid #dfe5d6;
+  padding-left: 12px;
+}
+.layer-tab,
+.complex-actions .button {
+  min-height: 28px;
+  padding: 5px 8px;
+}
+.layer-tab.active {
+  background: #d9ecd1;
+  border-color: #608b61;
+}
+.complex-actions {
+  margin-left: auto;
+}
 .palette-buttons {
   display: grid;
   gap: 6px;
@@ -825,9 +892,135 @@ h1 {
 }
 .palette-disable {
   color: #35604c !important;
+}
+.palette-utility {
   grid-column: 1 / -1;
   justify-self: end;
   margin-top: 4px;
+}
+.palette-restore {
+  color: #556e5d !important;
+}
+.behavior-dialog-backdrop {
+  align-items: center;
+  background: rgb(16 42 33 / 48%);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  position: fixed;
+  z-index: 30;
+}
+.behavior-dialog {
+  background: #f7f5ed;
+  border: 1px solid #d6e1cc;
+  border-radius: 18px;
+  box-shadow: 0 22px 60px rgb(12 35 27 / 30%);
+  color: #18352c;
+  max-height: calc(100dvh - 48px);
+  max-width: 520px;
+  overflow: auto;
+  padding: clamp(22px, 4vw, 34px);
+  position: relative;
+  width: 100%;
+}
+.behavior-dialog h2 {
+  font-size: 27px;
+  letter-spacing: -0.9px;
+  margin: 0;
+}
+.behavior-dialog-close {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  color: #4a705c;
+  cursor: pointer;
+  display: flex;
+  font-size: 27px;
+  height: 34px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  width: 34px;
+}
+.behavior-dialog-close:hover {
+  background: #e5eee0;
+}
+.dialog-intro {
+  color: #647669;
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 9px 0 17px;
+}
+.behavior-form {
+  display: grid;
+  gap: 8px;
+}
+.behavior-form label {
+  color: #486453;
+  font-size: 12px;
+  font-weight: 750;
+  margin-top: 5px;
+}
+.behavior-form input,
+.behavior-form select {
+  background: #fffefa;
+  border: 1px solid #cbd8c4;
+  border-radius: 8px;
+  color: #18352c;
+  font: inherit;
+  min-height: 40px;
+  padding: 8px 10px;
+}
+.behavior-form-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+.new-layer-control > div,
+.macro-step-control {
+  display: flex;
+  gap: 8px;
+}
+.new-layer-control input,
+.macro-step-control select {
+  min-width: 0;
+  width: 100%;
+}
+.new-layer-control .button,
+.macro-step-control .button {
+  flex: 0 0 auto;
+}
+.macro-steps {
+  display: grid;
+  gap: 5px;
+  list-style: decimal;
+  margin: 5px 0 0;
+  padding-left: 27px;
+}
+.macro-steps li {
+  align-items: center;
+  background: #edf3e8;
+  border-radius: 6px;
+  display: flex;
+  font-size: 12px;
+  justify-content: space-between;
+  padding: 5px 7px;
+}
+.macro-steps button {
+  background: transparent;
+  border: 0;
+  color: #4a705c;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  padding: 2px 4px;
 }
 .apply-status {
   border-top: 1px solid #dfe5d6;

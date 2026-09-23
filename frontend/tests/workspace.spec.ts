@@ -280,12 +280,25 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   await page.keyboard.press("CapsLock");
   await expect(page.locator(".editor-key").first()).toHaveClass(/flashing-key/);
   await page.locator(".editor-key").first().click();
+  await page.getByRole("button", { name: "Tap & hold" }).click();
+  await expect(page.getByRole("heading", { name: "Tap & hold" })).toBeVisible();
+  await page
+    .getByRole("button", { name: "Close complex action dialog" })
+    .click();
   await page
     .locator('.palette-buttons button[title="Assign Caps (caps)"]')
     .click();
   await expect(
     page.getByRole("heading", { name: "Unconfigured keyboard draft" }),
   ).toBeVisible();
+  await expect(page.locator(".editor-key").first().locator("small")).toHaveText(
+    "caps",
+  );
+  await page.getByRole("button", { name: "Disable selected key" }).click();
+  await expect(page.locator(".editor-key").first().locator("small")).toHaveText(
+    "Disabled",
+  );
+  await page.getByRole("button", { name: "Restore original" }).click();
   await expect(page.locator(".editor-key").first().locator("small")).toHaveText(
     "caps",
   );
@@ -307,6 +320,7 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   await expect(
     page.getByRole("button", { name: "Edit draft", exact: true }),
   ).toBeEnabled();
+  await expect(page.getByText("Set up", { exact: true })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
@@ -355,5 +369,6 @@ test("hides manager output devices while retaining legacy role-less inputs", asy
   await expect(
     page.getByText("kmonad-device-manager-2438b2cc423091fb"),
   ).toHaveCount(0);
+  await expect(page.getByText("Not set up yet", { exact: true })).toBeVisible();
   await expect(page.getByText("2 known", { exact: true })).toBeVisible();
 });
