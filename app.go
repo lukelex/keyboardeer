@@ -122,16 +122,57 @@ func (a *App) DeleteProfile(id string, expectedDraftRevision uint64) error {
 }
 
 func (a *App) CompileProfile(id string) (compiler.Result, error) {
-	drafts, err := a.Profiles()
+	draft, err := a.profileByID(id)
 	if err != nil {
 		return compiler.Result{}, err
 	}
-	for _, draft := range drafts {
-		if draft.ID == id {
-			return compiler.Compile(draft)
-		}
+	return compiler.Compile(draft)
+}
+
+// ProfilePreview is correlated to the exact local draft and manager generation
+// used for the check. The UI must discard it after any local edit, device
+// change, or manager server-ID change; validity never implies activation.
+type ProfilePreview struct {
+	ProfileID       string                      `json:"profile_id"`
+	DraftRevision   uint64                      `json:"draft_revision"`
+	DeviceID        string                      `json:"device_id"`
+	ManagerServerID string                      `json:"manager_server_id"`
+	StateRevision   uint64                      `json:"state_revision"`
+	Validation      managerapi.ValidationResult `json:"validation"`
+	SourceMap       []compiler.SourceMapEntry   `json:"source_map"`
+}
+
+func (a *App) PreviewProfile(id string) (ProfilePreview, error) {
+	draft, err := a.profileByID(id)
+	if err != nil {
+		return ProfilePreview{}, err
 	}
-	return compiler.Result{}, fmt.Errorf("profile %q does not exist", id)
+	compiled, err := compiler.Compile(draft)
+	if err != nil {
+		return ProfilePreview{}, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	before, err := a.manager.ManagerGet(ctx)
+	if err != nil {
+		return ProfilePreview{}, err
+	}
+	available, reason := managerapi.CapabilityAvailable(before.Capabilities, "candidate_validation")
+	if !available {
+		return ProfilePreview{}, &managerapi.Error{Code: "unsupported_capability", Message: reason}
+	}
+	preview, err := a.manager.Preview(ctx, managerapi.PreviewParams{Model: &managerapi.PreviewModel{DeviceID: draft.DeviceID, Behavior: compiled.Behavior}})
+	if err != nil {
+		return ProfilePreview{}, err
+	}
+	after, err := a.manager.ManagerGet(ctx)
+	if err != nil {
+		return ProfilePreview{}, err
+	}
+	if before.ServerID != after.ServerID {
+		return ProfilePreview{}, &managerapi.Error{Code: "manager_restarted", Message: "The manager restarted while it validated this draft."}
+	}
+	return ProfilePreview{ProfileID: draft.ID, DraftRevision: draft.DraftRevision, DeviceID: draft.DeviceID, ManagerServerID: after.ServerID, StateRevision: after.StateRevision, Validation: preview.Validation, SourceMap: compiled.SourceMap}, nil
 }
 
 func (a *App) RecoverCorruptProfileStore() (string, error) {
@@ -150,6 +191,19 @@ func (a *App) profileStore() (*profile.Store, error) {
 		return nil, fmt.Errorf("profile store is unavailable")
 	}
 	return a.profiles, nil
+}
+
+func (a *App) profileByID(id string) (profile.Profile, error) {
+	drafts, err := a.Profiles()
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	for _, draft := range drafts {
+		if draft.ID == id {
+			return draft, nil
+		}
+	}
+	return profile.Profile{}, fmt.Errorf("profile %q does not exist", id)
 }
 
 // ManagerStatus performs the mandatory hello/capability negotiation. It does

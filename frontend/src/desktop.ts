@@ -121,6 +121,26 @@ export interface CompileResult {
     };
   }>;
 }
+export interface ProfilePreview {
+  profile_id: string;
+  draft_revision: number;
+  device_id: string;
+  manager_server_id: string;
+  state_revision: number;
+  validation: {
+    outcome: string;
+    reason_code: string;
+    reason: string;
+    diagnostics: Array<{
+      id: string;
+      severity: string;
+      reason_code: string;
+      summary: string;
+      remediation: string;
+    }>;
+  };
+  source_map: CompileResult["source_map"];
+}
 
 type AppBindings = {
   Info?: () => Promise<AppInfo>;
@@ -135,6 +155,7 @@ type AppBindings = {
   SaveProfile?: (profile: Profile) => Promise<Profile>;
   DeleteProfile?: (id: string, expectedDraftRevision: number) => Promise<void>;
   CompileProfile?: (id: string) => Promise<CompileResult>;
+  PreviewProfile?: (id: string) => Promise<ProfilePreview>;
   RecoverCorruptProfileStore?: () => Promise<string>;
   IdentifyStart?: (deviceID: string, timeoutMS: number) => Promise<Operation>;
   IdentifyCancel?: (operationID: string) => Promise<Operation>;
@@ -192,6 +213,8 @@ export const DeleteProfile = (id: string, expectedDraftRevision: number) =>
   )(id, expectedDraftRevision);
 export const CompileProfile = (id: string) =>
   binding<(id: string) => Promise<CompileResult>>("CompileProfile")(id);
+export const PreviewProfile = (id: string) =>
+  binding<(id: string) => Promise<ProfilePreview>>("PreviewProfile")(id);
 export const RecoverCorruptProfileStore = () =>
   binding<() => Promise<string>>("RecoverCorruptProfileStore")();
 export const IdentifyStart = (id: string, timeout: number) =>
