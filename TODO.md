@@ -127,7 +127,7 @@ and obtain deterministic behavior without writing KMonad syntax.
 
 ## P1 — Apply and lifecycle (parked)
 
-- [ ] **APPLY-01** Implement a human-readable review diff and explicit apply;
+- [x] **APPLY-01** Implement a human-readable review diff and explicit apply;
   distinguish local draft saved, candidate accepted, and active/healthy.
 - [ ] **APPLY-02** Integrate managed create/update with configuration association,
   idempotency keys, expected revisions, uncertain-response recovery, and

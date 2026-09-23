@@ -378,6 +378,10 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   await expect(page.getByText("MANAGED APPLY", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Apply to keyboard" }).click();
   await expect(
+    page.getByRole("heading", { name: "Ready to send this draft?" }),
+  ).toBeVisible();
+  await page.getByRole("dialog").getByRole("button", { name: "Apply to keyboard" }).click();
+  await expect(
     page.getByText(
       "Manager Apply: Succeeded — configuration persisted and activation confirmed",
     ),

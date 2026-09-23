@@ -136,6 +136,7 @@
   let previewGeneration = 0;
   let pendingPreview: { draft: Profile; generation: number } | null = null;
   let applyBusy = false;
+  let applyReviewOpen = false;
   let applyOperation: Operation | null = null;
   let lifecycleBusyID = "";
   let operation: Operation | null = null;
@@ -379,6 +380,17 @@
       return `Switch ${layerName(behavior.target)}`;
     if (behavior.kind === "alias") return `@${behavior.target}`;
     if (behavior.kind === "macro") return `Macro ${behavior.target}`;
+    return humanize(behavior.kind);
+  }
+  function behaviorSummary(behavior: ProfileBehavior) {
+    if (behavior.kind === "key") return `Send ${behavior.key}`;
+    if (behavior.kind === "disabled") return "Disable key";
+    if (behavior.kind === "transparent") return "Pass through";
+    if (behavior.kind === "hold_layer") return `Hold ${layerName(behavior.target)}`;
+    if (behavior.kind === "switch_layer") return `Switch to ${layerName(behavior.target)}`;
+    if (behavior.kind === "tap_hold") return "Tap & hold";
+    if (behavior.kind === "alias") return `Use alias ${behavior.target}`;
+    if (behavior.kind === "macro") return `Run macro ${behavior.target}`;
     return humanize(behavior.kind);
   }
   function layerName(id: string | undefined) {
@@ -870,6 +882,14 @@
     } finally {
       applyBusy = false;
     }
+  }
+  function openApplyReview() {
+    if (!canApply || applyBusy) return;
+    applyReviewOpen = true;
+  }
+  async function confirmApply() {
+    applyReviewOpen = false;
+    await applyDraft();
   }
   async function previewDraft(draft: Profile, generation: number) {
     previewInFlight = true;
@@ -1431,7 +1451,7 @@
           <button
             class="button primary editor-apply"
             type="button"
-            on:click={applyDraft}
+            on:click={openApplyReview}
             disabled={!canApply || applyBusy}
             title={canApply
               ? "Apply this validated draft to the keyboard"
@@ -1947,6 +1967,44 @@
             </div>
           </form>
         {/if}
+      </dialog>
+    </div>
+  {/if}
+  {#if applyReviewOpen && activeProfile}
+    <div class="behavior-dialog-backdrop">
+      <dialog class="behavior-dialog" open aria-labelledby="apply-review-title">
+        <button
+          class="behavior-dialog-close"
+          on:click={() => (applyReviewOpen = false)}
+          aria-label="Close apply review"
+          title="Close">×</button
+        >
+        <p class="eyebrow">REVIEW &amp; APPLY</p>
+        <h2 id="apply-review-title">Ready to send this draft?</h2>
+        <p class="dialog-intro">
+          The manager will render, validate, persist, and supervise this profile.
+          Nothing changes until you confirm.
+        </p>
+        <ul class="apply-review-list">
+          {#each activeProfile.assignments ?? [] as assignment (`${assignment.layer_id}-${assignment.source_key}`)}
+            <li>
+              <strong>{layerName(assignment.layer_id)} · {assignment.source_key}</strong>
+              <span>{behaviorSummary(assignment.behavior)}</span>
+            </li>
+          {:else}
+            <li><span>No explicit assignments; the original Base layout will be applied.</span></li>
+          {/each}
+        </ul>
+        <div class="behavior-form-actions">
+          <button
+            class="button secondary"
+            type="button"
+            on:click={() => (applyReviewOpen = false)}>Keep editing</button
+          >
+          <button class="button primary" type="button" on:click={confirmApply}
+            >Apply to keyboard</button
+          >
+        </div>
       </dialog>
     </div>
   {/if}
