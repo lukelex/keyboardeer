@@ -29,7 +29,7 @@
 
   type View = "devices" | "setup" | "editor";
   type KeyOption = GeometryTemplate["keys"][number];
-  type ComplexAction = "tap_hold" | "layer" | "alias" | "macro";
+  type ComplexAction = "tap_hold" | "layer" | "alias" | "macro" | "layers";
   const managerCheckIntervalMS = 15_000;
   const modifierSourceKeys = new Set([
     "caps",
@@ -119,6 +119,7 @@
   let layerAction: "hold_layer" | "switch_layer" = "hold_layer";
   let layerTargetID = "base";
   let newLayerName = "";
+  let layerRename = "";
   let aliasName = "";
   let aliasKey = "";
   let macroName = "";
@@ -303,7 +304,7 @@
     behavior: ProfileBehavior | undefined,
     sourceKey: string,
   ) {
-    if (!behavior) return sourceKey;
+    if (!behavior) return selectedLayerID === "base" ? sourceKey : "Pass through";
     if (behavior.kind === "key") return behavior.key ?? sourceKey;
     if (behavior.kind === "transparent") return "Pass through";
     if (behavior.kind === "disabled") return "Disabled";
@@ -324,6 +325,48 @@
   }
   function layerName(id: string | undefined) {
     return activeProfile?.layers.find((layer) => layer.id === id)?.name ?? id;
+  }
+  function behaviorTargetsLayer(
+    behavior: ProfileBehavior,
+    layerID: string,
+    seen = new Set<string>(),
+  ): boolean {
+    if (
+      (behavior.kind === "hold_layer" || behavior.kind === "switch_layer") &&
+      behavior.target === layerID
+    ) {
+      return true;
+    }
+    if (behavior.kind === "tap_hold") {
+      return Boolean(
+        (behavior.tap && behaviorTargetsLayer(behavior.tap, layerID, seen)) ||
+          (behavior.hold && behaviorTargetsLayer(behavior.hold, layerID, seen)),
+      );
+    }
+    if (behavior.kind === "alias" && behavior.target && !seen.has(`a:${behavior.target}`)) {
+      seen.add(`a:${behavior.target}`);
+      const alias = activeProfile?.aliases?.[behavior.target];
+      return alias ? behaviorTargetsLayer(alias, layerID, seen) : false;
+    }
+    if (behavior.kind === "macro" && behavior.target && !seen.has(`m:${behavior.target}`)) {
+      seen.add(`m:${behavior.target}`);
+      return Boolean(
+        activeProfile?.macros?.[behavior.target]?.some((step) =>
+          behaviorTargetsLayer(step, layerID, seen),
+        ),
+      );
+    }
+    return false;
+  }
+  function layerEntryCount(layerID: string) {
+    return (
+      activeProfile?.assignments?.filter((assignment) =>
+        behaviorTargetsLayer(assignment.behavior, layerID),
+      ).length ?? 0
+    );
+  }
+  function layerIsReachable(layerID: string) {
+    return layerID === "base" || layerEntryCount(layerID) > 0;
   }
   function clearPolling() {
     if (pollTimer) clearInterval(pollTimer);
@@ -530,7 +573,7 @@
     await saveDraft({ ...activeProfile, assignments });
   }
   function openBehaviorDialog(kind: ComplexAction) {
-    if (!activeProfile || !selectedSourceKey) {
+    if (!activeProfile || (kind !== "layers" && !selectedSourceKey)) {
       feedback = "Select a physical key before choosing a complex action.";
       return;
     }
@@ -541,6 +584,7 @@
     macroNextKey ||= fallback;
     tapHoldLayerID = selectedLayerID;
     layerTargetID = selectedLayerID;
+    layerRename = activeLayer?.name ?? "";
     behaviorDialog = kind;
   }
   function closeBehaviorDialog() {
@@ -662,6 +706,62 @@
       layerTargetID = id;
       tapHoldLayerID = id;
       newLayerName = "";
+    }
+  }
+  async function renameSelectedLayer() {
+    if (!activeProfile || !activeLayer || !layerRename.trim()) return;
+    const name = layerRename.trim();
+    if (
+      activeProfile.layers.some(
+        (layer) => layer.id !== selectedLayerID && layer.name === name,
+      )
+    ) {
+      feedback = "A layer with that name already exists.";
+      return;
+    }
+    await saveDraft({
+      ...activeProfile,
+      layers: activeProfile.layers.map((layer) =>
+        layer.id === selectedLayerID ? { ...layer, name } : layer,
+      ),
+    });
+  }
+  async function moveSelectedLayer(direction: -1 | 1) {
+    if (!activeProfile || selectedLayerID === "base") return;
+    const index = activeProfile.layers.findIndex(
+      (layer) => layer.id === selectedLayerID,
+    );
+    const destination = index + direction;
+    if (index < 1 || destination < 1 || destination >= activeProfile.layers.length) {
+      return;
+    }
+    const layers = [...activeProfile.layers];
+    [layers[index], layers[destination]] = [layers[destination], layers[index]];
+    await saveDraft({ ...activeProfile, layers });
+  }
+  async function deleteSelectedLayer() {
+    if (!activeProfile || selectedLayerID === "base") {
+      feedback = "The Base layer is always required.";
+      return;
+    }
+    const ownAssignments = activeProfile.assignments?.filter(
+      (assignment) => assignment.layer_id === selectedLayerID,
+    ).length ?? 0;
+    const references = layerEntryCount(selectedLayerID);
+    if (ownAssignments || references) {
+      feedback = `Remove ${ownAssignments} assignment${ownAssignments === 1 ? "" : "s"} and ${references} layer action${references === 1 ? "" : "s"} before deleting this layer.`;
+      return;
+    }
+    if (
+      await saveDraft({
+        ...activeProfile,
+        layers: activeProfile.layers.filter(
+          (layer) => layer.id !== selectedLayerID,
+        ),
+      })
+    ) {
+      selectedLayerID = "base";
+      layerRename = "";
     }
   }
   function schedulePreview(draft: Profile) {
@@ -1205,18 +1305,30 @@
                 <span
                   >{activeLayer ? `${activeLayer.name} layer` : "No active layer"}</span
                 >
+                {#if activeLayer && !layerIsReachable(activeLayer.id)}
+                  <em>Needs an entry action</em>
+                {/if}
               </div>
               <div class="layer-tabs" role="tablist" aria-label="Keymap layers">
                 {#each activeProfile.layers as layer (layer.id)}
                   <button
                     class:active={selectedLayerID === layer.id}
+                    class:unreachable={!layerIsReachable(layer.id)}
                     class="button secondary layer-tab"
                     role="tab"
                     aria-selected={selectedLayerID === layer.id}
                     on:click={() => (selectedLayerID = layer.id)}
+                    title={layerIsReachable(layer.id)
+                      ? `${layer.name} layer`
+                      : `${layer.name} has no entry action`}
                     >{layer.name}</button
                   >
                 {/each}
+                <button
+                  class="button secondary layer-tab"
+                  on:click={() => openBehaviorDialog("layers")}
+                  title="Manage layers">Manage</button
+                >
               </div>
               <div class="complex-actions">
                 <button
@@ -1286,6 +1398,18 @@
                   disabled={profileBusy || !selectedSourceKey}
                   >Restore original</button
                 >
+                <button
+                  class="button secondary"
+                  on:click={() => assignBehavior({ kind: "transparent" })}
+                  disabled={
+                    profileBusy || !selectedSourceKey || selectedLayerID === "base"
+                  }
+                  title={
+                    selectedLayerID === "base"
+                      ? "The Base layer cannot fall through."
+                      : "Let this key fall through to the lower layer."
+                  }>Pass through</button
+                >
               </div>
             </div>
           </section>
@@ -1322,7 +1446,72 @@
           title="Close">×</button
         >
         <p class="eyebrow">COMPLEX ACTION · {selectedSourceKey}</p>
-        {#if behaviorDialog === "tap_hold"}
+        {#if behaviorDialog === "layers"}
+          <h2 id="behavior-dialog-title">Manage layers</h2>
+          <p class="dialog-intro">
+            Layers without an entry action cannot be reached from the keyboard.
+            Add a Hold layer or Switch layer action before applying this draft.
+          </p>
+          <div class="layer-manager-list" aria-label="Layers">
+            {#each activeProfile.layers as layer, index (layer.id)}
+              <button
+                class:active={selectedLayerID === layer.id}
+                class:unreachable={!layerIsReachable(layer.id)}
+                on:click={() => {
+                  selectedLayerID = layer.id;
+                  layerRename = layer.name;
+                }}
+                >{layer.name}<small
+                  >{layerIsReachable(layer.id)
+                    ? "Reachable"
+                    : "No entry action"}</small
+                ></button
+              >
+              {#if index === 0}<span class="layer-manager-base">Required</span>{/if}
+            {/each}
+          </div>
+          <form class="behavior-form" on:submit|preventDefault={renameSelectedLayer}>
+            <label for="rename-layer">Rename selected layer</label>
+            <input
+              id="rename-layer"
+              bind:value={layerRename}
+              maxlength="40"
+              required
+            />
+            <div class="layer-manager-actions">
+              <button
+                class="button secondary"
+                type="button"
+                disabled={selectedLayerID === "base" || profileBusy}
+                on:click={() => moveSelectedLayer(-1)}>Move earlier</button
+              >
+              <button
+                class="button secondary"
+                type="button"
+                disabled={selectedLayerID === "base" || profileBusy}
+                on:click={() => moveSelectedLayer(1)}>Move later</button
+              >
+              <button
+                class="button secondary"
+                type="button"
+                disabled={selectedLayerID === "base" || profileBusy}
+                on:click={deleteSelectedLayer}>Delete layer</button
+              >
+            </div>
+            <div class="behavior-form-actions">
+              <button
+                class="button secondary"
+                type="button"
+                on:click={closeBehaviorDialog}>Close</button
+              >
+              <button
+                class="button primary"
+                disabled={profileBusy || !layerRename.trim()}
+                type="submit">Rename layer</button
+              >
+            </div>
+          </form>
+        {:else if behaviorDialog === "tap_hold"}
           <h2 id="behavior-dialog-title">Tap &amp; hold</h2>
           <p class="dialog-intro">
             Choose what happens for a quick tap and what happens while the key

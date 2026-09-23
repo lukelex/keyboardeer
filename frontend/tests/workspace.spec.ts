@@ -280,6 +280,39 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   await page.keyboard.press("CapsLock");
   await expect(page.locator(".editor-key").first()).toHaveClass(/flashing-key/);
   await page.locator(".editor-key").first().click();
+  await page.getByRole("button", { name: "Layer action" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Layer action" }),
+  ).toBeVisible();
+  await page.getByLabel("Or add a layer").fill("Navigation");
+  await page.getByRole("button", { name: "Add layer" }).click();
+  await expect(page.getByRole("tab", { name: "Navigation" })).toBeVisible();
+  await page
+    .getByRole("button", { name: "Close complex action dialog" })
+    .click();
+  await page.getByRole("button", { name: "Pass through" }).click();
+  await expect(page.locator(".editor-key").first().locator("small")).toHaveText(
+    "Pass through",
+  );
+  await page.getByRole("button", { name: "Restore original" }).click();
+  await expect(page.locator(".editor-key").first().locator("small")).toHaveText(
+    "Pass through",
+  );
+  await page.getByRole("tab", { name: "Base" }).click();
+  await page.getByRole("button", { name: "Manage" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Manage layers" }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Navigation No entry action" })
+    .click();
+  await page.getByLabel("Rename selected layer").fill("Nav");
+  await page.getByRole("button", { name: "Rename layer" }).click();
+  await expect(page.getByRole("tab", { name: "Nav" })).toBeVisible();
+  await page
+    .getByRole("button", { name: "Close complex action dialog" })
+    .click();
+  await page.getByRole("tab", { name: "Base" }).click();
   await page.getByRole("button", { name: "Tap & hold" }).click();
   await expect(page.getByRole("heading", { name: "Tap & hold" })).toBeVisible();
   await page

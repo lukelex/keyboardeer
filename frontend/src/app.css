@@ -837,6 +837,12 @@ h1 {
   color: #73846b;
   font-size: 10px;
 }
+.selected-key-context em {
+  color: #956d30;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 650;
+}
 .layer-tabs,
 .complex-actions,
 .palette-utility {
@@ -857,6 +863,10 @@ h1 {
 .layer-tab.active {
   background: #d9ecd1;
   border-color: #608b61;
+}
+.layer-tab.unreachable {
+  border-color: #d1b775;
+  color: #86662c;
 }
 .complex-actions {
   margin-left: auto;
@@ -1021,6 +1031,51 @@ h1 {
   font-size: 11px;
   font-weight: 650;
   padding: 2px 4px;
+}
+.layer-manager-list {
+  display: grid;
+  gap: 6px;
+  margin: 18px 0;
+}
+.layer-manager-list button {
+  align-items: center;
+  background: #fffefa;
+  border: 1px solid #cbd8c4;
+  border-radius: 8px;
+  color: #315541;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  justify-content: space-between;
+  padding: 9px 10px;
+  text-align: left;
+}
+.layer-manager-list button.active {
+  background: #d9ecd1;
+  border-color: #608b61;
+}
+.layer-manager-list button.unreachable small {
+  color: #956d30;
+}
+.layer-manager-list small,
+.layer-manager-base {
+  color: #718076;
+  font-size: 10px;
+  font-weight: 500;
+}
+.layer-manager-base {
+  margin: -3px 0 2px 10px;
+}
+.layer-manager-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.layer-manager-actions .button:last-child {
+  color: #914f42;
 }
 .apply-status {
   border-top: 1px solid #dfe5d6;

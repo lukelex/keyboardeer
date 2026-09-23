@@ -87,7 +87,7 @@ terminal, and reconnect restores an authoritative view.
   map every drawn key to a source key without guessing from a product name.
 - [ ] **EDIT-01** Implement keyboard rendering, selection, bottom action palette, key search,
   single-key remapping, restore-original, undo/redo, and persistent draft status.
-- [ ] **EDIT-02** Implement layer create/rename/delete/reorder, transparency,
+- [x] **EDIT-02** Implement layer create/rename/delete/reorder, transparency,
   reachability, and layer-switch behaviors; previews must not change live state.
 - [ ] **EDIT-03** Add tap/hold behavior with explicit timing semantics and
   defaults; explain how to reach/exit layers before applying a profile.
