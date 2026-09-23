@@ -219,7 +219,8 @@
     activeProfile &&
     profilePreview?.profile_id === activeProfile.id &&
     profilePreview.draft_revision === activeProfile.draft_revision &&
-    profilePreview.manager_server_id === workspace.status.server_id
+    profilePreview.manager_server_id === workspace.status.server_id &&
+    profilePreview.state_revision === workspace.snapshot?.state_revision
       ? profilePreview
       : null;
   $: canApply =
@@ -953,7 +954,16 @@
   }
 
   function acceptWorkspaceUpdate(next: ManagerWorkspace) {
+    const environmentChanged =
+      workspace.status.server_id !== next.status.server_id ||
+      workspace.snapshot?.state_revision !== next.snapshot?.state_revision ||
+      JSON.stringify(workspace.status.capabilities ?? []) !==
+        JSON.stringify(next.status.capabilities ?? []);
     workspace = next;
+    if (environmentChanged && activeProfile) {
+      profilePreview = null;
+      schedulePreview(activeProfile);
+    }
     if (!identifyOpen || !selectedDevice) return;
     const refreshedDevice = next.snapshot?.devices?.find(
       (device) => device.id === selectedDevice?.id,

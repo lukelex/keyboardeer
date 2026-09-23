@@ -107,7 +107,7 @@ and obtain deterministic behavior without writing KMonad syntax.
   possible. Check the entire compiled candidate automatically after semantic
   edits; coalesce rapid input and bound per-device/global preview concurrency.
   Separate valid, rejected, blocked, timeout, and transport errors.
-- [ ] **VALIDATE-02** Invalidate success immediately after draft or environment
+- [x] **VALIDATE-02** Invalidate success immediately after draft or environment
   changes. Correlate responses with draft revision, device, candidate, manager
   connection, and environment generation. Ignore stale/out-of-order responses;
   avoid duplicate checks for pure selection. Never imply validity means active.
