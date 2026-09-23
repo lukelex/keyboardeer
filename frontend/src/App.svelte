@@ -135,11 +135,13 @@
     try {
       workspace = await Workspace();
     } catch (error) {
+      const desktopUnavailable = !window.go?.main?.App?.Workspace;
       workspace = {
         status: {
-          state: "unavailable",
-          message:
-            "Desktop bindings are unavailable in this browser preview. Run the Wails app to contact a manager.",
+          state: desktopUnavailable ? "browser_preview" : "unavailable",
+          message: desktopUnavailable
+            ? "This browser preview has no Wails desktop bindings, so it cannot contact the local manager. Use the native KeyboarDeer window launched by scripts/desktop.sh."
+            : "The desktop app could not load the manager workspace.",
           endpoint: "",
         },
       };
@@ -393,7 +395,9 @@
               <h2 id="manager-title">
                 {workspace.status.state === "incomplete"
                   ? "Manager API incomplete"
-                  : "Manager unavailable"}
+                  : workspace.status.state === "browser_preview"
+                    ? "Desktop bindings unavailable"
+                    : "Manager unavailable"}
               </h2>
               <p>{workspace.status.message}</p>
               {#if workspace.status.capability}<small
