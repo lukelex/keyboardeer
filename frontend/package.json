@@ -11,7 +11,7 @@
     "dev": "vite",
     "build": "vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "lint": "prettier --check .",
+    "lint": "prettier --check src index.html package.json vite.config.ts svelte.config.js tsconfig.json",
     "format": "prettier --write ."
   },
   "devDependencies": {

@@ -9,3 +9,5 @@ frontend/dist/*
 !frontend/dist/.gitkeep
 
 /keyboardeer
+frontend/wailsjs/
+frontend/package.json.md5

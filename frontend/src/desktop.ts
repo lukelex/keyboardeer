@@ -1,4 +1,6 @@
-// This development fallback is replaced by Wails-generated bindings in desktop builds.
+// Typed Wails bridge owned by KeyboarDeer. It intentionally does not import
+// generated wailsjs output, so browser development remains usable and Wails
+// regeneration never changes application source files.
 export interface AppInfo {
   name: string;
   version: string;
@@ -43,47 +45,38 @@ export interface PreviewResult {
   validation: { outcome: string; reason_code: string; reason: string };
 }
 
+type AppBindings = {
+  Info?: () => Promise<AppInfo>;
+  ManagerStatus?: () => Promise<ManagerStatus>;
+  Workspace?: () => Promise<ManagerWorkspace>;
+  IdentifyStart?: (deviceID: string, timeoutMS: number) => Promise<Operation>;
+  IdentifyCancel?: (operationID: string) => Promise<Operation>;
+  IdentifyOperation?: (operationID: string) => Promise<Operation>;
+  IntegrationDeviceList?: () => Promise<{ devices: Device[] }>;
+  IntegrationIdentifyStart?: (
+    deviceID: string,
+    timeoutMS: number,
+  ) => Promise<Operation>;
+  IntegrationIdentifyCancel?: (operationID: string) => Promise<Operation>;
+  IntegrationOperationGet?: (operationID: string) => Promise<Operation>;
+  IntegrationPreview?: (
+    deviceID: string,
+    behavior: string,
+  ) => Promise<PreviewResult>;
+};
+
 declare global {
   interface Window {
-    go?: {
-      main?: {
-        App?: {
-          Info?: () => Promise<AppInfo>;
-          ManagerStatus?: () => Promise<ManagerStatus>;
-          Workspace?: () => Promise<ManagerWorkspace>;
-          IdentifyStart?: (
-            deviceID: string,
-            timeoutMS: number,
-          ) => Promise<Operation>;
-          IdentifyCancel?: (operationID: string) => Promise<Operation>;
-          IdentifyOperation?: (operationID: string) => Promise<Operation>;
-          IntegrationDeviceList?: () => Promise<{ devices: Device[] }>;
-          IntegrationIdentifyStart?: (
-            deviceID: string,
-            timeoutMS: number,
-          ) => Promise<Operation>;
-          IntegrationIdentifyCancel?: (
-            operationID: string,
-          ) => Promise<Operation>;
-          IntegrationOperationGet?: (operationID: string) => Promise<Operation>;
-          IntegrationPreview?: (
-            deviceID: string,
-            behavior: string,
-          ) => Promise<PreviewResult>;
-        };
-      };
-    };
+    go?: { main?: { App?: AppBindings } };
   }
 }
 
-type AppBindings = NonNullable<
-  NonNullable<NonNullable<Window["go"]>["main"]>["App"]
->;
 function binding<T>(name: keyof AppBindings): T {
   const call = window.go?.main?.App?.[name];
   if (!call) throw new Error(`Wails binding ${name} is unavailable.`);
   return call as T;
 }
+
 export const Info = () => binding<() => Promise<AppInfo>>("Info")();
 export const ManagerStatus = () =>
   binding<() => Promise<ManagerStatus>>("ManagerStatus")();

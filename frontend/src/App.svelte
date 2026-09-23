@@ -12,7 +12,7 @@
     type ManagerStatus,
     type ManagerWorkspace,
     type Operation,
-  } from "../wailsjs/go/main/App";
+  } from "./desktop";
 
   type View = "devices" | "identify";
   const initialStatus: ManagerStatus = {
