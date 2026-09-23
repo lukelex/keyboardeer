@@ -12,11 +12,12 @@ rejected because the manager-rendered `defcfg` lacked an output form (see the
 source-contract gap below); no configuration was applied or device mapping
 changed.
 
-**Deployed-manager recheck:** The running user service was updated to
-`ab37fad81b7aa1615ce3fd26d7810e957757a696` (a descendant of `aa3e88c`) on the
-same date. Its API handshake, metadata, and inventory work, but a model preview
-still reaches KMonad with a `defcfg` missing `output`. The exact revision's
-`renderManagedConfiguration` source still renders only an input form.
+**Deployed-manager recheck:** The running user service first reached
+`ab37fad81b7aa1615ce3fd26d7810e957757a696` (a descendant of `aa3e88c`), where
+the missing-output preview failure remained. It was then updated to
+`41b32c733a2fc3081713cf8791610fa5cd833dfa`: the exact renderer now owns both
+input and output forms, and a real behavior-only preview returned
+`validation.valid` from KMonad dry-run.
 
 This is KeyboarDeer's maintained list of manager interactions. It is a source
 compatibility audit, **not** a statement about released manager binaries or a
@@ -51,7 +52,7 @@ Relevant source:
 | `device.identify.start` | Implemented. One bounded 1–30-second session for a connected device. | Implemented. | Normal UI is capability-gated; harness can exercise it. |
 | `device.identify.cancel` | Implemented. | Implemented. | Only while the matching identification operation is live. |
 | `operation.get` | Implemented over the retained operation store, despite the historical helper name. | Implemented. | Can read identify and retained apply/lifecycle operations. Polling is useful before events are integrated. |
-| `validation.preview` | Implemented. Model preview is side-effect-free; returns valid, rejected, or blocked. | Implemented; successful model preview is blocked by the observed render gap. | Use `{model:{device_id,behavior}}`; GUI profiles never supply `defcfg` or `device-file`. |
+| `validation.preview` | Implemented. Model preview is side-effect-free; returns valid, rejected, or blocked. | Implemented and smoke-tested successfully against deployed `41b32c7`. | Use `{model:{device_id,behavior}}`; GUI profiles never supply `defcfg` or `device-file`. |
 | `configuration.apply` | Implemented by `2516765`; transactional render, validation, persistence, activation confirmation, and rollback pipeline. | Not yet implemented. | Eventual combined create/update UI route. Revalidates at apply time. |
 | `configuration.create` / `configuration.update` | Implemented. Create accepts name/model; update requires configuration ID and expected revision. | Not yet implemented. | Managed lifecycle once local profiles/compiler are ready. |
 | `configuration.set_enabled` / `configuration.delete` | Implemented by `f8ea0ec`. Both require expected revision. | Not yet implemented. | Explicit runtime lifecycle; distinct from deleting a local profile. |
@@ -71,7 +72,7 @@ model, or a required runtime capability is unavailable.
 | Runtime health, desired/active revisions, conflicts | `snapshot.get` | Yes | Partial | Devices show associated configuration phase and desired/active revisions; add dedicated diagnostics and event-driven refresh. Do not derive health from names or CLI output. |
 | Identify a keyboard | `device.identify.start`, `operation.get`, `device.identify.cancel` | Yes | Partial | Current UI is capability-gated; smoke test it against a source build. |
 | Create and reopen an editor draft | None; application-owned persistence | N/A | Partial | The UI explicitly selects the verified US ANSI 60% geometry, creates/reopens a local draft, and persists Base-layer key assignments. Multiple-profile management, layers, undo/redo, and more behaviors remain. |
-| Compile behavior and live preview | `validation.preview` | Yes | Partial | The editor compiles and previews its complete saved draft after a Base-layer edit, coalescing rapid edits for 250 ms and discarding mismatched draft revisions. The manager must render a complete runnable `defcfg` before model previews can succeed; add bounded preview concurrency, diagnostics adapter, and broader editor UI. |
+| Compile behavior and live preview | `validation.preview` | Yes | Partial | The editor compiles and previews its complete saved draft after a Base-layer edit, coalescing rapid edits for 250 ms and discarding mismatched draft revisions. Successful behavior-only preview is proven on deployed `41b32c7`; add bounded preview concurrency, diagnostics adapter, and broader editor UI. |
 | Receive device/runtime changes | `snapshot.get`, `events.subscribe` | Yes | Partial | The app coalesces stream events into fresh snapshots and emits workspace updates. Persist the cursor across restart and add reconnect/resync integration tests. |
 | Apply a managed profile | `configuration.create` / `update` / `apply`, then snapshot/events | Mostly | No | Local compiler/profile/editor and an idempotency decision below. |
 | Enable, disable, or delete managed runtime config | `configuration.set_enabled`, `configuration.delete` | Yes | No | Configuration inventory/UI, expected-revision handling, operation recovery. |
@@ -113,18 +114,19 @@ resource. They do not promise a physical source key or behavior span. The
 per-key recovery design still needs KeyboarDeer's local compiler/source map and
 must leave unmappable manager errors at keymap level.
 
-### 5. Model rendering currently omits an output form
+### 5. Model rendering gap fixed in deployed `41b32c7`
 
 The smoke test sent a standard `(defsrc …)/(deflayer …)` behavior model for a
 connected device. `validation.preview` reached KMonad, which rejected the
 manager-generated candidate with `Missing setting in 'defcfg': output`. At this
 revision `renderManagedConfiguration` emits only the manager-owned input form.
-This conflicts with the model contract needed by KeyboarDeer: the GUI must not
-choose a device-specific `defcfg` representation, but the manager must render
-a complete runnable one. Keep preview/apply UI disabled for this source revision
-until the manager supplies the output form (and re-run a valid-model smoke test).
-This was re-confirmed against deployed manager `ab37fad`, which is newer than
-the original source-audit commit.
+This exposed a model-contract gap: the GUI must not choose a device-specific
+`defcfg` representation, but the manager must render a complete runnable one.
+Commit `41b32c7` fixes that renderer through a platform-owned complete `defcfg`
+and rejects behavior that attempts to provide manager-owned input/output forms.
+The updated deployed service accepted the same behavior-only candidate with
+`validation.valid`. This removes the preview blocker, but does not change the
+separate idempotency and managed-lifecycle gates for Apply.
 
 ## Required API behavior
 
