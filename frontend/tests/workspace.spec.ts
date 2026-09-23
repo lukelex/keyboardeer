@@ -205,13 +205,6 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   await expect(
     page.getByText("Manager preview: Valid", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Review & apply" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Ready to make it live?" }),
-  ).toBeVisible();
-  await page
-    .getByText("I understand this changes the live mapping for this keyboard.")
-    .click();
   await page.getByRole("button", { name: "Apply to keyboard" }).click();
   await expect(
     page.getByText(

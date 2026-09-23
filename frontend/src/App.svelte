@@ -27,7 +27,7 @@
     type ProfilePreview,
   } from "./desktop";
 
-  type View = "devices" | "identify" | "setup" | "editor" | "review";
+  type View = "devices" | "identify" | "setup" | "editor";
   const initialStatus: ManagerStatus = {
     state: "checking",
     message: "Checking the local manager connection…",
@@ -50,7 +50,6 @@
   let previewTimer: ReturnType<typeof setTimeout> | undefined;
   let previewGeneration = 0;
   let applyBusy = false;
-  let applyConfirmed = false;
   let applyOperation: Operation | null = null;
   let lifecycleBusyID = "";
   let operation: Operation | null = null;
@@ -307,15 +306,8 @@
       void previewDraft(draft, generation);
     }, 250);
   }
-  function openReview() {
-    if (!canApply || !activeProfile) return;
-    applyConfirmed = false;
-    applyOperation = null;
-    feedback = "";
-    view = "review";
-  }
   async function applyDraft() {
-    if (!activeProfile || !canApply || !applyConfirmed || applyBusy) return;
+    if (!activeProfile || !canApply || applyBusy) return;
     applyBusy = true;
     feedback = "";
     try {
@@ -325,7 +317,6 @@
         profile.id === result.profile.id ? result.profile : profile,
       );
       applyOperation = result.operation;
-      view = "editor";
       await refresh();
     } catch (error) {
       feedback = explain(error);
@@ -903,12 +894,12 @@
             <button
               class="button primary"
               type="button"
-              on:click={openReview}
+              on:click={applyDraft}
               disabled={!canApply || applyBusy}
               title={canApply
-                ? "Review the validated draft before applying it"
+                ? "Apply this validated draft to the keyboard"
                 : "Apply requires a current valid manager preview, a connected keyboard, and the managed-configurations capability."}
-              >Review & apply</button
+              >{applyBusy ? "Applying…" : "Apply to keyboard"}</button
             >
           </div>
         {:else}
@@ -920,68 +911,6 @@
             </div>
           </section>
         {/if}
-        {#if feedback}<p class="inline-feedback" role="status">
-            {feedback}
-          </p>{/if}
-      </section>
-    {:else if view === "review" && activeProfile}
-      <section class="review-page" aria-labelledby="review-title">
-        <button class="back-link" on:click={() => (view = "editor")}
-          >← Back to editor</button
-        >
-        <div class="page-heading">
-          <div>
-            <p class="eyebrow">REVIEW & APPLY</p>
-            <h1 id="review-title">Ready to make it live?</h1>
-            <p>
-              {activeProfile.name} will be managed for
-              {selectedDevice?.display_name ?? "this keyboard"}.
-            </p>
-          </div>
-          <span class="build-label">VALIDATED DRAFT</span>
-        </div>
-        <section class="review-card">
-          <h2>What happens next</h2>
-          <ol>
-            <li>The manager recompiles and validates the complete behavior.</li>
-            <li>It writes its own managed configuration and activates it.</li>
-            <li>
-              It reports activation or rollback; closing this app does not stop
-              the mapping.
-            </li>
-          </ol>
-          <p class="boundary-note">
-            This is a {activeProfile.manager_configuration_id
-              ? "revision-checked update"
-              : "new managed configuration"}. The manager, not KeyboarDeer,
-            chooses all platform input and output details.
-          </p>
-          <label class="apply-confirmation">
-            <input
-              type="checkbox"
-              bind:checked={applyConfirmed}
-              disabled={applyBusy}
-            />
-            <span
-              >I understand this changes the live mapping for this keyboard.</span
-            >
-          </label>
-          <div class="setup-actions">
-            <button
-              class="button secondary"
-              type="button"
-              on:click={() => (view = "editor")}
-              disabled={applyBusy}>Cancel</button
-            >
-            <button
-              class="button primary"
-              type="button"
-              on:click={applyDraft}
-              disabled={!applyConfirmed || !canApply || applyBusy}
-              >{applyBusy ? "Applying…" : "Apply to keyboard"}</button
-            >
-          </div>
-        </section>
         {#if feedback}<p class="inline-feedback" role="status">
             {feedback}
           </p>{/if}
