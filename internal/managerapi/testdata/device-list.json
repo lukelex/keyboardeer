@@ -1,0 +1,15 @@
+{
+  "devices": [
+    {
+      "id": "dev_test",
+      "display_name": "Contract fixture keyboard",
+      "availability": "mystery_future_state",
+      "identity_stability": "unknown",
+      "configured_by": [],
+      "runtime_conflict": false,
+      "reason_code": "future_reason",
+      "reason": "A future manager response",
+      "unknown_future_field": {"safe": true}
+    }
+  ]
+}
