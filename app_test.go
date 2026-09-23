@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -58,5 +59,39 @@ func TestWorkspaceEventStreamRequiresFreshAdvertisedCapability(t *testing.T) {
 	workspace.Status.Capabilities[0].Available = false
 	if workspaceEventStreamAvailable(workspace) {
 		t.Fatal("workspace without event_stream capability was eligible")
+	}
+}
+
+func TestRecordWorkspacePersistsSnapshotReplayCursor(t *testing.T) {
+	store := managerapi.NewEventCursorStore(filepath.Join(t.TempDir(), "event-cursor.json"))
+	app := &App{eventCursors: store}
+	app.recordWorkspace(managerapi.Workspace{
+		Status:   managerapi.ConnectionStatus{State: "ready"},
+		Snapshot: &managerapi.Snapshot{EventCursor: managerapi.EventCursor{ServerID: "server-1", EventID: 9, StateRevision: 14}},
+	})
+	cursor, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cursor.ServerID != "server-1" || cursor.EventID != 9 || cursor.StateRevision != 14 {
+		t.Fatalf("persisted cursor = %#v", cursor)
+	}
+}
+
+func TestSubscriptionCursorNeverSkipsAheadOfSnapshot(t *testing.T) {
+	store := managerapi.NewEventCursorStore(filepath.Join(t.TempDir(), "event-cursor.json"))
+	app := &App{eventCursors: store}
+	snapshot := managerapi.EventCursor{ServerID: "server-1", EventID: 9, StateRevision: 14}
+	if err := store.Save(snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if got := app.subscriptionCursor(snapshot); got != snapshot {
+		t.Fatalf("equal persisted cursor was not restored: %#v", got)
+	}
+	if err := store.Save(managerapi.EventCursor{ServerID: "server-1", EventID: 10, StateRevision: 15}); err != nil {
+		t.Fatal(err)
+	}
+	if got := app.subscriptionCursor(snapshot); got != snapshot {
+		t.Fatalf("persisted cursor skipped snapshot boundary: %#v", got)
 	}
 }

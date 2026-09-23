@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -27,11 +28,13 @@ type App struct {
 	ctx               context.Context
 	manager           *managerapi.APIClient
 	profiles          *profile.Store
+	eventCursors      *managerapi.EventCursorStore
 	profileStoreError error
 	monitorMu         sync.Mutex
 	monitor           *managerapi.EventSubscription
 	monitorGeneration uint64
 	workspaceMu       sync.Mutex
+	workspaceLoadMu   sync.Mutex
 	lastWorkspace     *managerapi.Workspace
 	refreshTimer      *time.Timer
 	refreshDue        time.Time
@@ -51,12 +54,17 @@ func NewApp() *App {
 	}), profileStoreError: err}
 	if err == nil {
 		app.profiles = profile.NewStore(path)
+		app.eventCursors = managerapi.NewEventCursorStore(filepath.Join(filepath.Dir(path), "event-cursor.json"))
 	}
 	return app
 }
 
 func newAppWithProfileStore(store *profile.Store) *App {
-	return &App{manager: managerapi.New(managerapi.Options{ClientName: "keyboardeer", ClientVersion: appVersion}), profiles: store}
+	return &App{
+		manager:      managerapi.New(managerapi.Options{ClientName: "keyboardeer", ClientVersion: appVersion}),
+		profiles:     store,
+		eventCursors: managerapi.NewEventCursorStore(filepath.Join(filepath.Dir(store.Path()), "event-cursor.json")),
+	}
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -375,9 +383,17 @@ func (a *App) ManagerStatus() managerapi.ConnectionStatus {
 func (a *App) Workspace() managerapi.Workspace {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	workspace := a.recordWorkspace(a.manager.LoadWorkspace(ctx))
+	workspace := a.loadWorkspace(ctx)
 	a.observeWorkspace(workspace)
 	return workspace
+}
+
+func (a *App) loadWorkspace(ctx context.Context) managerapi.Workspace {
+	// A snapshot is a point-in-time authority. Serializing requests prevents a
+	// slow earlier request from overwriting a newer snapshot/event cursor.
+	a.workspaceLoadMu.Lock()
+	defer a.workspaceLoadMu.Unlock()
+	return a.recordWorkspace(a.manager.LoadWorkspace(ctx))
 }
 
 // recordWorkspace retains the last authoritative snapshot only as explicitly
@@ -390,6 +406,7 @@ func (a *App) recordWorkspace(workspace managerapi.Workspace) managerapi.Workspa
 		workspace.Stale = false
 		copy := workspace
 		a.lastWorkspace = &copy
+		a.persistEventCursor(workspace.Snapshot.EventCursor)
 		return workspace
 	}
 	if a.lastWorkspace == nil || a.lastWorkspace.Snapshot == nil {
@@ -411,6 +428,28 @@ func (a *App) recordWorkspace(workspace managerapi.Workspace) managerapi.Workspa
 		workspace.Status.Version = last.Status.Version
 	}
 	return workspace
+}
+
+func (a *App) persistEventCursor(cursor managerapi.EventCursor) {
+	if a.eventCursors == nil {
+		return
+	}
+	// Loss of this optional convenience state never affects the authoritative
+	// snapshot or event subscription. A later snapshot remains the recovery path.
+	_ = a.eventCursors.Save(cursor)
+}
+
+func (a *App) staleWorkspace(message string) (managerapi.Workspace, bool) {
+	a.workspaceMu.Lock()
+	defer a.workspaceMu.Unlock()
+	if a.lastWorkspace == nil || a.lastWorkspace.Snapshot == nil {
+		return managerapi.Workspace{}, false
+	}
+	stale := *a.lastWorkspace
+	stale.Stale = true
+	stale.Status.State = "reconnecting"
+	stale.Status.Message = message
+	return stale, true
 }
 
 // observeWorkspace maintains one dedicated event-stream connection. Events are
@@ -443,7 +482,7 @@ func (a *App) observeWorkspace(workspace managerapi.Workspace) {
 		a.scheduleWorkspaceResync(generation, delay)
 		return
 	}
-	cursor := workspace.Snapshot.EventCursor
+	cursor := a.subscriptionCursor(workspace.Snapshot.EventCursor)
 	if a.ctx == nil || (a.monitor != nil && a.monitor.Info.ServerID == cursor.ServerID) {
 		a.monitorMu.Unlock()
 		return
@@ -467,12 +506,27 @@ func workspaceEventStreamAvailable(workspace managerapi.Workspace) bool {
 	return available
 }
 
+// subscriptionCursor makes the persisted cursor part of the restart handoff
+// without ever skipping ahead of the fresh snapshot. A persisted cursor only
+// replaces an identical snapshot boundary; otherwise the snapshot is newer (or
+// belongs to a restarted manager) and is the only safe replay starting point.
+func (a *App) subscriptionCursor(snapshot managerapi.EventCursor) managerapi.EventCursor {
+	if a.eventCursors == nil || snapshot.ServerID == "" {
+		return snapshot
+	}
+	persisted, err := a.eventCursors.Load()
+	if err != nil || persisted.ServerID != snapshot.ServerID || persisted.EventID != snapshot.EventID || persisted.StateRevision != snapshot.StateRevision {
+		return snapshot
+	}
+	return persisted
+}
+
 func (a *App) openWorkspaceMonitor(generation uint64, cursor managerapi.EventCursor) {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	monitor, err := a.manager.Subscribe(ctx, cursor)
 	if err != nil {
-		a.scheduleWorkspaceResync(generation, time.Second)
+		a.scheduleWorkspaceResync(generation, workspaceRetryInterval)
 		return
 	}
 	a.monitorMu.Lock()
@@ -491,15 +545,37 @@ func (a *App) runWorkspaceMonitor(generation uint64, monitor *managerapi.EventSu
 	var timer *time.Timer
 	for {
 		select {
+		case <-monitor.Done():
+			if timer != nil {
+				timer.Stop()
+			}
+			if !a.clearWorkspaceMonitor(generation, monitor) {
+				return
+			}
+			a.persistEventCursor(monitor.Cursor())
+			if stale, ok := a.staleWorkspace("The manager event stream disconnected. Refreshing the authoritative keyboard snapshot…"); ok {
+				a.emitWorkspace(stale)
+			}
+			a.scheduleWorkspaceResync(generation, 250*time.Millisecond)
+			return
 		case _, open := <-monitor.Events:
 			if !open {
 				if timer != nil {
 					timer.Stop()
 				}
-				a.clearWorkspaceMonitor(generation, monitor)
+				if !a.clearWorkspaceMonitor(generation, monitor) {
+					return
+				}
+				a.persistEventCursor(monitor.Cursor())
+				if stale, ok := a.staleWorkspace("The manager event stream disconnected. Refreshing the authoritative keyboard snapshot…"); ok {
+					a.emitWorkspace(stale)
+				}
 				a.scheduleWorkspaceResync(generation, 250*time.Millisecond)
 				return
 			}
+			// Event types are intentionally opaque hints. A future event still
+			// advances the cursor and triggers a complete authoritative snapshot.
+			a.persistEventCursor(monitor.Cursor())
 			if timer == nil {
 				timer = time.NewTimer(150 * time.Millisecond)
 				refresh = timer.C
@@ -512,12 +588,14 @@ func (a *App) runWorkspaceMonitor(generation uint64, monitor *managerapi.EventSu
 	}
 }
 
-func (a *App) clearWorkspaceMonitor(generation uint64, monitor *managerapi.EventSubscription) {
+func (a *App) clearWorkspaceMonitor(generation uint64, monitor *managerapi.EventSubscription) bool {
 	a.monitorMu.Lock()
 	defer a.monitorMu.Unlock()
 	if generation == a.monitorGeneration && a.monitor == monitor {
 		a.monitor = nil
+		return true
 	}
+	return false
 }
 
 func (a *App) scheduleWorkspaceResync(generation uint64, delay time.Duration) {
@@ -564,7 +642,7 @@ func (a *App) refreshWorkspace(generation uint64) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	workspace := a.recordWorkspace(a.manager.LoadWorkspace(ctx))
+	workspace := a.loadWorkspace(ctx)
 	a.emitWorkspace(workspace)
 	a.observeWorkspace(workspace)
 }

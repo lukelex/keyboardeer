@@ -14,7 +14,12 @@ import (
 
 const eventBuffer = 64
 
-var ErrSlowEventConsumer = errors.New("manager event consumer is too slow")
+var (
+	ErrSlowEventConsumer  = errors.New("manager event consumer is too slow")
+	ErrEventGap           = errors.New("manager event stream has a cursor gap")
+	ErrEventResync        = errors.New("manager event stream requires a resync")
+	ErrEventServerChanged = errors.New("manager event stream server changed")
+)
 
 // EventSubscription owns a dedicated API connection. The manager sends a
 // subscription response followed by event frames on that same connection, so
@@ -29,6 +34,8 @@ type EventSubscription struct {
 	closeOnce  sync.Once
 	errMu      sync.Mutex
 	err        error
+	cursorMu   sync.Mutex
+	cursor     EventCursor
 }
 
 func (s *EventSubscription) Done() <-chan struct{} { return s.done }
@@ -37,6 +44,21 @@ func (s *EventSubscription) Err() error {
 	s.errMu.Lock()
 	defer s.errMu.Unlock()
 	return s.err
+}
+
+// Cursor is the latest contiguous cursor delivered by this subscription. It is
+// safe to persist after an event and is never advanced over a detected gap.
+func (s *EventSubscription) Cursor() EventCursor {
+	s.cursorMu.Lock()
+	defer s.cursorMu.Unlock()
+	return s.cursor
+}
+
+func (s *EventSubscription) advanceCursor(event Event) {
+	s.cursorMu.Lock()
+	s.cursor.EventID = event.EventID
+	s.cursor.StateRevision = event.StateRevision
+	s.cursorMu.Unlock()
 }
 
 func (s *EventSubscription) Close() error {
@@ -50,7 +72,6 @@ func (s *EventSubscription) finish(err error) {
 		s.err = err
 		s.errMu.Unlock()
 		_ = s.connection.Close()
-		close(s.events)
 		close(s.done)
 	})
 }
@@ -86,8 +107,17 @@ func (c *APIClient) Subscribe(ctx context.Context, cursor EventCursor) (*EventSu
 		_ = connection.Close()
 		return nil, err
 	}
+	if cursor.ServerID != "" && info.ServerID != "" && cursor.ServerID != info.ServerID {
+		_ = connection.Close()
+		return nil, fmt.Errorf("%w: expected %q, got %q", ErrEventServerChanged, cursor.ServerID, info.ServerID)
+	}
+	serverID := info.ServerID
+	if serverID == "" {
+		serverID = cursor.ServerID
+	}
 	subscription := &EventSubscription{
 		Info: info, connection: connection, events: make(chan Event, eventBuffer), done: make(chan struct{}),
+		cursor: EventCursor{ServerID: serverID, EventID: cursor.EventID, StateRevision: cursor.StateRevision},
 	}
 	subscription.Events = subscription.events
 	go subscription.readEvents(reader)
@@ -144,6 +174,7 @@ func (c *APIClient) subscriptionRequest(ctx context.Context, connection net.Conn
 }
 
 func (s *EventSubscription) readEvents(reader *bufio.Reader) {
+	defer close(s.events)
 	for {
 		line, err := reader.ReadSlice('\n')
 		if err != nil {
@@ -172,14 +203,26 @@ func (s *EventSubscription) readEvents(reader *bufio.Reader) {
 			s.finish(errors.New("unexpected non-event frame on manager event stream"))
 			return
 		}
+		if frame.Event.Type == "manager.resync_required" {
+			s.finish(ErrEventResync)
+			return
+		}
+		cursor := s.Cursor()
+		if frame.Event.EventID != cursor.EventID+1 {
+			s.finish(fmt.Errorf("%w: expected event %d, got %d", ErrEventGap, cursor.EventID+1, frame.Event.EventID))
+			return
+		}
+		if frame.Event.StateRevision < cursor.StateRevision {
+			s.finish(fmt.Errorf("%w: state revision regressed from %d to %d", ErrEventGap, cursor.StateRevision, frame.Event.StateRevision))
+			return
+		}
+		s.advanceCursor(frame.Event)
 		select {
+		case <-s.done:
+			return
 		case s.events <- frame.Event:
 		default:
 			s.finish(ErrSlowEventConsumer)
-			return
-		}
-		if frame.Event.Type == "manager.resync_required" {
-			s.finish(nil)
 			return
 		}
 	}

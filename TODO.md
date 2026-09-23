@@ -67,7 +67,7 @@ supervision code in KeyboarDeer.
   the chosen mapping may pause. **Normal UI gate: MGR-01.**
 - [x] **STATE-01** Add bounded snapshot refresh while events are unsupported;
   mark stale state on disconnect rather than presenting it as live health.
-- [ ] **STATE-02** Add events with a gap-free snapshot handoff, replay cursor,
+- [x] **STATE-02** Add events with a gap-free snapshot handoff, replay cursor,
   unknown-event tolerance, manager restart handling, and resync after backlog.
   **Upstream gate: MGR-04.**
 

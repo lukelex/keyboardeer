@@ -418,10 +418,93 @@ func TestSubscribeReplaysEventsAndEndsOnResync(t *testing.T) {
 	for event := range subscription.Events {
 		types = append(types, event.Type)
 	}
-	if len(types) != 2 || types[0] != "device.added" || types[1] != "manager.resync_required" {
+	if len(types) != 1 || types[0] != "device.added" {
 		t.Fatalf("events = %v", types)
 	}
-	if err := subscription.Err(); err != nil {
+	if !errors.Is(subscription.Err(), ErrEventResync) {
+		t.Fatalf("subscription error = %v, want resync", subscription.Err())
+	}
+	if cursor := subscription.Cursor(); cursor.EventID != 5 || cursor.StateRevision != 7 {
+		t.Fatalf("cursor advanced across resync: %#v", cursor)
+	}
+}
+
+func TestSubscribeRejectsEventCursorGap(t *testing.T) {
+	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
+		switch request.Method {
+		case "session.hello":
+			writeResult(t, rw, request.ID, `{"selected_version":1,"server_id":"server-1","manager_version":"test"}`)
+		case "events.subscribe":
+			writeResult(t, rw, request.ID, `{"subscription_id":2,"server_id":"server-1","state_revision":8,"latest_event_id":7}`)
+			if _, err := rw.WriteString(`{"type":"event","event_id":7,"state_revision":8,"time":"2026-09-23T00:00:00Z","event_type":"future.event","resource":{"kind":"device","id":"dev-1"},"reason_code":"future_reason","data":{}}` + "\n"); err != nil {
+				t.Error(err)
+				return
+			}
+			if err := rw.Flush(); err != nil {
+				t.Error(err)
+			}
+		default:
+			t.Errorf("unexpected method %s", request.Method)
+		}
+	})
+	client := New(Options{Endpoint: socket})
+	defer client.Close()
+	subscription, err := client.Subscribe(context.Background(), EventCursor{ServerID: "server-1", EventID: 4, StateRevision: 6})
+	if err != nil {
 		t.Fatal(err)
 	}
+	for range subscription.Events {
+	}
+	if !errors.Is(subscription.Err(), ErrEventGap) {
+		t.Fatalf("subscription error = %v, want cursor gap", subscription.Err())
+	}
+	if cursor := subscription.Cursor(); cursor.EventID != 4 {
+		t.Fatalf("cursor advanced across gap: %#v", cursor)
+	}
+}
+
+func TestSubscribeAcceptsUnknownEventsAndRejectsManagerRestart(t *testing.T) {
+	t.Run("unknown event", func(t *testing.T) {
+		socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
+			switch request.Method {
+			case "session.hello":
+				writeResult(t, rw, request.ID, `{"selected_version":1,"server_id":"server-1","manager_version":"test"}`)
+			case "events.subscribe":
+				writeResult(t, rw, request.ID, `{"subscription_id":2,"server_id":"server-1","state_revision":7,"latest_event_id":5}`)
+				_, _ = rw.WriteString(`{"type":"event","event_id":5,"state_revision":7,"time":"2026-09-23T00:00:00Z","event_type":"future.event","resource":{"kind":"device","id":"dev-1"},"reason_code":"future_reason","data":{}}` + "\n")
+				_ = rw.Flush()
+			default:
+				t.Errorf("unexpected method %s", request.Method)
+			}
+		})
+		client := New(Options{Endpoint: socket})
+		defer client.Close()
+		subscription, err := client.Subscribe(context.Background(), EventCursor{ServerID: "server-1", EventID: 4, StateRevision: 6})
+		if err != nil {
+			t.Fatal(err)
+		}
+		event := <-subscription.Events
+		if event.Type != "future.event" || subscription.Cursor().EventID != 5 {
+			t.Fatalf("unknown event was not delivered: %#v, %#v", event, subscription.Cursor())
+		}
+		_ = subscription.Close()
+	})
+	t.Run("server changed", func(t *testing.T) {
+		socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
+			switch request.Method {
+			case "session.hello":
+				writeResult(t, rw, request.ID, `{"selected_version":1,"server_id":"server-2","manager_version":"test"}`)
+			case "events.subscribe":
+				writeResult(t, rw, request.ID, `{"subscription_id":2,"server_id":"server-2","state_revision":1,"latest_event_id":0}`)
+			default:
+				t.Errorf("unexpected method %s", request.Method)
+			}
+		})
+		client := New(Options{Endpoint: socket})
+		defer client.Close()
+		_, err := client.Subscribe(context.Background(), EventCursor{ServerID: "server-1", EventID: 4})
+		if !errors.Is(err, ErrEventServerChanged) {
+			t.Fatalf("subscribe error = %v, want manager restart", err)
+		}
+	})
 }
