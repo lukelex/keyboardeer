@@ -324,6 +324,35 @@ func TestWorkspaceUsesSnapshotAfterCapabilityNegotiation(t *testing.T) {
 	}
 }
 
+func TestWorkspaceDoesNotFetchDevicesWithoutDiscoveryCapability(t *testing.T) {
+	var methods []string
+	var methodsMu sync.Mutex
+	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
+		methodsMu.Lock()
+		methods = append(methods, request.Method)
+		methodsMu.Unlock()
+		switch request.Method {
+		case "session.hello":
+			writeResult(t, rw, request.ID, `{"selected_version":1,"server_id":"server","manager_version":"test"}`)
+		case "manager.get":
+			writeResult(t, rw, request.ID, `{"server_id":"server","capabilities":[{"name":"device_discovery","available":false,"reason_code":"backend_unavailable","reason":"no input backend"}]}`)
+		default:
+			t.Errorf("unexpected method %s", request.Method)
+		}
+	})
+	client := New(Options{Endpoint: socket})
+	defer client.Close()
+	workspace := client.LoadWorkspace(context.Background())
+	if workspace.Status.State != "incomplete" || workspace.Status.Capability != "device_discovery" || workspace.Status.Message != "no input backend" {
+		t.Fatalf("unexpected workspace: %#v", workspace)
+	}
+	methodsMu.Lock()
+	defer methodsMu.Unlock()
+	if len(methods) != 2 {
+		t.Fatalf("snapshot.get must not run without device discovery, methods=%v", methods)
+	}
+}
+
 func TestManagerGetDecodesPublicMetadata(t *testing.T) {
 	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
 		switch request.Method {

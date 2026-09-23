@@ -42,7 +42,7 @@ explains sequencing; this file is the place to track completion.
 - [x] **API-04** Add an explicit integration harness for implemented device list,
   identify start/cancel, identification operation polling, and model preview.
   Prove these calls against the supported manager revision, not just mocks.
-- [ ] **API-05** Implement normal capability negotiation using `manager.get`;
+- [x] **API-05** Implement normal capability negotiation using `manager.get`;
   show API-incomplete when unsupported and never silently enable features.
   **Upstream gate: MGR-01.**
 - [ ] **DESIGN-01** Review the prototype with first-time users; validate key
