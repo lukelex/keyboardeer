@@ -128,14 +128,26 @@
   function isWorkspace(value: unknown): value is ManagerWorkspace {
     return typeof value === "object" && value !== null && "status" in value;
   }
+  function hasDesktopBinding(name: string) {
+    return !!window.go?.main?.App?.[name as keyof typeof window.go.main.App];
+  }
+  async function waitForDesktopBinding(name: string, timeoutMS = 1500) {
+    const deadline = Date.now() + timeoutMS;
+    while (!hasDesktopBinding(name) && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    return hasDesktopBinding(name);
+  }
 
   async function refresh() {
     loading = true;
     feedback = "";
+    const workspaceBindingReady = await waitForDesktopBinding("Workspace");
     try {
       workspace = await Workspace();
+      if (workspaceBindingReady) void loadLocalDrafts();
     } catch (error) {
-      const desktopUnavailable = !window.go?.main?.App?.Workspace;
+      const desktopUnavailable = !workspaceBindingReady;
       workspace = {
         status: {
           state: desktopUnavailable ? "browser_preview" : "unavailable",
@@ -324,6 +336,7 @@
   onMount(() => {
     void (async () => {
       try {
+        await waitForDesktopBinding("Info");
         info = await Info();
       } catch {
         info = { name: "KeyboarDeer", version: "browser development" };
@@ -338,7 +351,6 @@
     // The manager view must never wait on optional local-draft bindings. A
     // corrupt or unavailable profile store may disable setup, but it cannot
     // leave the device workspace indefinitely stuck in its initial state.
-    void loadLocalDrafts();
     void refresh();
   });
   onDestroy(() => {
