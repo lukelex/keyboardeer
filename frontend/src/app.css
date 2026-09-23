@@ -774,6 +774,33 @@ h1 {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.identify-timing {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.identify-timing label {
+  color: #647669;
+  font-size: 11px;
+  font-weight: 700;
+}
+.identify-timing select {
+  background: #fffefa;
+  border: 1px solid #cbd8c4;
+  border-radius: 7px;
+  color: #315541;
+  font: inherit;
+  font-size: 12px;
+  min-height: 32px;
+  padding: 4px 7px;
+}
+.identify-timing strong {
+  color: #4f7d4c;
+  font-size: 11px;
+  margin-left: auto;
+}
 .identify-actions {
   display: flex;
   gap: 10px;

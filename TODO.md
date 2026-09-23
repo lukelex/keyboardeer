@@ -62,7 +62,7 @@ supervision code in KeyboarDeer.
   **Upstream gate: MGR-02.**
 - [x] **DEV-03** Show external configurations as read-only and preserve
   per-resource diagnostics and remediation.
-- [ ] **DEV-04** Integrate bounded identification, countdown, cancellation,
+- [x] **DEV-04** Integrate bounded identification, countdown, cancellation,
   timeout/hotplug/conflict handling, and operation polling; explain that only
   the chosen mapping may pause. **Normal UI gate: MGR-01.**
 - [ ] **STATE-01** Add bounded snapshot refresh while events are unsupported;

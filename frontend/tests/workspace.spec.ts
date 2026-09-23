@@ -201,6 +201,27 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
               configuration_revision: 8,
             };
           },
+          IdentifyStart: async (_, timeoutMS) => ({
+            id: "identify-1",
+            kind: "identify",
+            state: "waiting",
+            reason_code: "operation_waiting",
+            reason: `Waiting up to ${timeoutMS} milliseconds for a keypress.`,
+          }),
+          IdentifyOperation: async () => ({
+            id: "identify-1",
+            kind: "identify",
+            state: "waiting",
+            reason_code: "operation_waiting",
+            reason: "Waiting for a keypress.",
+          }),
+          IdentifyCancel: async () => ({
+            id: "identify-1",
+            kind: "identify",
+            state: "cancelled",
+            reason_code: "operation_cancelled",
+            reason: "Identification was cancelled.",
+          }),
         },
       },
     };
@@ -218,6 +239,13 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   await expect(identify.locator("svg")).toBeVisible();
   await identify.click();
   await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByLabel("Session length").selectOption("5000");
+  await page
+    .getByRole("button", { name: "Start 5-second identification" })
+    .click();
+  await expect(page.getByText(/remaining$/)).toBeVisible();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
   await page
     .getByRole("button", { name: "Close keyboard identification" })
     .click();

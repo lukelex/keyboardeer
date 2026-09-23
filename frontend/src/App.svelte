@@ -140,8 +140,12 @@
   let loading = false;
   let identifyBusy = false;
   let identifyOpen = false;
+  let identifyTimeoutMS = 15_000;
+  let identifyDeadlineMS = 0;
+  let identifyRemainingSeconds = 0;
   let feedback = "";
   let pollTimer: ReturnType<typeof setInterval> | undefined;
+  let identifyCountdownTimer: ReturnType<typeof setInterval> | undefined;
   let managerCheckTimer: ReturnType<typeof setInterval> | undefined;
   let stopWorkspaceEvents: (() => void) | undefined;
 
@@ -414,6 +418,17 @@
   function clearPolling() {
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = undefined;
+    if (identifyCountdownTimer) clearInterval(identifyCountdownTimer);
+    identifyCountdownTimer = undefined;
+    identifyDeadlineMS = 0;
+    identifyRemainingSeconds = 0;
+  }
+  function updateIdentifyCountdown() {
+    if (!identifyDeadlineMS) return;
+    identifyRemainingSeconds = Math.max(
+      0,
+      Math.ceil((identifyDeadlineMS - Date.now()) / 1000),
+    );
   }
   function clearManagerCheckTimer() {
     if (managerCheckTimer) clearInterval(managerCheckTimer);
@@ -449,7 +464,7 @@
     feedback = "";
     const workspaceBindingReady = await waitForDesktopBinding("Workspace");
     try {
-      workspace = await Workspace();
+      acceptWorkspaceUpdate(await Workspace());
       if (workspaceBindingReady) void loadLocalDrafts();
     } catch (error) {
       const desktopUnavailable = !workspaceBindingReady;
@@ -485,6 +500,7 @@
   }
   function closeIdentify() {
     if (operation && !terminal(operation.state)) void cancelIdentify();
+    clearPolling();
     identifyOpen = false;
   }
   function handleIdentifyKeydown(event: KeyboardEvent) {
@@ -867,7 +883,11 @@
     if (!operation) return;
     try {
       operation = await IdentifyOperation(operation.id);
-      if (operation && terminal(operation.state)) clearPolling();
+      if (operation && terminal(operation.state)) {
+        clearPolling();
+      } else {
+        updateIdentifyCountdown();
+      }
     } catch (error) {
       feedback = explain(error);
       clearPolling();
@@ -878,9 +898,12 @@
     identifyBusy = true;
     feedback = "";
     try {
-      operation = await IdentifyStart(selectedDevice.id, 15_000);
+      operation = await IdentifyStart(selectedDevice.id, identifyTimeoutMS);
       clearPolling();
+      identifyDeadlineMS = Date.now() + identifyTimeoutMS;
+      updateIdentifyCountdown();
       pollTimer = setInterval(pollOperation, 700);
+      identifyCountdownTimer = setInterval(updateIdentifyCountdown, 250);
     } catch (error) {
       feedback = explain(error);
     } finally {
@@ -909,6 +932,24 @@
     applyOperation = null;
   }
 
+  function acceptWorkspaceUpdate(next: ManagerWorkspace) {
+    workspace = next;
+    if (!identifyOpen || !selectedDevice) return;
+    const refreshedDevice = next.snapshot?.devices?.find(
+      (device) => device.id === selectedDevice?.id,
+    );
+    if (!refreshedDevice) {
+      feedback = "The selected keyboard is no longer reported by the manager. Identification may have ended.";
+      return;
+    }
+    selectedDevice = refreshedDevice;
+    if (refreshedDevice.runtime_conflict) {
+      feedback = "The selected keyboard now has a runtime conflict. The manager may stop identification.";
+    } else if (!isConnected(refreshedDevice)) {
+      feedback = "The selected keyboard disconnected. The manager may stop identification.";
+    }
+  }
+
   onMount(() => {
     void (async () => {
       try {
@@ -921,7 +962,7 @@
     stopWorkspaceEvents = window.runtime?.EventsOn?.(
       "workspace:changed",
       (next) => {
-        if (isWorkspace(next)) workspace = next;
+        if (isWorkspace(next)) acceptWorkspaceUpdate(next);
       },
     );
     // The manager view must never wait on optional local-draft bindings. A
@@ -1881,6 +1922,23 @@
                 >{operation ? operation.reason_code : "Not started"}</span
               >{#if operation}<small>Operation {operation.id}</small>{/if}
             </div>
+            <div class="identify-timing">
+              <label for="identify-timeout">Session length</label>
+              <select
+                id="identify-timeout"
+                bind:value={identifyTimeoutMS}
+                disabled={!!(operation && !terminal(operation.state))}
+              >
+                <option value={5_000}>5 seconds</option>
+                <option value={15_000}>15 seconds</option>
+                <option value={30_000}>30 seconds</option>
+              </select>
+              {#if operation && !terminal(operation.state)}
+                <strong aria-live="polite"
+                  >{identifyRemainingSeconds}s remaining</strong
+                >
+              {/if}
+            </div>
             <div class="identify-actions">
               <button
                 class="button primary"
@@ -1892,7 +1950,7 @@
                   ? "Working…"
                   : operation && terminal(operation.state)
                     ? "Try again"
-                    : "Start identification"}</button
+                    : `Start ${identifyTimeoutMS / 1000}-second identification`}</button
               ><button
                 class="button text"
                 on:click={cancelIdentify}
