@@ -114,7 +114,7 @@ and obtain deterministic behavior without writing KMonad syntax.
 - [x] **VALIDATE-03** Build compiler node/source mapping and a diagnostic adapter.
   Use only reliable manager locations; general errors must not blame the last
   clicked key. Coordinate structured key/source metadata upstream if necessary.
-- [ ] **VALIDATE-04** Implement quiet valid/checking status, prominent rejection
+- [x] **VALIDATE-04** Implement quiet valid/checking status, prominent rejection
   with causes/remedies, affected keys and layer counts, accessible announcements,
   and issue-to-key navigation. Separate environmental blockage from bad edits.
 - [ ] **VALIDATE-05** Keep last validated assignment provenance and per-key

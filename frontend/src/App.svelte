@@ -1443,7 +1443,11 @@
           <div class="editor-scroll-region">
             <div class="keyboard-editor" aria-label={activeGeometry.name}>
               {#if currentPreview && currentPreview.validation.outcome !== "valid"}
-                <aside class="preview-message" aria-live="polite">
+                <aside
+                  class:blocked={currentPreview.validation.outcome === "blocked"}
+                  class="preview-message"
+                  aria-live="polite"
+                >
                   <strong
                     >Preview {humanize(
                       currentPreview.validation.outcome,
@@ -1454,6 +1458,12 @@
                     <p>
                       No keyboard mapping has been applied. The manager did not
                       provide a reliable key location for this result.
+                    </p>
+                  {:else if currentPreview.validation.outcome === "blocked"}
+                    <p>
+                      This is an environmental blockage, not an invalid key
+                      assignment. Editing remains available while the manager or
+                      keyboard recovers.
                     </p>
                   {/if}
                   {#if currentPreview.validation.diagnostics?.length}

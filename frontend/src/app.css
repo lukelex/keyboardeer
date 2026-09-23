@@ -910,6 +910,14 @@ h1 {
   line-height: 1.4;
   margin: 4px 0 0;
 }
+.preview-message.blocked {
+  background: #fcf6e8;
+  border-color: #dfcea4;
+  color: #796239;
+}
+.preview-message.blocked p {
+  color: #796239;
+}
 .validation-diagnostics {
   display: grid;
   gap: 7px;
