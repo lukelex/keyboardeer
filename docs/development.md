@@ -44,3 +44,16 @@ reviewed manager revision, it shows **Manager API incomplete** because
 actions. This is intentional: the app does not substitute preview fixtures for
 live manager data. The browser Vite preview also keeps controls disabled because
 it has no Wails bindings.
+
+## Launch the desktop app
+
+From the repository root, run:
+
+```sh
+./scripts/desktop.sh
+```
+
+The launcher uses the pinned Wails v2.16.0 CLI through Go, so no global Wails
+installation is needed. On its first run Wails installs the locked frontend
+dependencies and then starts the desktop app. Pass Wails development arguments
+through the script, for example `./scripts/desktop.sh -debug`.
