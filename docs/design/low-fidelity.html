@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KeyboarDeer · Low-fidelity flows</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#eee;color:#242424;font:15px/1.5 system-ui,sans-serif}header,main{max-width:1200px;margin:auto;padding:32px}header{padding-bottom:0}h1{font-size:30px;margin:8px 0}h2{font-size:22px;margin:0 0 8px}h3{margin:0 0 8px;font-size:17px}p{margin:8px 0;color:#555}a{color:inherit}nav{display:flex;gap:24px;margin:24px 0}.eyebrow{font:12px monospace;text-transform:uppercase;letter-spacing:2px}.screen{margin:24px 0 48px}.frame{border:2px solid #555;background:white;display:grid;grid-template-columns:160px 1fr;min-height:440px}.rail{border-right:1px solid #aaa;padding:24px 16px}.rail strong{display:block;margin-bottom:36px}.rail div{padding:10px 0}.selected{font-weight:bold;text-decoration:underline}.content{padding:32px}.bar{display:flex;justify-content:space-between;gap:16px;align-items:center}.tag,.button{display:inline-block;border:1px solid #555;padding:7px 14px;font-size:13px}.button{border-width:2px;font-weight:600}.muted{color:#777}.row{padding:20px 0;border-bottom:1px solid #bbb;display:flex;align-items:center;gap:24px}.row .info{flex:1}.sketch{width:120px;height:56px;border:2px solid #777;padding:6px;background:repeating-linear-gradient(90deg,transparent 0 10px,#ccc 10px 12px),repeating-linear-gradient(0deg,white 0 10px,#ccc 10px 12px)}.note{font:13px/1.5 monospace;margin-top:16px;color:#555}.edit-grid{display:grid;grid-template-columns:1fr 230px;gap:24px;margin-top:24px}.keyboard{border:2px solid #777;padding:12px;margin-top:30px;display:grid;grid-template-columns:repeat(12,1fr);gap:5px}.key{height:34px;border:1px solid #999;text-align:center;padding:5px;font:12px monospace}.key.on{background:#ccc;border:2px solid black}.inspector{border:1px solid #999;padding:18px}.field{border:1px solid #999;padding:10px;margin:12px 0}.footer{border-top:1px solid #bbb;margin-top:30px;padding-top:16px}.review{border:2px solid #555;width:min(540px,100%);margin:20px auto;padding:24px}.callout{background:#eee;border-left:3px solid #666;padding:12px;margin:20px 0}.annotations{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:16px}.annotations p{font-size:13px}.number{font:12px monospace;background:#ddd;padding:3px 7px;margin-right:8px}@media(max-width:800px){.frame{grid-template-columns:1fr}.rail{display:none}.edit-grid,.annotations{grid-template-columns:1fr}.content{padding:20px}.row{flex-wrap:wrap}header,main{padding:20px}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">KeyboarDeer / Design exploration / 01</div>
+  <h1>One keyboard. One clear next step.</h1>
+  <p>Low-fidelity desktop wireframes. Focus: hierarchy, actions, and confidence.</p>
+  <nav><a href="#devices">01 · Choose</a><a href="#editor">02 · Edit</a><a href="#review">03 · Review</a><a href="high-fidelity.html">High-fidelity prototype →</a></nav>
+</header>
+<main>
+  <section class="screen" id="devices">
+    <h2>01 / Choose a keyboard</h2><p>A quiet list. Connection and mapping health are different signals.</p>
+    <div class="frame">
+      <aside class="rail"><strong>[deer] KeyboarDeer</strong><div class="selected">Keyboards</div><div>Help</div></aside>
+      <div class="content">
+        <div class="bar"><div><span class="eyebrow">Your workspace</span><h2>Keyboards</h2></div><span class="tag">● Manager connected</span></div>
+        <p>Choose a keyboard to make it your own.</p>
+        <div class="row"><div class="sketch"></div><div class="info"><h3>Keychron Q1</h3><p>Connected · Everyday profile active</p></div><span class="button">Configure →</span></div>
+        <div class="row"><div class="sketch"></div><div class="info"><h3>Framework keyboard</h3><p>Connected · No profile yet</p></div><span class="button">Set up →</span></div>
+        <div class="row"><div class="sketch"></div><div class="info"><h3>Logitech MX Keys</h3><p>Disconnected · Last used with Work</p></div><span class="tag">View profile</span></div>
+        <p class="note">Select a device first, then use “Identify” to confirm it with a keypress.</p>
+      </div>
+    </div>
+    <div class="annotations"><p><span class="number">1</span>Devices are the home screen. No dashboard, activity feed, or stats.</p><p><span class="number">2</span>One main action per device, determined by its current state.</p><p><span class="number">3</span>Keep disconnected devices visible. An absent keyboard is not an error.</p></div>
+  </section>
+  <section class="screen" id="editor">
+    <h2>02 / Select a key, choose what it does</h2><p>The keyboard is the canvas; the right panel explains the selected key.</p>
+    <div class="frame">
+      <aside class="rail"><strong>[deer] KeyboarDeer</strong><div>← Keyboards</div><div class="selected">Keychron Q1</div><div>Everyday profile</div></aside>
+      <div class="content">
+        <div class="bar"><div><h2>Keychron Q1</h2><p>Everyday ▾ · Connected</p></div><span class="tag">Identify keyboard</span></div>
+        <div class="edit-grid">
+          <div><div class="bar"><span class="tag">Base layer</span><span class="muted">Navigation layer</span><span>+</span></div>
+            <div class="keyboard" aria-label="Keyboard wireframe">
+              <span class="key">Esc</span><span class="key">1</span><span class="key">2</span><span class="key">3</span><span class="key">4</span><span class="key">5</span><span class="key">6</span><span class="key">7</span><span class="key">8</span><span class="key">9</span><span class="key">0</span><span class="key">⌫</span>
+              <span class="key">Tab</span><span class="key">Q</span><span class="key">W</span><span class="key">E</span><span class="key">R</span><span class="key">T</span><span class="key">Y</span><span class="key">U</span><span class="key">I</span><span class="key">O</span><span class="key">P</span><span class="key">↵</span>
+              <span class="key on">Caps</span><span class="key">A</span><span class="key">S</span><span class="key">D</span><span class="key">F</span><span class="key">G</span><span class="key">H</span><span class="key">J</span><span class="key">K</span><span class="key">L</span><span class="key">;</span><span class="key">'</span>
+              <span class="key">Shift</span><span class="key">Z</span><span class="key">X</span><span class="key">C</span><span class="key">V</span><span class="key">B</span><span class="key">N</span><span class="key">M</span><span class="key">,</span><span class="key">.</span><span class="key">/</span><span class="key">↑</span>
+            </div><p class="note">[outlined] selected · [dot] edited</p>
+          </div>
+          <aside class="inspector"><span class="eyebrow">Selected key</span><h3>Caps Lock</h3><div class="field">Behavior: Tap & hold ▾</div><div class="field">Tap → Escape ▾</div><div class="field">Hold → Control ▾</div><p>Tap to escape. Hold for shortcuts.</p><span class="button">Save to draft</span></aside>
+        </div>
+        <div class="bar footer"><div><strong>1 change in your draft</strong><p>Current mapping still running.</p></div><span class="button">Review & apply →</span></div>
+      </div>
+    </div>
+    <div class="annotations"><p><span class="number">1</span>Click-to-assign works without dragging. Progressive disclosure keeps advanced behaviors out of the way.</p><p><span class="number">2</span>Layer tabs belong beside the keyboard. Selecting a tab previews a layer; it does not activate it.</p><p><span class="number">3</span>Draft edits never silently become live. A persistent footer explains what is pending.</p></div>
+  </section>
+  <section class="screen" id="review">
+    <h2>03 / Review, validate, apply</h2><p>A focused confirmation with a readable diff and an explicit result.</p>
+    <div class="frame">
+      <aside class="rail"><strong>[deer] KeyboarDeer</strong><div>Keyboards</div><div class="selected">Keychron Q1</div></aside>
+      <div class="content"><div class="review"><span class="eyebrow">Keychron Q1 / Everyday</span><h2>Ready for a new habit?</h2><p>1 change on the Base layer</p><div class="row"><div class="info"><strong>Caps Lock</strong><p>Caps Lock → Tap Escape / Hold Control</p></div></div><div class="callout"><strong>✓ Validation passed</strong><p>The manager will check again before applying.</p></div><div class="bar"><span class="tag">Keep editing</span><span class="button">Apply to keyboard</span></div></div></div>
+    </div>
+    <div class="annotations"><p><span class="number">1</span>Preview validation is separate from applying. Show progress while the manager checks.</p><p><span class="number">2</span>If blocked, show why and how to retry. If rejected, keep the draft and the active revision distinct.</p><p><span class="number">3</span>On success: “Everyday is active.” Closing the window keeps the mapping running.</p></div>
+  </section>
+</main>
+</body>
+</html>
