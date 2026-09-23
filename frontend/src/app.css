@@ -748,6 +748,29 @@ h1 {
   line-height: 1.4;
   margin: 4px 0 0;
 }
+.layer-guidance {
+  background: #f0f5e9;
+  border: 1px solid #d9e6d2;
+  border-radius: 10px;
+  color: #4c6656;
+  margin: 20px auto 0;
+  max-width: 780px;
+  padding: 12px 15px;
+}
+.layer-guidance strong {
+  font-size: 12px;
+}
+.layer-guidance p {
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 5px 0 0;
+}
+.layer-guidance small {
+  color: #956d30;
+  display: block;
+  font-size: 11px;
+  margin-top: 6px;
+}
 .keyboard-row {
   display: flex;
   gap: 5px;
@@ -965,6 +988,15 @@ h1 {
   font-size: 13px;
   line-height: 1.55;
   margin: 9px 0 17px;
+}
+.timing-explanation {
+  background: #edf3e8;
+  border-left: 3px solid #7da26a;
+  color: #4c6656;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: -5px 0 17px;
+  padding: 9px 11px;
 }
 .behavior-form {
   display: grid;

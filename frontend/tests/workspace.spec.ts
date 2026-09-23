@@ -284,9 +284,11 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   await expect(
     page.getByRole("heading", { name: "Layer action" }),
   ).toBeVisible();
+  await expect(page.getByText("Layer entry and exit")).toHaveCount(0);
   await page.getByLabel("Or add a layer").fill("Navigation");
   await page.getByRole("button", { name: "Add layer" }).click();
   await expect(page.getByRole("tab", { name: "Navigation" })).toBeVisible();
+  await expect(page.getByText("Layer entry and exit")).toBeVisible();
   await page
     .getByRole("button", { name: "Close complex action dialog" })
     .click();
@@ -315,6 +317,7 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   await page.getByRole("tab", { name: "Base" }).click();
   await page.getByRole("button", { name: "Tap & hold" }).click();
   await expect(page.getByRole("heading", { name: "Tap & hold" })).toBeVisible();
+  await expect(page.getByText("200 ms default:")).toBeVisible();
   await page
     .getByRole("button", { name: "Close complex action dialog" })
     .click();

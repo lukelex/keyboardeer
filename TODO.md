@@ -89,7 +89,7 @@ terminal, and reconnect restores an authoritative view.
   single-key remapping, restore-original, undo/redo, and persistent draft status.
 - [x] **EDIT-02** Implement layer create/rename/delete/reorder, transparency,
   reachability, and layer-switch behaviors; previews must not change live state.
-- [ ] **EDIT-03** Add tap/hold behavior with explicit timing semantics and
+- [x] **EDIT-03** Add tap/hold behavior with explicit timing semantics and
   defaults; explain how to reach/exit layers before applying a profile.
 - [ ] **COMPILE-01** Compile deterministically to platform-neutral behavior
   (`defsrc`, `deflayer`, supported aliases); reject invalid references, duplicate

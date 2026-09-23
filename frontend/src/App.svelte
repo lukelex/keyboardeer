@@ -31,6 +31,7 @@
   type KeyOption = GeometryTemplate["keys"][number];
   type ComplexAction = "tap_hold" | "layer" | "alias" | "macro" | "layers";
   const managerCheckIntervalMS = 15_000;
+  const defaultTapHoldTimeoutMS = 200;
   const modifierSourceKeys = new Set([
     "caps",
     "cmp",
@@ -115,7 +116,7 @@
   let tapHoldMode: "key" | "layer" = "key";
   let holdKey = "";
   let tapHoldLayerID = "base";
-  let tapHoldTimeoutMS = 200;
+  let tapHoldTimeoutMS = defaultTapHoldTimeoutMS;
   let layerAction: "hold_layer" | "switch_layer" = "hold_layer";
   let layerTargetID = "base";
   let newLayerName = "";
@@ -1281,6 +1282,20 @@
                 </div>
               {/each}
             </div>
+            {#if activeProfile.layers.length > 1}
+              <section class="layer-guidance" aria-labelledby="layer-guidance-title">
+                <strong id="layer-guidance-title">Layer entry and exit</strong>
+                <p>
+                  Assign a <b>Hold layer</b> or <b>Switch layer</b> action on a
+                  reachable key to enter an overlay. Hold layers end when that
+                  key is released. Switched layers remain active until another
+                  Switch layer action—normally one targeting Base—changes them.
+                </p>
+                {#each activeProfile.layers.filter((layer) => !layerIsReachable(layer.id)) as layer (layer.id)}
+                  <small>{layer.name} has no entry action yet.</small>
+                {/each}
+              </section>
+            {/if}
             {#if activeProfile.apply_pending}
               <p class="apply-status">
                 An Apply sent at {new Date(
@@ -1518,6 +1533,12 @@
             is held. The manager validates the complete draft before it can be
             applied.
           </p>
+          <p class="timing-explanation">
+            <strong>{defaultTapHoldTimeoutMS} ms default:</strong> release before
+            the timeout to send the tap action; keep holding beyond it to use the
+            hold action. A held layer stays active only while this key remains
+            pressed.
+          </p>
           <form class="behavior-form" on:submit|preventDefault={assignTapHold}>
             <label for="tap-key">Tap</label>
             <select id="tap-key" bind:value={tapKey}>
@@ -1551,7 +1572,6 @@
               type="number"
               bind:value={tapHoldTimeoutMS}
               min="1"
-              max="1000"
               required
             />
             <div class="behavior-form-actions">
