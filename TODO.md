@@ -111,7 +111,7 @@ and obtain deterministic behavior without writing KMonad syntax.
   changes. Correlate responses with draft revision, device, candidate, manager
   connection, and environment generation. Ignore stale/out-of-order responses;
   avoid duplicate checks for pure selection. Never imply validity means active.
-- [ ] **VALIDATE-03** Build compiler node/source mapping and a diagnostic adapter.
+- [x] **VALIDATE-03** Build compiler node/source mapping and a diagnostic adapter.
   Use only reliable manager locations; general errors must not blame the last
   clicked key. Coordinate structured key/source metadata upstream if necessary.
 - [ ] **VALIDATE-04** Implement quiet valid/checking status, prominent rejection

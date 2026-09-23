@@ -156,6 +156,7 @@ export interface ProfilePreview {
       reason_code: string;
       summary: string;
       remediation: string;
+      resource?: { kind: string; id: string } | null;
     }> | null;
   };
   source_map: CompileResult["source_map"];

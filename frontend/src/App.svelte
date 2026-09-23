@@ -323,6 +323,14 @@
       "The manager did not provide a runtime explanation for this configuration."
     );
   }
+  function diagnosticResourceLabel(diagnostic: NonNullable<ProfilePreview["validation"]["diagnostics"]>[number]) {
+    if (!diagnostic.resource) return "Keymap-wide issue";
+    if (diagnostic.resource.kind === "device") return "Selected keyboard";
+    if (diagnostic.resource.kind === "configuration") return "Configuration";
+    // The manager currently does not promise physical-key locations. Preserve
+    // opaque, future resource kinds without guessing a key from display text.
+    return `${humanize(diagnostic.resource.kind)} issue`;
+  }
   async function setLifecycleEnabled(
     configuration: Configuration,
     enabled: boolean,
@@ -1447,6 +1455,19 @@
                       No keyboard mapping has been applied. The manager did not
                       provide a reliable key location for this result.
                     </p>
+                  {/if}
+                  {#if currentPreview.validation.diagnostics?.length}
+                    <ul class="validation-diagnostics">
+                      {#each currentPreview.validation.diagnostics as diagnostic (diagnostic.id)}
+                        <li>
+                          <strong>{diagnosticResourceLabel(diagnostic)}</strong>
+                          <span>{diagnostic.summary}</span>
+                          {#if diagnostic.remediation}<small
+                              >{diagnostic.remediation}</small
+                            >{/if}
+                        </li>
+                      {/each}
+                    </ul>
                   {/if}
                 </aside>
               {/if}
