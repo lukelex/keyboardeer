@@ -130,9 +130,11 @@
   let keyFlashTimer: ReturnType<typeof setTimeout> | undefined;
   let profileBusy = false;
   let previewBusy = false;
+  let previewInFlight = false;
   let profilePreview: ProfilePreview | null = null;
   let previewTimer: ReturnType<typeof setTimeout> | undefined;
   let previewGeneration = 0;
+  let pendingPreview: { draft: Profile; generation: number } | null = null;
   let applyBusy = false;
   let applyOperation: Operation | null = null;
   let lifecycleBusyID = "";
@@ -830,8 +832,17 @@
     previewBusy = true;
     previewTimer = setTimeout(() => {
       previewTimer = undefined;
-      void previewDraft(draft, generation);
+      queuePreview(draft, generation);
     }, 250);
+  }
+  function queuePreview(draft: Profile, generation: number) {
+    if (previewInFlight) {
+      // One preview at a time protects the manager and makes the latest draft
+      // the only queued candidate for this desktop session.
+      pendingPreview = { draft, generation };
+      return;
+    }
+    void previewDraft(draft, generation);
   }
   async function applyDraft() {
     if (!activeProfile || !canApply || applyBusy) return;
@@ -852,12 +863,17 @@
     }
   }
   async function previewDraft(draft: Profile, generation: number) {
+    previewInFlight = true;
     if (
       !capabilities.find(
         (capability) => capability.name === "candidate_validation",
       )?.available
     ) {
       if (generation === previewGeneration) previewBusy = false;
+      previewInFlight = false;
+      const next = pendingPreview;
+      pendingPreview = null;
+      if (next) queuePreview(next.draft, next.generation);
       return;
     }
     try {
@@ -877,6 +893,10 @@
       }
     } finally {
       if (generation === previewGeneration) previewBusy = false;
+      previewInFlight = false;
+      const next = pendingPreview;
+      pendingPreview = null;
+      if (next) queuePreview(next.draft, next.generation);
     }
   }
   async function pollOperation() {

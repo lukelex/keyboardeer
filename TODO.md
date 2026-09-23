@@ -102,7 +102,7 @@ and obtain deterministic behavior without writing KMonad syntax.
 
 ## P1 — Continuous preview and per-key recovery (active)
 
-- [ ] **VALIDATE-01** Connect `{model: {device_id, behavior}}` to
+- [x] **VALIDATE-01** Connect `{model: {device_id, behavior}}` to
   `validation.preview`; map diagnostics to the relevant editor fields where
   possible. Check the entire compiled candidate automatically after semantic
   edits; coalesce rapid input and bound per-device/global preview concurrency.
