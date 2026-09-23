@@ -45,6 +45,14 @@ func (c *APIClient) Bootstrap(ctx context.Context) ConnectionStatus {
 		status.Message = "The manager connection did not return usable capability information."
 		return status
 	}
+	if info.ServerID != "" && info.ServerID != hello.ServerID {
+		status.State = "unavailable"
+		status.Message = "The manager identity changed while KeyboarDeer was establishing its connection."
+		return status
+	}
+	if info.ServerID != "" {
+		status.ServerID = info.ServerID
+	}
 	status.Capabilities = info.Capabilities
 	status.State = "ready"
 	status.Message = "Manager capabilities are available."

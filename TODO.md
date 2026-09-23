@@ -35,7 +35,7 @@ explains sequencing; this file is the place to track completion.
 - [x] **API-01** Implement a Go socket client: endpoint discovery, JSON Lines,
   bounded frames, request correlation, deadlines, transport failures, reconnect
   backoff, and resource cleanup on GUI exit.
-- [ ] **API-02** Negotiate hello on every connection, track server identity,
+- [x] **API-02** Negotiate hello on every connection, track server identity,
   handle unsupported versions, and expose a small typed Wails bridge to Svelte.
 - [ ] **API-03** Define Go/domain/frontend types and contract fixtures, including
   unknown fields/enums, structured errors, unavailable capabilities, and timeouts.

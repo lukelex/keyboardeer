@@ -268,6 +268,25 @@ func TestWorkspaceDoesNotFetchSnapshotWhenManagerGetIsUnsupported(t *testing.T) 
 	}
 }
 
+func TestBootstrapRejectsManagerIdentityChangeDuringNegotiation(t *testing.T) {
+	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
+		switch request.Method {
+		case "session.hello":
+			writeResult(t, rw, request.ID, `{"selected_version":1,"server_id":"server-before","manager_version":"test"}`)
+		case "manager.get":
+			writeResult(t, rw, request.ID, `{"server_id":"server-after","capabilities":[]}`)
+		default:
+			t.Errorf("unexpected method %s", request.Method)
+		}
+	})
+	client := New(Options{Endpoint: socket})
+	defer client.Close()
+	status := client.Bootstrap(context.Background())
+	if status.State != "unavailable" || status.ServerID != "server-before" {
+		t.Fatalf("identity change status = %#v", status)
+	}
+}
+
 func TestWorkspaceUsesSnapshotAfterCapabilityNegotiation(t *testing.T) {
 	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
 		switch request.Method {
