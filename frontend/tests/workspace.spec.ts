@@ -177,8 +177,17 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   await page.goto("/");
   await expect(page.getByText("Manager ready", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Identify", exact: true }),
-  ).toBeEnabled();
+    page.getByRole("button", { name: "Refresh", exact: true }),
+  ).toHaveCount(0);
+  const identify = page.getByRole("button", { name: "Identify", exact: true });
+  await expect(identify).toBeEnabled();
+  await expect(identify).toHaveAttribute("title", "Identify this keyboard");
+  await identify.click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Close keyboard identification" })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   const bindings = page.getByRole("checkbox", {
     name: "Enable bindings for Managed fixture",
   });
@@ -195,6 +204,11 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   await page.getByRole("button", { name: "Set up", exact: true }).click();
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
   await expect(page.locator(".editor-key")).toHaveCount(1);
+  await expect(page.locator(".editor-key").first()).toHaveCSS("width", "42px");
+  await expect(page.locator(".editor-key").first()).toHaveCSS("height", "42px");
+  await page.keyboard.press("CapsLock");
+  await expect(page.locator(".editor-key").first()).toHaveClass(/flashing-key/);
+  await page.locator(".editor-key").first().click();
   await expect(page.locator(".editor-scroll-region")).toHaveCSS(
     "overflow-y",
     "auto",
@@ -214,7 +228,7 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
     page.getByText("Base layer · saved locally · revision 2"),
   ).toBeVisible();
   await expect(page.locator(".editor-key small")).toHaveText("caps");
-  await expect(page.locator(".preview-indicator.valid")).toBeVisible();
+  await expect(page.locator(".configuration-indicator.valid")).toBeVisible();
   await expect(
     page.getByText("Manager preview: Valid", { exact: true }),
   ).toHaveCount(0);

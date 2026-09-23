@@ -27,7 +27,56 @@
     type ProfilePreview,
   } from "./desktop";
 
-  type View = "devices" | "identify" | "setup" | "editor";
+  type View = "devices" | "setup" | "editor";
+  const managerCheckIntervalMS = 15_000;
+  const browserCodeToSourceKey: Record<string, string> = {
+    Escape: "esc",
+    Backquote: "grv",
+    Minus: "-",
+    Equal: "=",
+    Backspace: "bspc",
+    Tab: "tab",
+    BracketLeft: "[",
+    BracketRight: "]",
+    Backslash: "\\",
+    CapsLock: "caps",
+    Semicolon: ";",
+    Quote: "'",
+    Enter: "ret",
+    ShiftLeft: "lsft",
+    ShiftRight: "rsft",
+    Comma: ",",
+    Period: ".",
+    Slash: "/",
+    ControlLeft: "lctl",
+    ControlRight: "rctl",
+    MetaLeft: "lmet",
+    MetaRight: "rmet",
+    AltLeft: "lalt",
+    AltRight: "ralt",
+    Space: "spc",
+    ContextMenu: "cmp",
+    PrintScreen: "prnt",
+    Pause: "pause",
+    Insert: "ins",
+    Delete: "del",
+    Home: "home",
+    End: "end",
+    PageUp: "pgup",
+    PageDown: "pgdn",
+    ArrowUp: "up",
+    ArrowDown: "down",
+    ArrowLeft: "left",
+    ArrowRight: "rght",
+  };
+  for (let digit = 0; digit <= 9; digit += 1)
+    browserCodeToSourceKey[`Digit${digit}`] = String(digit);
+  for (let letter = 65; letter <= 90; letter += 1) {
+    const key = String.fromCharCode(letter);
+    browserCodeToSourceKey[`Key${key}`] = key.toLowerCase();
+  }
+  for (let functionKey = 1; functionKey <= 12; functionKey += 1)
+    browserCodeToSourceKey[`F${functionKey}`] = `f${functionKey}`;
   const initialStatus: ManagerStatus = {
     state: "checking",
     message: "Checking the local manager connection…",
@@ -44,6 +93,8 @@
   let profileName = "";
   let activeProfile: Profile | null = null;
   let selectedSourceKey = "";
+  let flashingSourceKey = "";
+  let keyFlashTimer: ReturnType<typeof setTimeout> | undefined;
   let profileBusy = false;
   let previewBusy = false;
   let profilePreview: ProfilePreview | null = null;
@@ -55,8 +106,10 @@
   let operation: Operation | null = null;
   let loading = false;
   let identifyBusy = false;
+  let identifyOpen = false;
   let feedback = "";
   let pollTimer: ReturnType<typeof setInterval> | undefined;
+  let managerCheckTimer: ReturnType<typeof setInterval> | undefined;
   let stopWorkspaceEvents: (() => void) | undefined;
 
   const unavailableCapability = (name: string): Capability => ({
@@ -118,6 +171,10 @@
   function isConnected(device: Device) {
     return device.availability === "connected";
   }
+  function paletteLabel(key: GeometryTemplate["keys"][number]) {
+    const compactLabels: Record<string, string> = { bspc: "Bksp", fwd: "Fwd" };
+    return compactLabels[key.source_key] ?? key.label;
+  }
   function terminal(state: string) {
     return [
       "succeeded",
@@ -171,6 +228,16 @@
   function clearPolling() {
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = undefined;
+  }
+  function clearManagerCheckTimer() {
+    if (managerCheckTimer) clearInterval(managerCheckTimer);
+    managerCheckTimer = undefined;
+  }
+  function startManagerCheckTimer() {
+    clearManagerCheckTimer();
+    managerCheckTimer = setInterval(() => {
+      if (!loading) void refresh();
+    }, managerCheckIntervalMS);
   }
   function explain(error: unknown) {
     return error instanceof Error
@@ -228,7 +295,35 @@
     selectedDevice = device;
     operation = null;
     feedback = "";
-    view = "identify";
+    identifyOpen = true;
+  }
+  function closeIdentify() {
+    if (operation && !terminal(operation.state)) void cancelIdentify();
+    identifyOpen = false;
+  }
+  function handleGlobalKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape" && identifyOpen) closeIdentify();
+    if (
+      !editorOpen ||
+      selectedSourceKey ||
+      event.repeat ||
+      event.target instanceof HTMLInputElement ||
+      event.target instanceof HTMLSelectElement ||
+      event.target instanceof HTMLTextAreaElement
+    )
+      return;
+    const sourceKey = browserCodeToSourceKey[event.code];
+    if (
+      !sourceKey ||
+      !activeGeometry?.keys.some((key) => key.source_key === sourceKey)
+    )
+      return;
+    flashingSourceKey = sourceKey;
+    if (keyFlashTimer) clearTimeout(keyFlashTimer);
+    keyFlashTimer = setTimeout(() => {
+      flashingSourceKey = "";
+      keyFlashTimer = undefined;
+    }, 240);
   }
   function openDraft(device: Device) {
     if (!canShowDevices) return;
@@ -238,7 +333,7 @@
     const draft = profileForDevice(device);
     if (draft) {
       activeProfile = draft;
-      selectedSourceKey = draft.geometry.source_keys[0] ?? "";
+      selectedSourceKey = "";
       view = "editor";
       return;
     }
@@ -266,7 +361,7 @@
         selectedGeometryID,
       );
       profiles = [...profiles, activeProfile];
-      selectedSourceKey = activeProfile.geometry.source_keys[0] ?? "";
+      selectedSourceKey = "";
       view = "editor";
       schedulePreview(activeProfile);
     } catch (error) {
@@ -423,15 +518,19 @@
     // corrupt or unavailable profile store may disable setup, but it cannot
     // leave the device workspace indefinitely stuck in its initial state.
     void refresh();
+    startManagerCheckTimer();
   });
   onDestroy(() => {
     clearPolling();
+    clearManagerCheckTimer();
     if (previewTimer) clearTimeout(previewTimer);
+    if (keyFlashTimer) clearTimeout(keyFlashTimer);
     stopWorkspaceEvents?.();
   });
 </script>
 
 <svelte:head><title>{info.name}</title></svelte:head>
+<svelte:window on:keydown={handleGlobalKeydown} />
 
 <div class:editor-mode={editorOpen} class="app-shell">
   <header class="app-header">
@@ -453,9 +552,6 @@
           ? "Manager ready"
           : humanize(workspace.status.state)}
       </span>
-      <button class="button secondary" on:click={refresh} disabled={loading}
-        >{loading ? "Checking…" : "Refresh"}</button
-      >
     </div>
   </header>
 
@@ -565,14 +661,24 @@
                 </div>
                 <div class="device-actions">
                   <button
-                    class="button text"
+                    class="button text identify-trigger"
                     on:click={() => openIdentify(device)}
                     disabled={!canIdentify || !isConnected(device)}
+                    aria-label="Identify"
                     title={!canIdentify
                       ? deviceIdentification.reason
                       : !isConnected(device)
                         ? "Identification needs a connected keyboard."
-                        : "Identify this keyboard"}>Identify</button
+                        : "Identify this keyboard"}
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"
+                      ><path d="M12 4a8 8 0 1 1-8 8" /><path
+                        d="M12 8a4 4 0 1 1-4 4"
+                      /><path d="M4 4l8 8" /><circle
+                        cx="12"
+                        cy="12"
+                        r="1.5"
+                      /></svg
+                    ></button
                   >
                   <button
                     class="button primary"
@@ -641,10 +747,21 @@
                 </p>
               </div>
               <div class="device-actions">
-                <button class="button text" disabled>Identify</button><button
-                  class="button primary"
-                  disabled>Set up</button
-                >
+                <button
+                  class="button text identify-trigger"
+                  aria-label="Identify"
+                  title="Device discovery is unavailable"
+                  disabled
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"
+                    ><path d="M12 4a8 8 0 1 1-8 8" /><path
+                      d="M12 8a4 4 0 1 1-4 4"
+                    /><path d="M4 4l8 8" /><circle
+                      cx="12"
+                      cy="12"
+                      r="1.5"
+                    /></svg
+                  ></button
+                ><button class="button primary" disabled>Set up</button>
               </div>
             </article>
           </section>
@@ -656,72 +773,6 @@
         {#if feedback}<p class="inline-feedback" role="status">
             {feedback}
           </p>{/if}
-      </section>
-    {:else if view === "identify" && selectedDevice}
-      <section aria-labelledby="identify-title" class="identify-page">
-        <button class="back-link" on:click={backToDevices}
-          >← All keyboards</button
-        >
-        <div class="page-heading">
-          <div>
-            <p class="eyebrow">LET’S FIND YOUR KEYBOARD</p>
-            <h1 id="identify-title">Is this the one?</h1>
-            <p>A keypress on the selected device confirms the match.</p>
-          </div>
-          <span class="build-label">ONE BOUNDED SESSION</span>
-        </div>
-        <article class="identify-card">
-          <div class="identify-art" aria-hidden="true">
-            <div class="orbit first"></div>
-            <div class="orbit second"></div>
-            <span>⌨</span>
-          </div>
-          <div class="identify-copy">
-            <p class="eyebrow">{selectedDevice.display_name}</p>
-            <h2>
-              {operation ? humanize(operation.state) : "Ready when you are."}
-            </h2>
-            <p>
-              {operation?.reason ??
-                "Start a 15-second manager session, then press any key on this keyboard. Only the selected mapping may briefly pause."}
-            </p>
-            <div class="operation-status">
-              <i></i><span
-                >{operation ? operation.reason_code : "Not started"}</span
-              >{#if operation}<small>Operation {operation.id}</small>{/if}
-            </div>
-            <div class="identify-actions">
-              <button
-                class="button primary"
-                on:click={startIdentify}
-                disabled={!canIdentify ||
-                  identifyBusy ||
-                  !!(operation && !terminal(operation.state))}
-                >{identifyBusy
-                  ? "Working…"
-                  : operation && terminal(operation.state)
-                    ? "Try again"
-                    : "Start identification"}</button
-              ><button
-                class="button text"
-                on:click={cancelIdentify}
-                disabled={!operation ||
-                  terminal(operation.state) ||
-                  identifyBusy}>Cancel</button
-              >
-            </div>
-          </div>
-        </article>
-        {#if feedback}<p class="inline-feedback" role="status">
-            {feedback}
-          </p>{/if}
-        <section class="quiet-tip">
-          <strong>A brief pause, just for this keyboard.</strong>
-          <p>
-            The manager owns the session and restores the selected mapping when
-            it ends. Other keyboards continue independently.
-          </p>
-        </section>
       </section>
     {:else if view === "setup" && selectedDevice}
       <section class="setup-page" aria-labelledby="setup-title">
@@ -781,43 +832,48 @@
     {:else if view === "editor" && activeProfile}
       <section class="editor-page" aria-labelledby="editor-title">
         <div class="editor-heading">
-          <button class="back-link" on:click={backToDevices}
-            >← All keyboards</button
-          >
-          <div class="page-heading">
-            <div>
-              <p class="eyebrow">
-                {selectedDevice?.display_name ?? "KEYBOARD"}
-              </p>
-              <h1 id="editor-title">{activeProfile.name}</h1>
-              <p>
-                Base layer · saved locally · revision {activeProfile.draft_revision}
-              </p>
-            </div>
-            <span class="build-label"
-              >{activeProfile.manager_configuration_id
-                ? "MANAGED PROFILE"
-                : "DRAFT ONLY"}</span
+          <nav aria-label="Editor breadcrumb">
+            <button class="back-link" on:click={backToDevices}
+              >← All keyboards</button
             >
+          </nav>
+          <div class="editor-title">
+            <h1 id="editor-title">{activeProfile.name}</h1>
+            <span>{selectedDevice?.display_name ?? "Keyboard"}</span>
           </div>
+          <span class="build-label"
+            >{activeProfile.manager_configuration_id
+              ? "MANAGED PROFILE"
+              : "DRAFT ONLY"}</span
+          >
+          {#if previewBusy}<span
+              class="configuration-indicator checking"
+              aria-label="Checking draft preview"
+
+            ></span>{:else if currentPreview?.validation.outcome === "valid"}<span
+              class="configuration-indicator valid"
+              aria-label="Valid configuration"><i></i>Valid configuration</span
+            >{/if}
+          <button
+            class="button primary editor-apply"
+            type="button"
+            on:click={applyDraft}
+            disabled={!canApply || applyBusy}
+            title={canApply
+              ? "Apply this validated draft to the keyboard"
+              : "Apply requires a current valid manager preview, a connected keyboard, and the managed-configurations capability."}
+            >{applyBusy ? "Applying…" : "Apply to keyboard"}</button
+          >
         </div>
         {#if activeGeometry}
           <div class="editor-scroll-region">
             <div class="keyboard-editor" aria-label={activeGeometry.name}>
-              {#if previewBusy}
-                <span
-                  class="preview-indicator checking"
-                  aria-label="Checking draft preview"
-                ></span>
-              {:else if currentPreview?.validation.outcome === "valid"}
-                <span
-                  class="preview-indicator valid"
-                  aria-label="Manager preview valid"
-                ></span>
-              {:else if currentPreview}
+              {#if currentPreview && currentPreview.validation.outcome !== "valid"}
                 <aside class="preview-message" aria-live="polite">
                   <strong
-                    >Preview {humanize(currentPreview.validation.outcome)}</strong
+                    >Preview {humanize(
+                      currentPreview.validation.outcome,
+                    )}</strong
                   >
                   <p>{currentPreview.validation.reason}</p>
                   {#if currentPreview.validation.outcome === "rejected"}
@@ -833,9 +889,14 @@
                   {#each activeGeometry.keys.filter((key) => key.row === row) as key (key.id)}
                     <button
                       class:selected-key={selectedSourceKey === key.source_key}
+                      class:flashing-key={flashingSourceKey === key.source_key}
                       class="editor-key"
-                      style={`--key-width: ${key.width}; --key-gap-before: ${key.gap_before ?? 0}`}
-                      on:click={() => (selectedSourceKey = key.source_key)}
+                      style={`width: ${key.width * 42}px; margin-left: ${(key.gap_before ?? 0) * 42}px`}
+                      on:click={() =>
+                        (selectedSourceKey =
+                          selectedSourceKey === key.source_key
+                            ? ""
+                            : key.source_key)}
                       aria-pressed={selectedSourceKey === key.source_key}
                     >
                       <strong>{key.label}</strong><small
@@ -849,38 +910,14 @@
                 </div>
               {/each}
             </div>
-            <div class="apply-actions">
-              <div>
-                <p class="eyebrow">MANAGED APPLY</p>
-                {#if activeProfile.apply_pending}
-                  <p class="apply-status">
-                    An Apply sent at {new Date(
-                      activeProfile.apply_pending.started_at,
-                    ).toLocaleString()} has an unknown outcome. To prevent a duplicate
-                    configuration, KeyboarDeer will not retry it automatically.
-                  </p>
-                {:else if applyOperation}
-                  <p class="apply-status">
-                    Manager Apply: {humanize(applyOperation.state)} —
-                    {applyOperation.reason}
-                  </p>
-                {/if}
-                <p>
-                  The manager will render, validate, persist, and supervise this
-                  profile. It owns all device and KMonad lifecycle work.
-                </p>
-              </div>
-              <button
-                class="button primary"
-                type="button"
-                on:click={applyDraft}
-                disabled={!canApply || applyBusy}
-                title={canApply
-                  ? "Apply this validated draft to the keyboard"
-                  : "Apply requires a current valid manager preview, a connected keyboard, and the managed-configurations capability."}
-                >{applyBusy ? "Applying…" : "Apply to keyboard"}</button
-              >
-            </div>
+            {#if activeProfile.apply_pending}<p class="apply-status">
+                An Apply sent at {new Date(
+                  activeProfile.apply_pending.started_at,
+                ).toLocaleString()} has an unknown outcome. To prevent a duplicate
+                configuration, KeyboarDeer will not retry it automatically.
+              </p>{:else if applyOperation}<p class="apply-status">
+                Manager Apply: {humanize(applyOperation.state)} — {applyOperation.reason}
+              </p>{/if}
             {#if feedback}<p class="inline-feedback" role="status">
                 {feedback}
               </p>{/if}
@@ -900,7 +937,8 @@
                         })}
                       disabled={profileBusy}
                       title={`Assign ${key.label} (${key.source_key})`}
-                      ><span>{key.label}</span><small>{key.source_key}</small
+                      ><span>{paletteLabel(key)}</span><small
+                        >{key.source_key}</small
                       ></button
                     >
                   {/each}
@@ -934,6 +972,74 @@
       </section>
     {/if}
   </main>
+  {#if identifyOpen && selectedDevice}
+    <div class="identify-dialog-backdrop">
+      <dialog class="identify-dialog" open aria-labelledby="identify-title">
+        <button
+          class="identify-close"
+          on:click={closeIdentify}
+          aria-label="Close keyboard identification"
+          title="Close identification">×</button
+        >
+        <div class="identify-dialog-heading">
+          <p class="eyebrow">LET’S FIND YOUR KEYBOARD</p>
+          <h2 id="identify-title">Is this the one?</h2>
+        </div>
+        <article class="identify-card">
+          <div class="identify-art" aria-hidden="true">
+            <div class="orbit first"></div>
+            <div class="orbit second"></div>
+            <span>⌨</span>
+          </div>
+          <div class="identify-copy">
+            <p class="eyebrow">{selectedDevice.display_name}</p>
+            <h2>
+              {operation ? humanize(operation.state) : "Ready when you are."}
+            </h2>
+            <p>
+              {operation?.reason ??
+                "Start a 15-second manager session, then press any key on this keyboard. Only the selected mapping may briefly pause."}
+            </p>
+            <div class="operation-status">
+              <i></i><span
+                >{operation ? operation.reason_code : "Not started"}</span
+              >{#if operation}<small>Operation {operation.id}</small>{/if}
+            </div>
+            <div class="identify-actions">
+              <button
+                class="button primary"
+                on:click={startIdentify}
+                disabled={!canIdentify ||
+                  identifyBusy ||
+                  !!(operation && !terminal(operation.state))}
+                >{identifyBusy
+                  ? "Working…"
+                  : operation && terminal(operation.state)
+                    ? "Try again"
+                    : "Start identification"}</button
+              ><button
+                class="button text"
+                on:click={cancelIdentify}
+                disabled={!operation ||
+                  terminal(operation.state) ||
+                  identifyBusy}>Cancel</button
+              >
+            </div>
+          </div>
+        </article>
+        {#if feedback}<p class="inline-feedback" role="status">
+            {feedback}
+          </p>{/if}
+        <section class="quiet-tip">
+          <strong>A brief pause, just for this keyboard.</strong>
+          <p>
+            The manager owns the session and restores the selected mapping when
+            it ends. Other keyboards continue independently.
+          </p>
+        </section>
+      </dialog>
+    </div>
+  {/if}
   <footer>
     Drafts remain your source of truth; the manager owns generated runtime
     configurations.
