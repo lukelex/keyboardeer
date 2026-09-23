@@ -1,21 +1,30 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import {
+    CreateProfile,
+    Geometries,
     IdentifyCancel,
     IdentifyOperation,
     IdentifyStart,
     Info,
+    PreviewProfile,
+    Profiles,
+    SaveProfile,
     Workspace,
     type AppInfo,
     type Capability,
     type Configuration,
     type Device,
+    type GeometryTemplate,
     type ManagerStatus,
     type ManagerWorkspace,
     type Operation,
+    type Profile,
+    type ProfileBehavior,
+    type ProfilePreview,
   } from "./desktop";
 
-  type View = "devices" | "identify";
+  type View = "devices" | "identify" | "setup" | "editor";
   const initialStatus: ManagerStatus = {
     state: "checking",
     message: "Checking the local manager connection…",
@@ -26,6 +35,15 @@
   let workspace: ManagerWorkspace = { status: initialStatus };
   let view: View = "devices";
   let selectedDevice: Device | null = null;
+  let profiles: Profile[] = [];
+  let geometries: GeometryTemplate[] = [];
+  let selectedGeometryID = "";
+  let profileName = "";
+  let activeProfile: Profile | null = null;
+  let selectedSourceKey = "";
+  let profileBusy = false;
+  let previewBusy = false;
+  let profilePreview: ProfilePreview | null = null;
   let operation: Operation | null = null;
   let loading = false;
   let identifyBusy = false;
@@ -52,6 +70,9 @@
     workspace.status.state === "ready" && deviceIdentification.available;
   $: devices = workspace.snapshot?.devices ?? [];
   $: configurations = workspace.snapshot?.configurations ?? [];
+  $: activeGeometry = activeProfile
+    ? geometries.find((geometry) => geometry.id === activeProfile?.geometry.id)
+    : undefined;
   function humanize(value: string) {
     return value
       .replace(/_/g, " ")
@@ -73,6 +94,25 @@
     return configurations.find(
       (configuration) => configuration.device_id === device.id,
     );
+  }
+  function profileForDevice(device: Device): Profile | undefined {
+    return profiles.find((profile) => profile.device_id === device.id);
+  }
+  function behaviorFor(sourceKey: string): ProfileBehavior | undefined {
+    return activeProfile?.assignments.find(
+      (assignment) =>
+        assignment.layer_id === "base" && assignment.source_key === sourceKey,
+    )?.behavior;
+  }
+  function behaviorLabel(
+    behavior: ProfileBehavior | undefined,
+    sourceKey: string,
+  ) {
+    if (!behavior) return sourceKey;
+    if (behavior.kind === "key") return behavior.key ?? sourceKey;
+    if (behavior.kind === "transparent") return "Pass through";
+    if (behavior.kind === "disabled") return "Disabled";
+    return humanize(behavior.kind);
   }
   function clearPolling() {
     if (pollTimer) clearInterval(pollTimer);
@@ -106,6 +146,14 @@
       loading = false;
     }
   }
+  async function loadLocalDrafts() {
+    try {
+      [profiles, geometries] = await Promise.all([Profiles(), Geometries()]);
+      selectedGeometryID ||= geometries[0]?.id ?? "";
+    } catch {
+      // Browser preview deliberately has no desktop persistence bindings.
+    }
+  }
 
   function openIdentify(device: Device) {
     if (!canIdentify || !isConnected(device)) return;
@@ -113,6 +161,106 @@
     operation = null;
     feedback = "";
     view = "identify";
+  }
+  function openDraft(device: Device) {
+    if (!canShowDevices) return;
+    selectedDevice = device;
+    feedback = "";
+    profilePreview = null;
+    const draft = profileForDevice(device);
+    if (draft) {
+      activeProfile = draft;
+      selectedSourceKey = draft.geometry.source_keys[0] ?? "";
+      view = "editor";
+      return;
+    }
+    activeProfile = null;
+    profileName = device.display_name
+      ? `${device.display_name} draft`
+      : "Keyboard draft";
+    selectedGeometryID ||= geometries[0]?.id ?? "";
+    view = "setup";
+  }
+  async function createDraft() {
+    if (
+      !selectedDevice ||
+      !selectedGeometryID ||
+      !profileName.trim() ||
+      profileBusy
+    )
+      return;
+    profileBusy = true;
+    feedback = "";
+    try {
+      activeProfile = await CreateProfile(
+        selectedDevice.id,
+        profileName.trim(),
+        selectedGeometryID,
+      );
+      profiles = [...profiles, activeProfile];
+      selectedSourceKey = activeProfile.geometry.source_keys[0] ?? "";
+      view = "editor";
+      void previewDraft(activeProfile);
+    } catch (error) {
+      feedback = explain(error);
+    } finally {
+      profileBusy = false;
+    }
+  }
+  async function assignBaseBehavior(behavior: ProfileBehavior) {
+    if (!activeProfile || !selectedSourceKey || profileBusy) return;
+    profileBusy = true;
+    feedback = "";
+    profilePreview = null;
+    const assignments = activeProfile.assignments.filter(
+      (assignment) =>
+        assignment.layer_id !== "base" ||
+        assignment.source_key !== selectedSourceKey,
+    );
+    assignments.push({
+      layer_id: "base",
+      source_key: selectedSourceKey,
+      behavior,
+    });
+    try {
+      const saved = await SaveProfile({ ...activeProfile, assignments });
+      activeProfile = saved;
+      profiles = profiles.map((profile) =>
+        profile.id === saved.id ? saved : profile,
+      );
+      void previewDraft(saved);
+    } catch (error) {
+      feedback = explain(error);
+    } finally {
+      profileBusy = false;
+    }
+  }
+  async function previewDraft(draft: Profile) {
+    if (
+      !capabilities.find(
+        (capability) => capability.name === "candidate_validation",
+      )?.available
+    )
+      return;
+    previewBusy = true;
+    try {
+      const result = await PreviewProfile(draft.id);
+      if (
+        activeProfile?.id === result.profile_id &&
+        activeProfile.draft_revision === result.draft_revision
+      ) {
+        profilePreview = result;
+      }
+    } catch (error) {
+      if (
+        activeProfile?.id === draft.id &&
+        activeProfile.draft_revision === draft.draft_revision
+      ) {
+        feedback = explain(error);
+      }
+    } finally {
+      previewBusy = false;
+    }
   }
   async function pollOperation() {
     if (!operation) return;
@@ -155,6 +303,8 @@
     view = "devices";
     selectedDevice = null;
     operation = null;
+    activeProfile = null;
+    profilePreview = null;
   }
 
   onMount(async () => {
@@ -169,6 +319,7 @@
         if (isWorkspace(next)) workspace = next;
       },
     );
+    await loadLocalDrafts();
     await refresh();
   });
   onDestroy(() => {
@@ -319,9 +470,16 @@
                   >
                   <button
                     class="button primary"
-                    disabled
-                    title="Visual keyboard drafts are not implemented yet."
-                    >Set up</button
+                    on:click={() => openDraft(device)}
+                    disabled={!canShowDevices || geometries.length === 0}
+                    title={geometries.length === 0
+                      ? "Loading verified keyboard geometries."
+                      : profileForDevice(device)
+                        ? "Open this local keyboard draft"
+                        : "Create a local keyboard draft"}
+                    >{profileForDevice(device)
+                      ? "Edit draft"
+                      : "Set up"}</button
                   >
                 </div>
               </article>
@@ -358,7 +516,7 @@
           manager owns those responsibilities.
         </p>
       </section>
-    {:else if selectedDevice}
+    {:else if view === "identify" && selectedDevice}
       <section aria-labelledby="identify-title" class="identify-page">
         <button class="back-link" on:click={backToDevices}
           >← All keyboards</button
@@ -424,11 +582,163 @@
           </p>
         </section>
       </section>
+    {:else if view === "setup" && selectedDevice}
+      <section class="setup-page" aria-labelledby="setup-title">
+        <button class="back-link" on:click={backToDevices}
+          >← All keyboards</button
+        >
+        <div class="page-heading">
+          <div>
+            <p class="eyebrow">A FRESH START</p>
+            <h1 id="setup-title">Meet your keyboard.</h1>
+            <p>Create a local draft. Nothing changes on the keyboard yet.</p>
+          </div>
+          <span class="build-label">LOCAL DRAFT</span>
+        </div>
+        <form class="setup-card" on:submit|preventDefault={createDraft}>
+          <label for="profile-name">Draft name</label>
+          <input
+            id="profile-name"
+            bind:value={profileName}
+            maxlength="80"
+            required
+          />
+          <label for="geometry">Physical layout</label>
+          <select id="geometry" bind:value={selectedGeometryID} required>
+            {#each geometries as geometry (geometry.id)}
+              <option value={geometry.id}>{geometry.name}</option>
+            {/each}
+          </select>
+          {#if geometries.find((geometry) => geometry.id === selectedGeometryID)}
+            <p class="field-help">
+              {geometries.find((geometry) => geometry.id === selectedGeometryID)
+                ?.description}
+            </p>
+          {/if}
+          <p class="boundary-note">
+            Layout selection is explicit. KeyboarDeer does not guess a physical
+            layout from the keyboard’s name.
+          </p>
+          <div class="setup-actions">
+            <button
+              class="button secondary"
+              type="button"
+              on:click={backToDevices}>Cancel</button
+            >
+            <button
+              class="button primary"
+              type="submit"
+              disabled={profileBusy || !selectedGeometryID}
+              >{profileBusy ? "Creating…" : "Create draft"}</button
+            >
+          </div>
+        </form>
+        {#if feedback}<p class="inline-feedback" role="status">
+            {feedback}
+          </p>{/if}
+      </section>
+    {:else if view === "editor" && activeProfile}
+      <section class="editor-page" aria-labelledby="editor-title">
+        <button class="back-link" on:click={backToDevices}
+          >← All keyboards</button
+        >
+        <div class="page-heading">
+          <div>
+            <p class="eyebrow">{selectedDevice?.display_name ?? "KEYBOARD"}</p>
+            <h1 id="editor-title">{activeProfile.name}</h1>
+            <p>
+              Base layer · saved locally · revision {activeProfile.draft_revision}
+            </p>
+          </div>
+          <span class="build-label">DRAFT ONLY</span>
+        </div>
+        {#if activeGeometry}
+          <div class="keyboard-editor" aria-label={activeGeometry.name}>
+            {#each [0, 1, 2, 3, 4] as row}
+              <div class="keyboard-row">
+                {#each activeGeometry.keys.filter((key) => key.row === row) as key (key.id)}
+                  <button
+                    class:selected-key={selectedSourceKey === key.source_key}
+                    class="editor-key"
+                    style={`--key-width: ${key.width}`}
+                    on:click={() => (selectedSourceKey = key.source_key)}
+                    aria-pressed={selectedSourceKey === key.source_key}
+                  >
+                    <strong>{key.label}</strong><small
+                      >{behaviorLabel(
+                        behaviorFor(key.source_key),
+                        key.source_key,
+                      )}</small
+                    >
+                  </button>
+                {/each}
+              </div>
+            {/each}
+          </div>
+          <section class="key-palette" aria-label="Basic key assignments">
+            <div>
+              <p class="eyebrow">SELECTED KEY</p>
+              <h2>
+                {activeGeometry.keys.find(
+                  (key) => key.source_key === selectedSourceKey,
+                )?.label ?? selectedSourceKey}
+              </h2>
+              <p>Choose a basic behavior for the Base layer.</p>
+            </div>
+            <div class="palette-buttons">
+              {#each ["esc", "tab", "caps", "lctl", "lsft", "spc", "ret", "bspc", "a", "b", "c", "v", "x", "z"] as key}
+                <button
+                  class="button secondary"
+                  on:click={() => assignBaseBehavior({ kind: "key", key })}
+                  disabled={profileBusy}>{key}</button
+                >
+              {/each}
+              <button
+                class="button secondary"
+                on:click={() => assignBaseBehavior({ kind: "disabled" })}
+                disabled={profileBusy}>Disable</button
+              >
+            </div>
+          </section>
+          <section
+            class:rejected={profilePreview?.validation.outcome === "rejected"}
+            class="preview-status"
+            aria-live="polite"
+          >
+            <strong
+              >{previewBusy
+                ? "Checking complete draft…"
+                : profilePreview
+                  ? `Manager preview: ${humanize(profilePreview.validation.outcome)}`
+                  : "Preview not checked"}</strong
+            >
+            <p>
+              {profilePreview?.validation.reason ??
+                "Every semantic edit is checked against the complete compiled draft."}
+            </p>
+            {#if profilePreview?.validation.outcome === "rejected"}
+              <p>
+                No keyboard mapping has been applied. The manager did not
+                provide a reliable key location for this result.
+              </p>
+            {/if}
+          </section>
+        {:else}
+          <section class="manager-notice" data-state="incomplete">
+            <span class="notice-symbol" aria-hidden="true">!</span>
+            <div>
+              <h2>Geometry unavailable</h2>
+              <p>This draft refers to a geometry this version cannot render.</p>
+            </div>
+          </section>
+        {/if}
+        {#if feedback}<p class="inline-feedback" role="status">
+            {feedback}
+          </p>{/if}
+      </section>
     {/if}
   </main>
   <footer>
-    Draft editing, layers, validation, and applying changes are intentionally
-    unavailable until their corresponding implementation milestones are
-    complete.
+    Drafts are local until a manager-backed apply workflow is implemented.
   </footer>
 </div>
