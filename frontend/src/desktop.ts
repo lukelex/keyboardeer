@@ -75,6 +75,18 @@ export interface ProfileGeometry {
   id: string;
   source_keys: string[];
 }
+export interface GeometryTemplate {
+  id: string;
+  name: string;
+  description: string;
+  keys: Array<{
+    id: string;
+    label: string;
+    source_key: string;
+    row: number;
+    width: number;
+  }>;
+}
 export interface ProfileLayer {
   id: string;
   name: string;
@@ -146,6 +158,7 @@ type AppBindings = {
   Info?: () => Promise<AppInfo>;
   ManagerStatus?: () => Promise<ManagerStatus>;
   Workspace?: () => Promise<ManagerWorkspace>;
+  Geometries?: () => Promise<GeometryTemplate[]>;
   Profiles?: () => Promise<Profile[]>;
   CreateProfile?: (
     deviceID: string,
@@ -196,6 +209,8 @@ export const ManagerStatus = () =>
   binding<() => Promise<ManagerStatus>>("ManagerStatus")();
 export const Workspace = () =>
   binding<() => Promise<ManagerWorkspace>>("Workspace")();
+export const Geometries = () =>
+  binding<() => Promise<GeometryTemplate[]>>("Geometries")();
 export const Profiles = () => binding<() => Promise<Profile[]>>("Profiles")();
 export const CreateProfile = (
   deviceID: string,

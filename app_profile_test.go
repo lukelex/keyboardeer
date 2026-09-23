@@ -41,6 +41,18 @@ func TestAppCreatesPersistsAndCompilesExplicitGeometryProfile(t *testing.T) {
 	}
 }
 
+func TestAppExposesOnlyVerifiedGeometries(t *testing.T) {
+	app := newAppWithProfileStore(profile.NewStore(filepath.Join(t.TempDir(), "profiles.json")))
+	defer app.manager.Close()
+	geometries := app.Geometries()
+	if len(geometries) != 1 || geometries[0].ID != geometry.ANSI60USID {
+		t.Fatalf("geometries = %#v", geometries)
+	}
+	if _, err := geometries[0].ProfileGeometry(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAppPreviewsThePersistedCompiledDraft(t *testing.T) {
 	endpoint := testPreviewManager(t)
 	client := managerapi.New(managerapi.Options{Endpoint: endpoint, ClientName: "keyboardeer-test", ClientVersion: "test"})

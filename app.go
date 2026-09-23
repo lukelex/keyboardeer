@@ -71,6 +71,10 @@ func (a *App) Info() AppInfo {
 	return AppInfo{Name: "KeyboarDeer", Version: appVersion}
 }
 
+// Geometries returns only layouts whose visual keys and KMonad source order
+// have been explicitly verified. It does not infer a layout from device names.
+func (a *App) Geometries() []geometry.Template { return geometry.List() }
+
 // Profiles are application-owned editable drafts. None of these methods access
 // a device or mutate a manager configuration.
 func (a *App) Profiles() ([]profile.Profile, error) {
