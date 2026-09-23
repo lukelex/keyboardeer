@@ -815,36 +815,33 @@
             {/each}
           </div>
           <section class="key-palette" aria-label="Basic key assignments">
-            <div>
-              <p class="eyebrow">SELECTED KEY</p>
-              <h2>
-                {activeGeometry.keys.find(
-                  (key) => key.source_key === selectedSourceKey,
-                )?.label ?? selectedSourceKey}
-              </h2>
-              <p>
-                Choose a basic behavior for the Base layer. All
-                {basicKeyOptions.length} keys in this verified layout are available
-                below.
-              </p>
-            </div>
             <div class="palette-buttons">
-              {#each basicKeyOptions as key (key.id)}
-                <button
-                  class="button secondary"
-                  on:click={() =>
-                    assignBaseBehavior({ kind: "key", key: key.source_key })}
-                  disabled={profileBusy}
-                  title={`Assign ${key.label} (${key.source_key})`}
-                  ><span>{key.label}</span><small>{key.source_key}</small
-                  ></button
-                >
+              {#each [0, 1, 2, 3, 4] as row}
+                <div class="palette-row">
+                  {#each basicKeyOptions.filter((key) => key.row === row) as key (key.id)}
+                    <button
+                      class="button secondary palette-key"
+                      style={`--key-width: ${key.width}`}
+                      on:click={() =>
+                        assignBaseBehavior({
+                          kind: "key",
+                          key: key.source_key,
+                        })}
+                      disabled={profileBusy}
+                      title={`Assign ${key.label} (${key.source_key})`}
+                      ><span>{key.label}</span><small>{key.source_key}</small
+                      ></button
+                    >
+                  {/each}
+                </div>
               {/each}
-              <button
-                class="button secondary"
-                on:click={() => assignBaseBehavior({ kind: "disabled" })}
-                disabled={profileBusy}>Disable</button
-              >
+              <div class="palette-row palette-utility">
+                <button
+                  class="button secondary palette-disable"
+                  on:click={() => assignBaseBehavior({ kind: "disabled" })}
+                  disabled={profileBusy}>Disable selected key</button
+                >
+              </div>
             </div>
           </section>
           <section

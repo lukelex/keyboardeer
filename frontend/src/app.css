@@ -555,17 +555,8 @@ h1 {
   white-space: nowrap;
 }
 .key-palette {
-  align-items: center;
-  display: grid;
-  gap: 22px;
-  grid-template-columns: minmax(170px, 0.65fr) 1fr;
+  padding: clamp(16px, 3vw, 29px);
 }
-.key-palette h2 {
-  font-size: 22px;
-  letter-spacing: -0.8px;
-  margin: 0;
-}
-.key-palette p:last-child,
 .preview-status p {
   color: #647669;
   font-size: 13px;
@@ -573,24 +564,45 @@ h1 {
   margin: 6px 0 0;
 }
 .palette-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
+  display: grid;
+  gap: 5px;
+  overflow-x: auto;
 }
-.palette-buttons .button {
+.palette-row {
+  display: flex;
+  gap: 5px;
+  min-width: 690px;
+}
+.palette-buttons .palette-key {
   align-items: center;
-  display: inline-flex;
+  background: #fffefa;
+  border-color: #cbd9c3;
+  display: flex;
+  flex: var(--key-width) 0 0;
   flex-direction: column;
+  height: 48px;
   gap: 1px;
-  min-height: 34px;
-  min-width: 42px;
+  justify-content: center;
+  min-width: 34px;
   padding: 5px 8px;
 }
-.palette-buttons .button small {
+.palette-buttons .palette-key:hover {
+  background: #d9ecd1;
+  border-color: #608b61;
+}
+.palette-buttons .palette-key small {
   color: #65776b;
   font-size: 9px;
   font-weight: 500;
   line-height: 1;
+}
+.palette-utility {
+  justify-content: flex-end;
+  margin-top: 4px;
+  min-width: 0;
+}
+.palette-disable {
+  color: #35604c !important;
 }
 .preview-status {
   background: #f0f5e9;
