@@ -35,3 +35,12 @@ It is not fixture mode and must never be confused with a manager connection.
 The desktop app is a client of `kmonad-device-manager`. It never opens input
 devices, launches KMonad, or reads manager-private status files. Controls whose
 manager capability has not been implemented are disabled and explain why.
+
+## Current desktop behavior
+
+The Wails shell opens on the real, capability-gated **Keyboards** view. With the
+reviewed manager revision, it shows **Manager API incomplete** because
+`manager.get` is not available and disables device, setup, and identification
+actions. This is intentional: the app does not substitute preview fixtures for
+live manager data. The browser Vite preview also keeps controls disabled because
+it has no Wails bindings.

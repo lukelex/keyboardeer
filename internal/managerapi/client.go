@@ -198,10 +198,14 @@ func (c *APIClient) noteConnectFailure() {
 }
 
 func (c *APIClient) readResponses(connection *ClientConnection) {
-	reader := bufio.NewReader(connection.conn)
+	reader := bufio.NewReaderSize(connection.conn, MaxFrameBytes+1)
 	for {
-		line, err := reader.ReadBytes('\n')
+		line, err := reader.ReadSlice('\n')
 		if err != nil {
+			if errors.Is(err, bufio.ErrBufferFull) {
+				c.failConnection(connection, ErrFrameTooLarge)
+				return
+			}
 			if !errors.Is(err, io.EOF) {
 				c.failConnection(connection, fmt.Errorf("read manager response: %w", err))
 			} else {
@@ -291,6 +295,11 @@ func (c *APIClient) rawCall(ctx context.Context, method string, params any) (jso
 }
 
 func (c *APIClient) rawCallOnConnection(ctx context.Context, connection *ClientConnection, method string, params any) (json.RawMessage, error) {
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.deadline)
+		defer cancel()
+	}
 	id := requestID()
 	wire := request{Type: "request", ID: id, Method: method, Params: params, DeadlineMS: deadlineMilliseconds(ctx, c.deadline)}
 	payload, err := json.Marshal(wire)

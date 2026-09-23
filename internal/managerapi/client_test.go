@@ -129,3 +129,59 @@ func TestClientHonoursResponseCorrelation(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestWorkspaceDoesNotListDevicesWhenManagerGetIsUnsupported(t *testing.T) {
+	var methods []string
+	var methodsMu sync.Mutex
+	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
+		methodsMu.Lock()
+		methods = append(methods, request.Method)
+		methodsMu.Unlock()
+		switch request.Method {
+		case "session.hello":
+			writeResult(t, rw, request.ID, `{"selected_version":1,"server_id":"server","manager_version":"test"}`)
+		case "manager.get":
+			if _, err := rw.WriteString(`{"type":"response","id":"` + request.ID + `","error":{"code":"unsupported_capability","message":"not ready"}}` + "\n"); err != nil {
+				t.Error(err)
+				return
+			}
+			if err := rw.Flush(); err != nil {
+				t.Error(err)
+			}
+		default:
+			t.Errorf("unexpected method %s", request.Method)
+		}
+	})
+	client := New(Options{Endpoint: socket})
+	defer client.Close()
+	workspace := client.LoadWorkspace(context.Background())
+	if workspace.Status.State != "incomplete" || workspace.Status.Capability != "manager.get" {
+		t.Fatalf("unexpected workspace: %#v", workspace)
+	}
+	methodsMu.Lock()
+	defer methodsMu.Unlock()
+	if len(methods) != 2 {
+		t.Fatalf("device.list must not run without manager.get, methods=%v", methods)
+	}
+}
+
+func TestWorkspaceListsOnlyAdvertisedDevices(t *testing.T) {
+	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
+		switch request.Method {
+		case "session.hello":
+			writeResult(t, rw, request.ID, `{"selected_version":1,"server_id":"server","manager_version":"test"}`)
+		case "manager.get":
+			writeResult(t, rw, request.ID, `{"capabilities":[{"name":"device_discovery","available":true,"reason_code":"capability_available","reason":"available"}]}`)
+		case "device.list":
+			writeResult(t, rw, request.ID, `{"devices":[{"id":"dev-1","display_name":"Test","availability":"connected","identity_stability":"serial","configured_by":[],"reason_code":"device_connected","reason":"connected"}]}`)
+		default:
+			t.Errorf("unexpected method %s", request.Method)
+		}
+	})
+	client := New(Options{Endpoint: socket})
+	defer client.Close()
+	workspace := client.LoadWorkspace(context.Background())
+	if workspace.Status.State != "ready" || len(workspace.Devices) != 1 {
+		t.Fatalf("unexpected workspace: %#v", workspace)
+	}
+}

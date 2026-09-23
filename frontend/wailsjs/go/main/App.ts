@@ -3,6 +3,12 @@ export interface AppInfo {
   name: string;
   version: string;
 }
+export interface Capability {
+  name: string;
+  available: boolean;
+  reason_code: string;
+  reason: string;
+}
 export interface ManagerStatus {
   state: string;
   message: string;
@@ -10,6 +16,7 @@ export interface ManagerStatus {
   server_id?: string;
   manager_version?: string;
   capability?: string;
+  capabilities?: Capability[];
 }
 export interface Device {
   id: string;
@@ -21,7 +28,8 @@ export interface Device {
   reason_code: string;
   reason: string;
 }
-export interface DeviceListResult {
+export interface ManagerWorkspace {
+  status: ManagerStatus;
   devices: Device[];
 }
 export interface Operation {
@@ -42,7 +50,14 @@ declare global {
         App?: {
           Info?: () => Promise<AppInfo>;
           ManagerStatus?: () => Promise<ManagerStatus>;
-          IntegrationDeviceList?: () => Promise<DeviceListResult>;
+          Workspace?: () => Promise<ManagerWorkspace>;
+          IdentifyStart?: (
+            deviceID: string,
+            timeoutMS: number,
+          ) => Promise<Operation>;
+          IdentifyCancel?: (operationID: string) => Promise<Operation>;
+          IdentifyOperation?: (operationID: string) => Promise<Operation>;
+          IntegrationDeviceList?: () => Promise<{ devices: Device[] }>;
           IntegrationIdentifyStart?: (
             deviceID: string,
             timeoutMS: number,
@@ -61,21 +76,30 @@ declare global {
   }
 }
 
-function binding<T>(
-  name: keyof NonNullable<
-    NonNullable<NonNullable<Window["go"]>["main"]>["App"]
-  >,
-): T {
-  const app = window.go?.main?.App;
-  const call = app?.[name];
+type AppBindings = NonNullable<
+  NonNullable<NonNullable<Window["go"]>["main"]>["App"]
+>;
+function binding<T>(name: keyof AppBindings): T {
+  const call = window.go?.main?.App?.[name];
   if (!call) throw new Error(`Wails binding ${name} is unavailable.`);
   return call as T;
 }
 export const Info = () => binding<() => Promise<AppInfo>>("Info")();
 export const ManagerStatus = () =>
   binding<() => Promise<ManagerStatus>>("ManagerStatus")();
+export const Workspace = () =>
+  binding<() => Promise<ManagerWorkspace>>("Workspace")();
+export const IdentifyStart = (id: string, timeout: number) =>
+  binding<(id: string, timeout: number) => Promise<Operation>>("IdentifyStart")(
+    id,
+    timeout,
+  );
+export const IdentifyCancel = (id: string) =>
+  binding<(id: string) => Promise<Operation>>("IdentifyCancel")(id);
+export const IdentifyOperation = (id: string) =>
+  binding<(id: string) => Promise<Operation>>("IdentifyOperation")(id);
 export const IntegrationDeviceList = () =>
-  binding<() => Promise<DeviceListResult>>("IntegrationDeviceList")();
+  binding<() => Promise<{ devices: Device[] }>>("IntegrationDeviceList")();
 export const IntegrationIdentifyStart = (id: string, timeout: number) =>
   binding<(id: string, timeout: number) => Promise<Operation>>(
     "IntegrationIdentifyStart",

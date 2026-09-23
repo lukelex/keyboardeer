@@ -37,3 +37,20 @@ The API contract fixtures and socket-server tests cover negotiation, request
 correlation, size bounds, endpoint resolution, unknown enum values, errors, and
 implemented method shapes. Running the harness against an installed manager is
 the remaining manual proof for API-04.
+
+## Current desktop slice
+
+The **Keyboards** landing screen calls the capability-gated `Workspace` bridge.
+It performs hello, then `manager.get`; only an advertised `device_discovery`
+capability allows a subsequent `device.list`. Every unavailable, incomplete, or
+reconnecting state visibly dims and disables inventory and setup actions. Browser
+Vite development reports that desktop bindings are absent; it never pretends to
+be connected with fixtures.
+
+When `device_identification` is advertised, a connected keyboard enables
+**Identify**. The flow calls `device.identify.start`, polls `operation.get` while
+active, and calls `device.identify.cancel` only for a live operation. Setup,
+draft editing, validation, profile, and apply controls remain disabled because
+those implementation milestones are not complete. The reviewed manager cannot
+yet advertise `manager.get`, so its expected normal presentation today is
+**Manager API incomplete**, with no `device.list` call made.

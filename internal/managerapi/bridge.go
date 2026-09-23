@@ -9,12 +9,13 @@ import (
 // ConnectionStatus is deliberately conservative. In normal application mode a
 // successful hello is insufficient: manager.get must establish capabilities.
 type ConnectionStatus struct {
-	State      string `json:"state"`
-	Message    string `json:"message"`
-	Endpoint   string `json:"endpoint"`
-	ServerID   string `json:"server_id,omitempty"`
-	Version    string `json:"manager_version,omitempty"`
-	Capability string `json:"capability,omitempty"`
+	State        string       `json:"state"`
+	Message      string       `json:"message"`
+	Endpoint     string       `json:"endpoint"`
+	ServerID     string       `json:"server_id,omitempty"`
+	Version      string       `json:"manager_version,omitempty"`
+	Capability   string       `json:"capability,omitempty"`
+	Capabilities []Capability `json:"capabilities,omitempty"`
 }
 
 func (c *APIClient) Bootstrap(ctx context.Context) ConnectionStatus {
@@ -44,7 +45,7 @@ func (c *APIClient) Bootstrap(ctx context.Context) ConnectionStatus {
 		status.Message = "The manager connection did not return usable capability information."
 		return status
 	}
-	_ = info // The frontend receives per-capability data with the future snapshot bridge.
+	status.Capabilities = info.Capabilities
 	status.State = "ready"
 	status.Message = "Manager capabilities are available."
 	return status
@@ -54,4 +55,43 @@ func (c *APIClient) StatusWithTimeout(timeout time.Duration) ConnectionStatus {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	return c.Bootstrap(ctx)
+}
+
+// Workspace is the capability-gated normal application read model. Devices are
+// populated only after manager.get has advertised device_discovery.
+type Workspace struct {
+	Status  ConnectionStatus `json:"status"`
+	Devices []Device         `json:"devices"`
+}
+
+func CapabilityAvailable(capabilities []Capability, name string) (bool, string) {
+	for _, capability := range capabilities {
+		if capability.Name == name {
+			return capability.Available, capability.Reason
+		}
+	}
+	return false, "The connected manager did not advertise this capability."
+}
+
+func (c *APIClient) LoadWorkspace(ctx context.Context) Workspace {
+	status := c.Bootstrap(ctx)
+	workspace := Workspace{Status: status, Devices: []Device{}}
+	if status.State != "ready" {
+		return workspace
+	}
+	available, reason := CapabilityAvailable(status.Capabilities, "device_discovery")
+	if !available {
+		workspace.Status.State = "incomplete"
+		workspace.Status.Capability = "device_discovery"
+		workspace.Status.Message = reason
+		return workspace
+	}
+	devices, err := c.DeviceList(ctx)
+	if err != nil {
+		workspace.Status.State = "unavailable"
+		workspace.Status.Message = "The manager could not load its device inventory."
+		return workspace
+	}
+	workspace.Devices = devices.Devices
+	return workspace
 }

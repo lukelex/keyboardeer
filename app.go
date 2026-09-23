@@ -48,6 +48,52 @@ func (a *App) ManagerStatus() managerapi.ConnectionStatus {
 	return a.manager.StatusWithTimeout(2 * time.Second)
 }
 
+// Workspace loads only capability-advertised normal application data. In the
+// reviewed manager revision manager.get is unavailable, so it returns an
+// API-incomplete state and no device calls are made.
+func (a *App) Workspace() managerapi.Workspace {
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	return a.manager.LoadWorkspace(ctx)
+}
+
+func (a *App) canUse(ctx context.Context, capability string) error {
+	info, err := a.manager.ManagerGet(ctx)
+	if err != nil {
+		return err
+	}
+	available, reason := managerapi.CapabilityAvailable(info.Capabilities, capability)
+	if !available {
+		return &managerapi.Error{Code: "unsupported_capability", Message: reason}
+	}
+	return nil
+}
+
+func (a *App) IdentifyStart(deviceID string, timeoutMS int) (managerapi.Operation, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := a.canUse(ctx, "device_identification"); err != nil {
+		return managerapi.Operation{}, err
+	}
+	return a.manager.IdentifyStart(ctx, managerapi.IdentifyStartParams{DeviceID: deviceID, TimeoutMS: timeoutMS})
+}
+func (a *App) IdentifyCancel(operationID string) (managerapi.Operation, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := a.canUse(ctx, "device_identification"); err != nil {
+		return managerapi.Operation{}, err
+	}
+	return a.manager.IdentifyCancel(ctx, operationID)
+}
+func (a *App) IdentifyOperation(operationID string) (managerapi.Operation, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := a.canUse(ctx, "device_identification"); err != nil {
+		return managerapi.Operation{}, err
+	}
+	return a.manager.OperationGet(ctx, operationID)
+}
+
 // The following bindings support explicitly labelled integration development.
 // They do not replace normal capability-gated application flows.
 func (a *App) IntegrationDeviceList() (managerapi.DeviceListResult, error) {
