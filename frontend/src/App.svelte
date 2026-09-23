@@ -141,7 +141,7 @@
           state: desktopUnavailable ? "browser_preview" : "unavailable",
           message: desktopUnavailable
             ? "This browser preview has no Wails desktop bindings, so it cannot contact the local manager. Use the native KeyboarDeer window launched by scripts/desktop.sh."
-            : "The desktop app could not load the manager workspace.",
+            : `The desktop app could not load the manager workspace: ${explain(error)}`,
           endpoint: "",
         },
       };
@@ -321,20 +321,25 @@
     profilePreview = null;
   }
 
-  onMount(async () => {
-    try {
-      info = await Info();
-    } catch {
-      info = { name: "KeyboarDeer", version: "browser development" };
-    }
+  onMount(() => {
+    void (async () => {
+      try {
+        info = await Info();
+      } catch {
+        info = { name: "KeyboarDeer", version: "browser development" };
+      }
+    })();
     stopWorkspaceEvents = window.runtime?.EventsOn?.(
       "workspace:changed",
       (next) => {
         if (isWorkspace(next)) workspace = next;
       },
     );
-    await loadLocalDrafts();
-    await refresh();
+    // The manager view must never wait on optional local-draft bindings. A
+    // corrupt or unavailable profile store may disable setup, but it cannot
+    // leave the device workspace indefinitely stuck in its initial state.
+    void loadLocalDrafts();
+    void refresh();
   });
   onDestroy(() => {
     clearPolling();
