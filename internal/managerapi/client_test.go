@@ -130,7 +130,7 @@ func TestClientHonoursResponseCorrelation(t *testing.T) {
 	}
 }
 
-func TestWorkspaceDoesNotListDevicesWhenManagerGetIsUnsupported(t *testing.T) {
+func TestWorkspaceDoesNotFetchSnapshotWhenManagerGetIsUnsupported(t *testing.T) {
 	var methods []string
 	var methodsMu sync.Mutex
 	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
@@ -161,19 +161,19 @@ func TestWorkspaceDoesNotListDevicesWhenManagerGetIsUnsupported(t *testing.T) {
 	methodsMu.Lock()
 	defer methodsMu.Unlock()
 	if len(methods) != 2 {
-		t.Fatalf("device.list must not run without manager.get, methods=%v", methods)
+		t.Fatalf("snapshot.get must not run without manager.get, methods=%v", methods)
 	}
 }
 
-func TestWorkspaceListsOnlyAdvertisedDevices(t *testing.T) {
+func TestWorkspaceUsesSnapshotAfterCapabilityNegotiation(t *testing.T) {
 	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
 		switch request.Method {
 		case "session.hello":
 			writeResult(t, rw, request.ID, `{"selected_version":1,"server_id":"server","manager_version":"test"}`)
 		case "manager.get":
 			writeResult(t, rw, request.ID, `{"capabilities":[{"name":"device_discovery","available":true,"reason_code":"capability_available","reason":"available"}]}`)
-		case "device.list":
-			writeResult(t, rw, request.ID, `{"devices":[{"id":"dev-1","display_name":"Test","availability":"connected","identity_stability":"serial","configured_by":[],"reason_code":"device_connected","reason":"connected"}]}`)
+		case "snapshot.get":
+			writeResult(t, rw, request.ID, `{"state_revision":12,"event_cursor":{"server_id":"server","event_id":7,"state_revision":12},"devices":[{"id":"dev-1","display_name":"Test","availability":"connected","identity_stability":"serial","configured_by":[],"reason_code":"device_connected","reason":"connected"}],"configurations":[],"operations":[],"health":{"healthy":true,"reason_code":"manager_healthy","reason":"healthy"}}`)
 		default:
 			t.Errorf("unexpected method %s", request.Method)
 		}
@@ -181,7 +181,29 @@ func TestWorkspaceListsOnlyAdvertisedDevices(t *testing.T) {
 	client := New(Options{Endpoint: socket})
 	defer client.Close()
 	workspace := client.LoadWorkspace(context.Background())
-	if workspace.Status.State != "ready" || len(workspace.Devices) != 1 {
+	if workspace.Status.State != "ready" || workspace.Snapshot == nil || len(workspace.Snapshot.Devices) != 1 || workspace.Snapshot.EventCursor.EventID != 7 {
 		t.Fatalf("unexpected workspace: %#v", workspace)
+	}
+}
+
+func TestManagerGetDecodesPublicMetadata(t *testing.T) {
+	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
+		switch request.Method {
+		case "session.hello":
+			writeResult(t, rw, request.ID, `{"selected_version":1,"server_id":"hello-server","manager_version":"hello-version"}`)
+		case "manager.get":
+			writeResult(t, rw, request.ID, `{"api_versions":[1],"manager_version":"manager-version","server_id":"server-2","platform":"linux","backend":"linux-evdev","state_revision":14,"event_cursor":{"server_id":"server-2","event_id":8,"state_revision":14},"limits":{"api_frame_bytes":1048576,"event_history":1024},"capabilities":[],"health":{"healthy":true,"reason_code":"manager_healthy","reason":"responsive","reconcile_count":7}}`)
+		default:
+			t.Errorf("unexpected method %s", request.Method)
+		}
+	})
+	client := New(Options{Endpoint: socket})
+	defer client.Close()
+	info, err := client.ManagerGet(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.ServerID != "server-2" || info.EventCursor.EventID != 8 || info.Limits.EventHistory != 1024 || !info.Health.Healthy {
+		t.Fatalf("unexpected manager metadata: %#v", info)
 	}
 }

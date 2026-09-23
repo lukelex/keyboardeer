@@ -57,11 +57,11 @@ func (c *APIClient) StatusWithTimeout(timeout time.Duration) ConnectionStatus {
 	return c.Bootstrap(ctx)
 }
 
-// Workspace is the capability-gated normal application read model. Devices are
-// populated only after manager.get has advertised device_discovery.
+// Workspace is the capability-gated normal application read model. The
+// snapshot is the authoritative source for Devices and runtime state.
 type Workspace struct {
-	Status  ConnectionStatus `json:"status"`
-	Devices []Device         `json:"devices"`
+	Status   ConnectionStatus `json:"status"`
+	Snapshot *Snapshot        `json:"snapshot,omitempty"`
 }
 
 func CapabilityAvailable(capabilities []Capability, name string) (bool, string) {
@@ -75,7 +75,7 @@ func CapabilityAvailable(capabilities []Capability, name string) (bool, string) 
 
 func (c *APIClient) LoadWorkspace(ctx context.Context) Workspace {
 	status := c.Bootstrap(ctx)
-	workspace := Workspace{Status: status, Devices: []Device{}}
+	workspace := Workspace{Status: status}
 	if status.State != "ready" {
 		return workspace
 	}
@@ -86,12 +86,12 @@ func (c *APIClient) LoadWorkspace(ctx context.Context) Workspace {
 		workspace.Status.Message = reason
 		return workspace
 	}
-	devices, err := c.DeviceList(ctx)
+	snapshot, err := c.SnapshotGet(ctx)
 	if err != nil {
 		workspace.Status.State = "unavailable"
-		workspace.Status.Message = "The manager could not load its device inventory."
+		workspace.Status.Message = "The manager could not load its authoritative workspace snapshot."
 		return workspace
 	}
-	workspace.Devices = devices.Devices
+	workspace.Snapshot = &snapshot
 	return workspace
 }

@@ -8,6 +8,7 @@
     Workspace,
     type AppInfo,
     type Capability,
+    type Configuration,
     type Device,
     type ManagerStatus,
     type ManagerWorkspace,
@@ -22,7 +23,7 @@
   };
 
   let info: AppInfo = { name: "KeyboarDeer", version: "starting…" };
-  let workspace: ManagerWorkspace = { status: initialStatus, devices: [] };
+  let workspace: ManagerWorkspace = { status: initialStatus };
   let view: View = "devices";
   let selectedDevice: Device | null = null;
   let operation: Operation | null = null;
@@ -48,6 +49,8 @@
     workspace.status.state === "ready" && deviceDiscovery.available;
   $: canIdentify =
     workspace.status.state === "ready" && deviceIdentification.available;
+  $: devices = workspace.snapshot?.devices ?? [];
+  $: configurations = workspace.snapshot?.configurations ?? [];
   function humanize(value: string) {
     return value
       .replace(/_/g, " ")
@@ -64,6 +67,11 @@
       "rolled_back",
       "cancelled",
     ].includes(state);
+  }
+  function configurationForDevice(device: Device): Configuration | undefined {
+    return configurations.find(
+      (configuration) => configuration.device_id === device.id,
+    );
   }
   function clearPolling() {
     if (pollTimer) clearInterval(pollTimer);
@@ -88,7 +96,6 @@
             "Desktop bindings are unavailable in this browser preview. Run the Wails app to contact a manager.",
           endpoint: "",
         },
-        devices: [],
       };
       feedback = explain(error);
     } finally {
@@ -240,11 +247,11 @@
         <div class="list-caption">
           <span>YOUR KEYBOARDS</span><span
             >{canShowDevices
-              ? `${workspace.devices.length} known`
+              ? `${devices.length} known`
               : "Waiting for manager capability"}</span
           >
         </div>
-        {#if canShowDevices && workspace.devices.length === 0}
+        {#if canShowDevices && devices.length === 0}
           <section class="empty-state">
             <span aria-hidden="true">⌨</span>
             <h2>A little quiet here.</h2>
@@ -255,7 +262,8 @@
           </section>
         {:else if canShowDevices}
           <div class="device-list">
-            {#each workspace.devices as device (device.id)}
+            {#each devices as device (device.id)}
+              {@const configuration = configurationForDevice(device)}
               <article class:offline={!isConnected(device)} class="device-card">
                 <div class="device-glyph" aria-hidden="true">⌨</div>
                 <div class="device-copy">
@@ -276,6 +284,14 @@
                         ", ",
                       )}</small
                     >{/if}
+                  {#if configuration}
+                    <small
+                      >{configuration.ownership} configuration ·
+                      {humanize(configuration.runtime.phase)} · desired
+                      {configuration.desired_revision} / active
+                      {configuration.active_revision}</small
+                    >
+                  {/if}
                 </div>
                 <div class="device-actions">
                   <button

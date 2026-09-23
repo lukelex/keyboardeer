@@ -32,7 +32,34 @@ export interface Device {
 }
 export interface ManagerWorkspace {
   status: ManagerStatus;
+  snapshot?: Snapshot;
+}
+export interface RuntimeState {
+  phase: string;
+  reason_code: string;
+  reason: string;
+  connected: boolean;
+  healthy: boolean;
+  retry_at?: string;
+  failure_count: number;
+}
+export interface Configuration {
+  id: string;
+  name: string;
+  ownership: string;
+  enabled: boolean;
+  device_id: string;
+  desired_revision: number;
+  active_revision: number;
+  runtime: RuntimeState;
+}
+export interface Snapshot {
+  state_revision: number;
+  event_cursor: { server_id: string; event_id: number; state_revision: number };
   devices: Device[];
+  configurations: Configuration[];
+  operations: Operation[];
+  health: { healthy: boolean; reason_code: string; reason: string };
 }
 export interface Operation {
   id: string;

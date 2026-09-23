@@ -50,11 +50,45 @@ type Capability struct {
 }
 
 type ManagerInfo struct {
-	APIVersions   []int        `json:"api_versions"`
-	Platform      string       `json:"platform"`
-	Backend       string       `json:"backend"`
-	StateRevision uint64       `json:"state_revision"`
-	Capabilities  []Capability `json:"capabilities"`
+	APIVersions    []int         `json:"api_versions"`
+	ManagerVersion string        `json:"manager_version"`
+	ServerID       string        `json:"server_id"`
+	Platform       string        `json:"platform"`
+	Backend        string        `json:"backend"`
+	StateRevision  uint64        `json:"state_revision"`
+	EventCursor    EventCursor   `json:"event_cursor"`
+	Limits         ManagerLimits `json:"limits"`
+	Capabilities   []Capability  `json:"capabilities"`
+	Health         ManagerHealth `json:"health"`
+}
+
+type ManagerLimits struct {
+	MaxConfigurations     int   `json:"max_configurations"`
+	MaxConfigurationBytes int64 `json:"max_configuration_bytes"`
+	CommandQueue          int   `json:"command_queue"`
+	EventHistory          int   `json:"event_history"`
+	EventSubscriberQueue  int   `json:"event_subscriber_queue"`
+	APIMaxClients         int   `json:"api_max_clients"`
+	APIInFlightRequests   int   `json:"api_in_flight_requests"`
+	APIFrameBytes         int   `json:"api_frame_bytes"`
+	DefaultDeadlineMS     int64 `json:"default_deadline_ms"`
+}
+
+type ManagerHealth struct {
+	Healthy             bool   `json:"healthy"`
+	ReasonCode          string `json:"reason_code"`
+	Reason              string `json:"reason"`
+	LastProgressAt      string `json:"last_progress_at,omitempty"`
+	ReconcileCount      uint64 `json:"reconcile_count"`
+	FailureCount        uint64 `json:"failure_count"`
+	MetricsAvailable    bool   `json:"metrics_available"`
+	StatusWriteFailures uint64 `json:"status_write_failures"`
+}
+
+type EventCursor struct {
+	ServerID      string `json:"server_id"`
+	EventID       uint64 `json:"event_id"`
+	StateRevision uint64 `json:"state_revision"`
 }
 
 type Device struct {
@@ -73,6 +107,37 @@ type Device struct {
 
 type DeviceListResult struct {
 	Devices []Device `json:"devices"`
+}
+
+type RuntimeState struct {
+	Phase        string `json:"phase"`
+	ReasonCode   string `json:"reason_code"`
+	Reason       string `json:"reason"`
+	Connected    bool   `json:"connected"`
+	Healthy      bool   `json:"healthy"`
+	RetryAt      string `json:"retry_at,omitempty"`
+	FailureCount int    `json:"failure_count"`
+}
+
+type Configuration struct {
+	ID              string       `json:"id"`
+	Name            string       `json:"name"`
+	Ownership       string       `json:"ownership"`
+	Enabled         bool         `json:"enabled"`
+	DeviceID        string       `json:"device_id"`
+	DesiredRevision uint64       `json:"desired_revision"`
+	ActiveRevision  uint64       `json:"active_revision"`
+	Runtime         RuntimeState `json:"runtime"`
+	LastOperation   *Operation   `json:"last_operation,omitempty"`
+}
+
+type Snapshot struct {
+	StateRevision  uint64          `json:"state_revision"`
+	EventCursor    EventCursor     `json:"event_cursor"`
+	Devices        []Device        `json:"devices"`
+	Configurations []Configuration `json:"configurations"`
+	Operations     []Operation     `json:"operations"`
+	Health         ManagerHealth   `json:"health"`
 }
 
 type ResourceRef struct {

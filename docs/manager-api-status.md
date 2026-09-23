@@ -30,7 +30,7 @@ Relevant source:
 | --- | --- | --- | --- |
 | `session.hello` | Implemented. Required first request; returns server ID, manager version, and initial state revision. | Implemented. | Start every connection; a changed server ID invalidates cached snapshot/event state. |
 | `manager.get` | Implemented by `aa3e88c`; returns public manager metadata, limits, health, event cursor, and the complete capability list. | Implemented; current bridge consumes capabilities and safely ignores newly added fields. | Normal capability-aware startup is now source-ready; smoke-test it against a manager built from this commit. |
-| `snapshot.get` | Implemented by `bf34fa0`; returns coherent devices, configurations, retained operations, manager health, state revision, and event cursor. Desired/active configuration state arrived in `60f49a5`. | Not yet implemented. | Authoritative inventory/recovery source once normal capability negotiation exists. Snapshot currently has health, not a separate diagnostics collection. |
+| `snapshot.get` | Implemented by `bf34fa0`; returns coherent devices, configurations, retained operations, manager health, state revision, and event cursor. Desired/active configuration state arrived in `60f49a5`. | Implemented for the normal workspace bridge. | The Devices view now uses the authoritative snapshot. Snapshot currently has health, not a separate diagnostics collection. |
 | `device.list` | Implemented. Refreshes and returns known keyboard-capable devices. | Implemented. | Normal device inventory is now enabled only when the runtime capability advertises `device_discovery`; smoke-test it against a source build. |
 | `configuration.list` | Implemented by `a0adbd7`; returns managed and external configuration resources without paths/content. | Not yet implemented. | Read-only external and managed configuration inventory. It cannot display raw `.kbd` text. |
 | `device.identify.start` | Implemented. One bounded 1–30-second session for a connected device. | Implemented. | Normal UI is capability-gated; harness can exercise it. |
@@ -52,15 +52,15 @@ model, or a required runtime capability is unavailable.
 | KeyboarDeer interaction | Manager calls | Source-ready? | App-ready? | What still blocks it |
 | --- | --- | ---: | ---: | --- |
 | Connect and establish trust | `session.hello` → `manager.get` | Yes | Partial | Run an integration smoke test against a manager built from this commit; expand the client to retain public limits, health, and event cursor. |
-| Devices landing page | `snapshot.get` (fallback: `device.list`) | Yes | Partial | The current app can now use capability-gated `device.list`; add snapshot types/bridge/UI reconciliation for authoritative runtime state. |
-| Runtime health, desired/active revisions, conflicts | `snapshot.get` | Yes | No | Snapshot client/UI. Do not derive health from names or CLI output. |
+| Devices landing page | `snapshot.get` | Yes | Partial | Current app uses the authoritative snapshot; event synchronization and richer state presentation remain. |
+| Runtime health, desired/active revisions, conflicts | `snapshot.get` | Yes | Partial | Devices show associated configuration phase and desired/active revisions; add dedicated diagnostics and event-driven refresh. Do not derive health from names or CLI output. |
 | Identify a keyboard | `device.identify.start`, `operation.get`, `device.identify.cancel` | Yes | Partial | Current UI is capability-gated; smoke test it against a source build. |
 | Create and reopen an editor draft | None; application-owned persistence | N/A | No | `PROFILE-01`, `PROFILE-02`, and a verified geometry. This can proceed now. |
 | Compile behavior and live preview | `validation.preview` | Yes | No | Local compiler, source mapping, persisted profile model, and validation scheduler. |
 | Receive device/runtime changes | `snapshot.get`, `events.subscribe` | Yes | No | Event-aware client multiplexing, cursor/resync tests. |
 | Apply a managed profile | `configuration.create` / `update` / `apply`, then snapshot/events | Mostly | No | Local compiler/profile/editor and an idempotency decision below. |
 | Enable, disable, or delete managed runtime config | `configuration.set_enabled`, `configuration.delete` | Yes | No | Configuration inventory/UI, expected-revision handling, operation recovery. |
-| Show external runtime configuration | `snapshot.get` / `configuration.list` | Yes | No | Snapshot/list client and UI. |
+| Show external runtime configuration | `snapshot.get` / `configuration.list` | Yes | Partial | Snapshot-backed device cards expose associated configuration state; a dedicated read-only external screen remains. |
 | Show external raw `.kbd` source | No supported API | **No** | No | A manager-owned, access-controlled content-read/export API. Do not read manager files directly. |
 | Adopt an external config | `configuration.adopt` | Yes | No | External inventory UI, clear lossless-representability explanation, and managed-profile hand-off UX. |
 

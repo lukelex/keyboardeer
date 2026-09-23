@@ -395,6 +395,10 @@ func (c *APIClient) ManagerGet(ctx context.Context) (ManagerInfo, error) {
 	var result ManagerInfo
 	return result, c.call(ctx, "manager.get", map[string]any{}, &result)
 }
+func (c *APIClient) SnapshotGet(ctx context.Context) (Snapshot, error) {
+	var result Snapshot
+	return result, c.call(ctx, "snapshot.get", map[string]any{}, &result)
+}
 func (c *APIClient) DeviceList(ctx context.Context) (DeviceListResult, error) {
 	var result DeviceListResult
 	return result, c.call(ctx, "device.list", map[string]any{}, &result)
