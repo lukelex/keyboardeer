@@ -214,9 +214,10 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
     page.getByText("Base layer · saved locally · revision 2"),
   ).toBeVisible();
   await expect(page.locator(".editor-key small")).toHaveText("caps");
+  await expect(page.locator(".preview-indicator.valid")).toBeVisible();
   await expect(
     page.getByText("Manager preview: Valid", { exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await page.getByRole("button", { name: "Apply to keyboard" }).click();
   await expect(
     page.getByText(

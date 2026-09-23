@@ -804,6 +804,30 @@
         {#if activeGeometry}
           <div class="editor-scroll-region">
             <div class="keyboard-editor" aria-label={activeGeometry.name}>
+              {#if previewBusy}
+                <span
+                  class="preview-indicator checking"
+                  aria-label="Checking draft preview"
+                ></span>
+              {:else if currentPreview?.validation.outcome === "valid"}
+                <span
+                  class="preview-indicator valid"
+                  aria-label="Manager preview valid"
+                ></span>
+              {:else if currentPreview}
+                <aside class="preview-message" aria-live="polite">
+                  <strong
+                    >Preview {humanize(currentPreview.validation.outcome)}</strong
+                  >
+                  <p>{currentPreview.validation.reason}</p>
+                  {#if currentPreview.validation.outcome === "rejected"}
+                    <p>
+                      No keyboard mapping has been applied. The manager did not
+                      provide a reliable key location for this result.
+                    </p>
+                  {/if}
+                </aside>
+              {/if}
               {#each activeRows as row}
                 <div class="keyboard-row">
                   {#each activeGeometry.keys.filter((key) => key.row === row) as key (key.id)}
@@ -825,45 +849,22 @@
                 </div>
               {/each}
             </div>
-            <section
-              class:rejected={currentPreview?.validation.outcome === "rejected"}
-              class="preview-status"
-              aria-live="polite"
-            >
-              <strong
-                >{previewBusy
-                  ? "Checking complete draft…"
-                  : currentPreview
-                    ? `Manager preview: ${humanize(currentPreview.validation.outcome)}`
-                    : "Preview not checked"}</strong
-              >
-              <p>
-                {currentPreview?.validation.reason ??
-                  "Every semantic edit is checked against the complete compiled draft."}
-              </p>
-              {#if currentPreview?.validation.outcome === "rejected"}
-                <p>
-                  No keyboard mapping has been applied. The manager did not
-                  provide a reliable key location for this result.
-                </p>
-              {/if}
-              {#if activeProfile.apply_pending}
-                <p>
-                  An Apply sent at {new Date(
-                    activeProfile.apply_pending.started_at,
-                  ).toLocaleString()} has an unknown outcome. To prevent a duplicate
-                  configuration, KeyboarDeer will not retry it automatically.
-                </p>
-              {:else if applyOperation}
-                <p>
-                  Manager Apply: {humanize(applyOperation.state)} —
-                  {applyOperation.reason}
-                </p>
-              {/if}
-            </section>
             <div class="apply-actions">
               <div>
                 <p class="eyebrow">MANAGED APPLY</p>
+                {#if activeProfile.apply_pending}
+                  <p class="apply-status">
+                    An Apply sent at {new Date(
+                      activeProfile.apply_pending.started_at,
+                    ).toLocaleString()} has an unknown outcome. To prevent a duplicate
+                    configuration, KeyboarDeer will not retry it automatically.
+                  </p>
+                {:else if applyOperation}
+                  <p class="apply-status">
+                    Manager Apply: {humanize(applyOperation.state)} —
+                    {applyOperation.reason}
+                  </p>
+                {/if}
                 <p>
                   The manager will render, validate, persist, and supervise this
                   profile. It owns all device and KMonad lifecycle work.
