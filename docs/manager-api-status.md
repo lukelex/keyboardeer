@@ -3,6 +3,13 @@
 **Source review:** 2026-09-23 at upstream `main` commit
 [`aa3e88c8d371906030969f32b51c4ed376710d88`](https://github.com/lukelex/kmonad-device-manager/commit/aa3e88c8d371906030969f32b51c4ed376710d88).
 
+**Development smoke test:** On 2026-09-23, KeyboarDeer built that exact source
+in an isolated worktree and exercised `session.hello`, `manager.get`,
+`snapshot.get`, `device.list`, and `validation.preview` over its real Unix
+socket. The manager reported healthy Linux/evdev capabilities and a coherent
+two-device snapshot. The deliberately minimal preview candidate was rejected by
+KMonad as expected; no configuration was applied or device mapping changed.
+
 This is KeyboarDeer's maintained list of manager interactions. It is a source
 compatibility audit, **not** a statement about released manager binaries or a
 substitute for an integration smoke test. Re-audit this matrix whenever the
@@ -29,8 +36,8 @@ Relevant source:
 | Manager interaction | Source status at `aa3e88c` | KeyboarDeer client status | Product use / limitation |
 | --- | --- | --- | --- |
 | `session.hello` | Implemented. Required first request; returns server ID, manager version, and initial state revision. | Implemented. | Start every connection; a changed server ID invalidates cached snapshot/event state. |
-| `manager.get` | Implemented by `aa3e88c`; returns public manager metadata, limits, health, event cursor, and the complete capability list. | Implemented; current bridge consumes capabilities and safely ignores newly added fields. | Normal capability-aware startup is now source-ready; smoke-test it against a manager built from this commit. |
-| `snapshot.get` | Implemented by `bf34fa0`; returns coherent devices, configurations, retained operations, manager health, state revision, and event cursor. Desired/active configuration state arrived in `60f49a5`. | Implemented for the normal workspace bridge. | The Devices view now uses the authoritative snapshot. Snapshot currently has health, not a separate diagnostics collection. |
+| `manager.get` | Implemented by `aa3e88c`; returns public manager metadata, limits, health, event cursor, and the complete capability list. | Implemented; current bridge consumes capabilities and safely ignores newly added fields. | Normal capability-aware startup is source-ready and was smoke-tested against a manager built from this commit. |
+| `snapshot.get` | Implemented by `bf34fa0`; returns coherent devices, configurations, retained operations, manager health, state revision, and event cursor. Desired/active configuration state arrived in `60f49a5`. | Implemented for the normal workspace bridge. | The Devices view now uses the authoritative snapshot, proven against the isolated source build. Snapshot currently has health, not a separate diagnostics collection. |
 | `device.list` | Implemented. Refreshes and returns known keyboard-capable devices. | Implemented. | Normal device inventory is now enabled only when the runtime capability advertises `device_discovery`; smoke-test it against a source build. |
 | `configuration.list` | Implemented by `a0adbd7`; returns managed and external configuration resources without paths/content. | Not yet implemented. | Read-only external and managed configuration inventory. It cannot display raw `.kbd` text. |
 | `device.identify.start` | Implemented. One bounded 1–30-second session for a connected device. | Implemented. | Normal UI is capability-gated; harness can exercise it. |

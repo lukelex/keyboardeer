@@ -18,7 +18,7 @@ func main() {
 	flag.StringVar(&endpoint, "socket", managerapi.DefaultEndpoint(), "manager Unix socket path")
 	flag.StringVar(&deviceID, "device", "", "opaque device ID for preview or identify")
 	flag.StringVar(&behavior, "behavior", "", "platform-neutral behavior for preview")
-	flag.StringVar(&action, "action", "list", "list, preview, identify, or operation")
+	flag.StringVar(&action, "action", "list", "list, manager, snapshot, preview, identify, or operation")
 	flag.Parse()
 	client := managerapi.New(managerapi.Options{Endpoint: endpoint, ClientName: "keyboardeer-integration-harness", ClientVersion: "0.1.0-dev"})
 	defer client.Close()
@@ -29,6 +29,10 @@ func main() {
 	switch action {
 	case "list":
 		result, err = client.DeviceList(ctx)
+	case "manager":
+		result, err = client.ManagerGet(ctx)
+	case "snapshot":
+		result, err = client.SnapshotGet(ctx)
 	case "preview":
 		if deviceID == "" || behavior == "" {
 			fail("-device and -behavior are required for preview")
@@ -45,7 +49,7 @@ func main() {
 		}
 		result, err = client.OperationGet(ctx, deviceID)
 	default:
-		fail("-action must be list, preview, identify, or operation")
+		fail("-action must be list, manager, snapshot, preview, identify, or operation")
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "manager API:", err)
