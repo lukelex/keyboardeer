@@ -141,7 +141,7 @@ and obtain deterministic behavior without writing KMonad syntax.
 - [ ] **IO-01** Import/export versioned GUI profiles with validation. Define the
   generated-config export contract with the manager; behavior-only export must
   not masquerade as a runnable device-specific `.kbd` file. **Gate: MGR-05.**
-- [ ] **EXTERNAL-01** Display external runtime state and, when supported, raw
+- [x] **EXTERNAL-01** Display external runtime state and, when supported, raw
   configuration content. Full arbitrary `.kbd` visual import is outside v1.
   **Content-read gate: MGR-05.**
 

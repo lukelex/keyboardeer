@@ -380,7 +380,10 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   await expect(
     page.getByRole("heading", { name: "Ready to send this draft?" }),
   ).toBeVisible();
-  await page.getByRole("dialog").getByRole("button", { name: "Apply to keyboard" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Apply to keyboard" })
+    .click();
   await expect(
     page.getByText(
       "Manager Apply: Succeeded — configuration persisted and activation confirmed",
@@ -545,5 +548,14 @@ test("explains unavailable and conflicting keyboard states", async ({
     page.getByText(
       "Latest manager operation: Failed — Review the manager diagnostic before changing this mapping.",
     ),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "View external configuration details" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "External configurations" }),
+  ).toHaveCount(2);
+  await expect(
+    page.getByText("Raw KMonad source is unavailable", { exact: true }),
   ).toBeVisible();
 });

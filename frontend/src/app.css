@@ -502,6 +502,48 @@ h1 {
   line-height: 1.45;
   margin: 8px 0 0;
 }
+.external-open {
+  color: #35604c !important;
+  margin-top: 13px;
+}
+.external-detail-list {
+  display: grid;
+  gap: 9px;
+  margin: 18px 0;
+}
+.external-detail-list article {
+  background: #faf9f4;
+  border: 1px solid #dfe5d6;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.external-detail-list h3 {
+  font-size: 13px;
+  margin: 0;
+}
+.external-detail-list p,
+.external-detail-list small {
+  color: #647669;
+  display: block;
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 6px 0 0;
+}
+.raw-external-unavailable {
+  background: #fcf6e8;
+  border: 1px solid #dfcea4;
+  border-radius: 8px;
+  color: #796239;
+  padding: 11px 12px;
+}
+.raw-external-unavailable strong {
+  font-size: 12px;
+}
+.raw-external-unavailable p {
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 5px 0 0;
+}
 .identify-trigger {
   align-items: center;
   display: inline-flex;

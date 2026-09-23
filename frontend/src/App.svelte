@@ -143,6 +143,7 @@
   let loading = false;
   let identifyBusy = false;
   let identifyOpen = false;
+  let externalOpen = false;
   let identifyTimeoutMS = 15_000;
   let identifyDeadlineMS = 0;
   let identifyRemainingSeconds = 0;
@@ -1355,6 +1356,11 @@
                 </article>
               {/each}
             </div>
+            <button
+              class="button secondary external-open"
+              on:click={() => (externalOpen = true)}
+              >View external configuration details</button
+            >
           </section>
         {/if}
         <p class="boundary-note">
@@ -2005,6 +2011,48 @@
             >Apply to keyboard</button
           >
         </div>
+      </dialog>
+    </div>
+  {/if}
+  {#if externalOpen}
+    <div class="behavior-dialog-backdrop">
+      <dialog
+        class="behavior-dialog external-dialog"
+        open
+        aria-labelledby="external-dialog-title"
+      >
+        <button
+          class="behavior-dialog-close"
+          on:click={() => (externalOpen = false)}
+          aria-label="Close external configuration details"
+          title="Close">×</button
+        >
+        <p class="eyebrow">MANAGER-SUPERVISED · READ ONLY</p>
+        <h2 id="external-dialog-title">External configurations</h2>
+        <p class="dialog-intro">
+          These configurations are not KeyboarDeer profiles. Their runtime state
+          is reported by the manager and cannot be edited here.
+        </p>
+        <div class="external-detail-list">
+          {#each configurations.filter((configuration) => configuration.ownership === "external") as configuration (configuration.id)}
+            {@const lastOperation = operationForConfiguration(configuration)}
+            <article>
+              <h3>{configuration.name || "Unnamed external configuration"}</h3>
+              <p>{runtimeHealthDetail(configuration)}</p>
+              {#if lastOperation}<small
+                  >Latest manager operation: {humanize(lastOperation.state)} —
+                  {lastOperation.reason}</small
+                >{/if}
+            </article>
+          {/each}
+        </div>
+        <section class="raw-external-unavailable">
+          <strong>Raw KMonad source is unavailable</strong>
+          <p>
+            The manager has not provided an access-controlled content API, so
+            KeyboarDeer does not read manager-owned files directly.
+          </p>
+        </section>
       </dialog>
     </div>
   {/if}
