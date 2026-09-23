@@ -102,6 +102,9 @@ and obtain deterministic behavior without writing KMonad syntax.
 
 ## P1 — Continuous preview and per-key recovery (active)
 
+Implementation handover for the remaining recovery work:
+[`validate-05-06-implementation-plan.md`](docs/validate-05-06-implementation-plan.md).
+
 - [x] **VALIDATE-01** Connect `{model: {device_id, behavior}}` to
   `validation.preview`; map diagnostics to the relevant editor fields where
   possible. Check the entire compiled candidate automatically after semantic
