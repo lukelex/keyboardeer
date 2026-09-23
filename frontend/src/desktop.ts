@@ -95,6 +95,12 @@ type AppBindings = {
 declare global {
   interface Window {
     go?: { main?: { App?: AppBindings } };
+    runtime?: {
+      EventsOn?: (
+        eventName: string,
+        callback: (payload: unknown) => void,
+      ) => () => void;
+    };
   }
 }
 

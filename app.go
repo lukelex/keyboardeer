@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/lukelex/keyboardeer/internal/managerapi"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 const appVersion = "0.1.0-dev"
@@ -12,8 +14,12 @@ const appVersion = "0.1.0-dev"
 // App is deliberately small: platform input and KMonad process management
 // belong to kmonad-device-manager, not the desktop application.
 type App struct {
-	ctx     context.Context
-	manager *managerapi.APIClient
+	ctx               context.Context
+	manager           *managerapi.APIClient
+	monitorMu         sync.Mutex
+	monitor           *managerapi.EventSubscription
+	monitorGeneration uint64
+	shuttingDown      bool
 }
 
 type AppInfo struct {
@@ -33,6 +39,15 @@ func (a *App) startup(ctx context.Context) {
 }
 
 func (a *App) shutdown(context.Context) {
+	a.monitorMu.Lock()
+	a.shuttingDown = true
+	monitor := a.monitor
+	a.monitor = nil
+	a.monitorGeneration++
+	a.monitorMu.Unlock()
+	if monitor != nil {
+		_ = monitor.Close()
+	}
 	_ = a.manager.Close()
 }
 
@@ -54,7 +69,116 @@ func (a *App) ManagerStatus() managerapi.ConnectionStatus {
 func (a *App) Workspace() managerapi.Workspace {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	return a.manager.LoadWorkspace(ctx)
+	workspace := a.manager.LoadWorkspace(ctx)
+	a.observeWorkspace(workspace)
+	return workspace
+}
+
+// observeWorkspace maintains one dedicated event-stream connection. Events are
+// hints, not source of truth: every burst is coalesced into a fresh snapshot.
+func (a *App) observeWorkspace(workspace managerapi.Workspace) {
+	if workspace.Snapshot == nil || a.ctx == nil {
+		return
+	}
+	cursor := workspace.Snapshot.EventCursor
+	a.monitorMu.Lock()
+	if a.shuttingDown || (a.monitor != nil && a.monitor.Info.ServerID == cursor.ServerID) {
+		a.monitorMu.Unlock()
+		return
+	}
+	previous := a.monitor
+	a.monitor = nil
+	a.monitorGeneration++
+	generation := a.monitorGeneration
+	a.monitorMu.Unlock()
+	if previous != nil {
+		_ = previous.Close()
+	}
+	go a.openWorkspaceMonitor(generation, cursor)
+}
+
+func (a *App) openWorkspaceMonitor(generation uint64, cursor managerapi.EventCursor) {
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	monitor, err := a.manager.Subscribe(ctx, cursor)
+	if err != nil {
+		a.scheduleWorkspaceResync(generation, time.Second)
+		return
+	}
+	a.monitorMu.Lock()
+	if a.shuttingDown || generation != a.monitorGeneration {
+		a.monitorMu.Unlock()
+		_ = monitor.Close()
+		return
+	}
+	a.monitor = monitor
+	a.monitorMu.Unlock()
+	a.runWorkspaceMonitor(generation, monitor)
+}
+
+func (a *App) runWorkspaceMonitor(generation uint64, monitor *managerapi.EventSubscription) {
+	var refresh <-chan time.Time
+	var timer *time.Timer
+	for {
+		select {
+		case _, open := <-monitor.Events:
+			if !open {
+				if timer != nil {
+					timer.Stop()
+				}
+				a.clearWorkspaceMonitor(generation, monitor)
+				a.scheduleWorkspaceResync(generation, 250*time.Millisecond)
+				return
+			}
+			if timer == nil {
+				timer = time.NewTimer(150 * time.Millisecond)
+				refresh = timer.C
+			}
+		case <-refresh:
+			timer = nil
+			refresh = nil
+			a.refreshWorkspace(generation)
+		}
+	}
+}
+
+func (a *App) clearWorkspaceMonitor(generation uint64, monitor *managerapi.EventSubscription) {
+	a.monitorMu.Lock()
+	defer a.monitorMu.Unlock()
+	if generation == a.monitorGeneration && a.monitor == monitor {
+		a.monitor = nil
+	}
+}
+
+func (a *App) scheduleWorkspaceResync(generation uint64, delay time.Duration) {
+	go func() {
+		time.Sleep(delay)
+		a.refreshWorkspace(generation)
+	}()
+}
+
+func (a *App) refreshWorkspace(generation uint64) {
+	a.monitorMu.Lock()
+	current := !a.shuttingDown && generation == a.monitorGeneration
+	a.monitorMu.Unlock()
+	if !current {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	workspace := a.manager.LoadWorkspace(ctx)
+	a.emitWorkspace(workspace)
+	if workspace.Snapshot != nil {
+		a.observeWorkspace(workspace)
+		return
+	}
+	a.scheduleWorkspaceResync(generation, time.Second)
+}
+
+func (a *App) emitWorkspace(workspace managerapi.Workspace) {
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "workspace:changed", workspace)
+	}
 }
 
 func (a *App) canUse(ctx context.Context, capability string) error {

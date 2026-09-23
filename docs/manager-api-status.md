@@ -41,7 +41,7 @@ Relevant source:
 | `configuration.create` / `configuration.update` | Implemented. Create accepts name/model; update requires configuration ID and expected revision. | Not yet implemented. | Managed lifecycle once local profiles/compiler are ready. |
 | `configuration.set_enabled` / `configuration.delete` | Implemented by `f8ea0ec`. Both require expected revision. | Not yet implemented. | Explicit runtime lifecycle; distinct from deleting a local profile. |
 | `configuration.adopt` | Implemented by `bff4dd2` for manager-validated, losslessly representable external configurations. | Not yet implemented. | Later, opt-in adoption only. Arbitrary visual import remains outside v1. |
-| `events.subscribe` | Implemented by `4551637`; resumable cursor support arrived in `9d44f1f`. Reply is followed by ordered `event` frames on the same connection; resync requires a fresh snapshot. | Dedicated persistent subscription transport is implemented. | Connect it to workspace state, cursor storage, snapshot/resubscribe recovery, and UI updates. |
+| `events.subscribe` | Implemented by `4551637`; resumable cursor support arrived in `9d44f1f`. Reply is followed by ordered `event` frames on the same connection; resync requires a fresh snapshot. | Dedicated persistent subscription transport and snapshot-coalescing workspace monitor are implemented. | Persist the cursor across GUI restart and add fault-injection/integration coverage. |
 
 ## Interaction-to-screen cross-reference
 
@@ -57,7 +57,7 @@ model, or a required runtime capability is unavailable.
 | Identify a keyboard | `device.identify.start`, `operation.get`, `device.identify.cancel` | Yes | Partial | Current UI is capability-gated; smoke test it against a source build. |
 | Create and reopen an editor draft | None; application-owned persistence | N/A | No | `PROFILE-01`, `PROFILE-02`, and a verified geometry. This can proceed now. |
 | Compile behavior and live preview | `validation.preview` | Yes | No | Local compiler, source mapping, persisted profile model, and validation scheduler. |
-| Receive device/runtime changes | `snapshot.get`, `events.subscribe` | Yes | No | Event-aware client multiplexing, cursor/resync tests. |
+| Receive device/runtime changes | `snapshot.get`, `events.subscribe` | Yes | Partial | The app coalesces stream events into fresh snapshots and emits workspace updates. Persist the cursor across restart and add reconnect/resync integration tests. |
 | Apply a managed profile | `configuration.create` / `update` / `apply`, then snapshot/events | Mostly | No | Local compiler/profile/editor and an idempotency decision below. |
 | Enable, disable, or delete managed runtime config | `configuration.set_enabled`, `configuration.delete` | Yes | No | Configuration inventory/UI, expected-revision handling, operation recovery. |
 | Show external runtime configuration | `snapshot.get` / `configuration.list` | Yes | Partial | Snapshot-backed device cards expose associated configuration state; a dedicated read-only external screen remains. |

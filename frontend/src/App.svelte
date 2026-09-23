@@ -31,6 +31,7 @@
   let identifyBusy = false;
   let feedback = "";
   let pollTimer: ReturnType<typeof setInterval> | undefined;
+  let stopWorkspaceEvents: (() => void) | undefined;
 
   const unavailableCapability = (name: string): Capability => ({
     name,
@@ -81,6 +82,9 @@
     return error instanceof Error
       ? error.message
       : "The manager did not complete that request.";
+  }
+  function isWorkspace(value: unknown): value is ManagerWorkspace {
+    return typeof value === "object" && value !== null && "status" in value;
   }
 
   async function refresh() {
@@ -159,9 +163,18 @@
     } catch {
       info = { name: "KeyboarDeer", version: "browser development" };
     }
+    stopWorkspaceEvents = window.runtime?.EventsOn?.(
+      "workspace:changed",
+      (next) => {
+        if (isWorkspace(next)) workspace = next;
+      },
+    );
     await refresh();
   });
-  onDestroy(clearPolling);
+  onDestroy(() => {
+    clearPolling();
+    stopWorkspaceEvents?.();
+  });
 </script>
 
 <svelte:head><title>{info.name}</title></svelte:head>
