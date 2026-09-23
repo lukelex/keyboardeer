@@ -1,4 +1,8 @@
-# KMonad GUI
+# KeyboarDeer
+
+This document describes the target product. For current implementation status,
+see the [API audit](manager-api-status.md), [integration roadmap](gui-integration-roadmap.md),
+[interface mockups](design/README.md), and [completion checklist](../TODO.md).
 
 ## Project Description
 
@@ -251,4 +255,13 @@ Possible states include:
 - waiting for device;
 - unavailable because of a system problem.
 
-T
+## First delivery target
+
+Deliver the Linux desktop workflow first, using the manager's same-user API.
+The stack remains cross-platform, but macOS and Windows support depends on
+manager backends and transports, not GUI-owned device access.
+
+Start with a read-only Devices view, then local profiles and visual editing,
+manager validation preview, and revision-aware managed apply. Advanced behaviors
+and additional layouts follow the same profile/compiler boundary. The visual
+prototype illustrates the intended UX; it does not establish backend readiness.

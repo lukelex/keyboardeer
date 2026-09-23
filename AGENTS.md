@@ -2,11 +2,15 @@
 
 ## Current state
 
-- This is a concept/branding repository, not an implemented application. There
-  are no package manifests, app entrypoints, build/test scripts, or CI workflows.
+- This is a design/planning repository, not an implemented desktop application.
+  `docs/design/` contains standalone HTML/CSS/JavaScript mockups. There are no
+  application package manifests, desktop entrypoints, build/test scripts, or CI
+  workflows.
 - Read `docs/project-description.md` before implementation. It specifies
-  Wails + Go + Svelte 5 + TypeScript; the README still says the stack is
-  undecided. No executable configuration establishes versions or tooling yet.
+  Wails + Go + Svelte 5 + TypeScript. No executable configuration establishes
+  versions or tooling yet. Consult `TODO.md` for delivery gates and
+  `docs/manager-api-status.md` for the pinned API audit; the upstream wiki's
+  opening status paragraph was stale at that revision.
 
 ## Planned architecture
 

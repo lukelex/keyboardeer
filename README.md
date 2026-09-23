@@ -39,17 +39,33 @@ These are design goals, not currently available features.
 
 ## Still growing its antlers
 
-**Status: concept and branding.** This repository currently contains the
-project identity, original logo artwork, and initial product direction.
-There is no installable application yet; a GUI toolkit and implementation
-language have not been selected.
+**Status: interface design and implementation planning.** This repository
+contains the project identity, low-fidelity wireframes, a clickable
+high-fidelity prototype, and an API integration plan. There is no installable
+application yet. The selected stack is **Wails + Go + Svelte 5 + TypeScript**.
 
 The next milestones are:
 
-- [ ] Explore the first-run flow: discover a keyboard and understand its current state.
-- [ ] Choose the GUI stack and establish an accessible visual foundation.
-- [ ] Connect a read-only device view to the device manager's local API.
-- [ ] Design the edit → validate → apply workflow around safe, per-keyboard updates.
+- [x] Design the choose → edit → review workflow in low- and high-fidelity mockups.
+- [x] Select the GUI stack and document the manager boundary.
+- [ ] Scaffold the application and connect the implemented API methods.
+- [ ] Ship a capability-aware, read-only device view.
+- [ ] Implement profiles, visual editing, and validation preview.
+- [ ] Connect safe apply and lifecycle operations as the manager provides them.
+
+### Explore the design and plan
+
+- [Interface mockups and viewing instructions](docs/design/README.md)
+- [Project description](docs/project-description.md)
+- [Verified manager API status](docs/manager-api-status.md)
+- [Integration roadmap](docs/gui-integration-roadmap.md)
+- [Completion checklist](TODO.md)
+
+The manager already implements device listing, keypress identification, and
+candidate preview through API v1. Capability reporting, full snapshots,
+configuration lifecycle methods, and events remain upstream dependencies at the
+[reviewed revision](docs/manager-api-status.md). The prototype simulates both
+current and future flows; it does not access your keyboards.
 
 The guiding principle is simple: **the GUI is a companion; the service keeps
 the keyboards running.**
