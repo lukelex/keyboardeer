@@ -179,23 +179,18 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   await expect(
     page.getByRole("button", { name: "Identify", exact: true }),
   ).toBeEnabled();
-  await page
-    .getByRole("button", { name: "Disable bindings", exact: true })
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "Disable this keyboard’s bindings?" }),
-  ).toBeVisible();
-  await page
-    .locator(".lifecycle-confirmation")
-    .getByRole("button", { name: "Disable bindings", exact: true })
-    .click();
+  const bindings = page.getByRole("checkbox", {
+    name: "Enable bindings for Managed fixture",
+  });
+  await bindings.uncheck();
   await expect(
     page.getByText(
       "Manager disabled bindings: configuration disabled and its KMonad process stopped",
     ),
   ).toBeVisible();
+  await expect(bindings).not.toBeChecked();
   await expect(
-    page.getByRole("button", { name: "Enable bindings", exact: true }),
+    page.getByText("Bindings disabled", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Set up", exact: true }).click();
   await page.getByRole("button", { name: "Create draft", exact: true }).click();

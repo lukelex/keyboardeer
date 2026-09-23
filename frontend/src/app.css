@@ -206,38 +206,31 @@ h1 {
   margin-top: 40px;
   padding: 0 0 12px;
 }
-.lifecycle-confirmation {
-  align-items: center;
-  background: #f0f5e9;
-  border: 1px solid #d2e1c8;
-  border-radius: 13px;
-  display: flex;
-  gap: 22px;
-  justify-content: space-between;
-  margin-top: 18px;
-  padding: 20px 22px;
-}
-.lifecycle-confirmation h2 {
-  color: #315943;
-  font-size: 18px;
-  letter-spacing: -0.35px;
-  margin: 0;
-}
-.lifecycle-confirmation p:last-child {
-  color: #60766b;
-  font-size: 13px;
-  line-height: 1.55;
-  margin: 6px 0 0;
-  max-width: 660px;
-}
-.lifecycle-actions {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 8px;
-}
-.lifecycle-actions .secondary,
 .device-actions .text {
   color: #35604c;
+}
+.binding-toggle {
+  align-items: center;
+  color: #35604c;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 650;
+  gap: 6px;
+  white-space: nowrap;
+}
+.binding-toggle input {
+  accent-color: #2c6652;
+  height: 16px;
+  margin: 0;
+  width: 16px;
+}
+.binding-toggle.disabled {
+  color: #7b8377;
+}
+.binding-toggle:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.52;
 }
 .device-list {
   display: grid;
@@ -683,10 +676,6 @@ footer {
     flex-direction: column;
   }
   .apply-actions {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .lifecycle-confirmation {
     align-items: flex-start;
     flex-direction: column;
   }
