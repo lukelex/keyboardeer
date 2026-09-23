@@ -427,6 +427,7 @@
     if (draft) {
       activeProfile = draft;
       selectedSourceKey = "";
+      selectedLayerID = "base";
       view = "editor";
       return;
     }
@@ -455,6 +456,7 @@
       );
       profiles = [...profiles, activeProfile];
       selectedSourceKey = "";
+      selectedLayerID = "base";
       view = "editor";
       schedulePreview(activeProfile);
     } catch (error) {
@@ -463,32 +465,190 @@
       profileBusy = false;
     }
   }
-  async function assignBaseBehavior(behavior: ProfileBehavior) {
-    if (!activeProfile || !selectedSourceKey || profileBusy) return;
-    profileBusy = true;
-    feedback = "";
-    profilePreview = null;
-    const assignments = (activeProfile.assignments ?? []).filter(
+  function withSelectedBehavior(
+    draft: Profile,
+    behavior: ProfileBehavior,
+  ): Profile {
+    const assignments = (draft.assignments ?? []).filter(
       (assignment) =>
-        assignment.layer_id !== "base" ||
+        assignment.layer_id !== selectedLayerID ||
         assignment.source_key !== selectedSourceKey,
     );
     assignments.push({
-      layer_id: "base",
+      layer_id: selectedLayerID,
       source_key: selectedSourceKey,
       behavior,
     });
+    return { ...draft, assignments };
+  }
+  async function saveDraft(draft: Profile): Promise<Profile | undefined> {
+    if (profileBusy) return undefined;
+    profileBusy = true;
+    feedback = "";
+    profilePreview = null;
     try {
-      const saved = await SaveProfile({ ...activeProfile, assignments });
+      const saved = await SaveProfile(draft);
       activeProfile = saved;
       profiles = profiles.map((profile) =>
         profile.id === saved.id ? saved : profile,
       );
       schedulePreview(saved);
+      return saved;
     } catch (error) {
       feedback = explain(error);
+      return undefined;
     } finally {
       profileBusy = false;
+    }
+  }
+  async function assignBehavior(behavior: ProfileBehavior) {
+    if (!activeProfile || !selectedSourceKey || profileBusy) return false;
+    return Boolean(
+      await saveDraft(withSelectedBehavior(activeProfile, behavior)),
+    );
+  }
+  async function restoreSelectedKey() {
+    if (!activeProfile || !selectedSourceKey || profileBusy) return;
+    const assignments = (activeProfile.assignments ?? []).filter(
+      (assignment) =>
+        assignment.layer_id !== selectedLayerID ||
+        assignment.source_key !== selectedSourceKey,
+    );
+    await saveDraft({ ...activeProfile, assignments });
+  }
+  function openBehaviorDialog(kind: ComplexAction) {
+    if (!activeProfile || !selectedSourceKey) {
+      feedback = "Select a physical key before choosing a complex action.";
+      return;
+    }
+    const fallback = paletteKeyOptions[0]?.source_key ?? "";
+    tapKey ||= fallback;
+    holdKey ||= fallback;
+    aliasKey ||= fallback;
+    macroNextKey ||= fallback;
+    tapHoldLayerID = selectedLayerID;
+    layerTargetID = selectedLayerID;
+    behaviorDialog = kind;
+  }
+  function closeBehaviorDialog() {
+    behaviorDialog = null;
+  }
+  async function assignTapHold() {
+    if (!tapKey || !holdKey || tapHoldTimeoutMS <= 0) return;
+    const hold: ProfileBehavior =
+      tapHoldMode === "layer"
+        ? { kind: "hold_layer", target: tapHoldLayerID }
+        : { kind: "key", key: holdKey };
+    if (
+      await assignBehavior({
+        kind: "tap_hold",
+        tap: { kind: "key", key: tapKey },
+        hold,
+        timeout_ms: tapHoldTimeoutMS,
+      })
+    ) {
+      closeBehaviorDialog();
+    }
+  }
+  async function assignLayerAction() {
+    if (!layerTargetID) return;
+    if (await assignBehavior({ kind: layerAction, target: layerTargetID })) {
+      closeBehaviorDialog();
+    }
+  }
+  function declarationNameIsValid(name: string) {
+    return /^[A-Za-z][A-Za-z0-9-]*$/.test(name);
+  }
+  async function createAlias() {
+    if (!activeProfile || !aliasKey || !declarationNameIsValid(aliasName)) {
+      feedback =
+        "Alias names must start with a letter and contain only letters, numbers, or hyphens.";
+      return;
+    }
+    if (
+      activeProfile.aliases?.[aliasName] ||
+      activeProfile.macros?.[aliasName]
+    ) {
+      feedback = "That alias or macro name is already in use.";
+      return;
+    }
+    const draft = withSelectedBehavior(
+      {
+        ...activeProfile,
+        aliases: {
+          ...(activeProfile.aliases ?? {}),
+          [aliasName]: { kind: "key", key: aliasKey },
+        },
+      },
+      { kind: "alias", target: aliasName },
+    );
+    if (await saveDraft(draft)) {
+      aliasName = "";
+      closeBehaviorDialog();
+    }
+  }
+  function addMacroStep() {
+    if (macroNextKey) macroSteps = [...macroSteps, macroNextKey];
+  }
+  async function createMacro() {
+    if (
+      !activeProfile ||
+      !declarationNameIsValid(macroName) ||
+      !macroSteps.length
+    ) {
+      feedback = "A macro needs a valid name and at least one key press.";
+      return;
+    }
+    if (
+      activeProfile.aliases?.[macroName] ||
+      activeProfile.macros?.[macroName]
+    ) {
+      feedback = "That alias or macro name is already in use.";
+      return;
+    }
+    const draft = withSelectedBehavior(
+      {
+        ...activeProfile,
+        macros: {
+          ...(activeProfile.macros ?? {}),
+          [macroName]: macroSteps.map((key) => ({ kind: "key", key })),
+        },
+      },
+      { kind: "macro", target: macroName },
+    );
+    if (await saveDraft(draft)) {
+      macroName = "";
+      macroSteps = [];
+      closeBehaviorDialog();
+    }
+  }
+  async function createLayer() {
+    if (!activeProfile || !newLayerName.trim()) return;
+    const name = newLayerName.trim();
+    if (activeProfile.layers.some((layer) => layer.name === name)) {
+      feedback = "A layer with that name already exists.";
+      return;
+    }
+    const stem =
+      name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "") || "layer";
+    let id = `layer-${stem}`;
+    let suffix = 2;
+    while (activeProfile.layers.some((layer) => layer.id === id)) {
+      id = `layer-${stem}-${suffix++}`;
+    }
+    if (
+      await saveDraft({
+        ...activeProfile,
+        layers: [...activeProfile.layers, { id, name }],
+      })
+    ) {
+      selectedLayerID = id;
+      layerTargetID = id;
+      tapHoldLayerID = id;
+      newLayerName = "";
     }
   }
   function schedulePreview(draft: Profile) {
@@ -1028,7 +1188,7 @@
                 <button
                   class="button secondary palette-key"
                   on:click={() =>
-                    assignBaseBehavior({
+                    assignBehavior({
                       kind: "key",
                       key: key.source_key,
                     })}
@@ -1041,7 +1201,7 @@
               {/each}
               <button
                 class="button secondary palette-disable"
-                on:click={() => assignBaseBehavior({ kind: "disabled" })}
+                on:click={() => assignBehavior({ kind: "disabled" })}
                 disabled={profileBusy}>Disable selected key</button
               >
             </div>
