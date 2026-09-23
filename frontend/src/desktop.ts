@@ -35,6 +35,9 @@ export interface Device {
 export interface ManagerWorkspace {
   status: ManagerStatus;
   snapshot?: Snapshot;
+  /** The snapshot is retained for context but is no longer live manager state. */
+  stale?: boolean;
+  snapshot_at?: string;
 }
 export interface RuntimeState {
   phase: string;

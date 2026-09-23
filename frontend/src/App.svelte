@@ -30,7 +30,6 @@
   type View = "devices" | "setup" | "editor";
   type KeyOption = GeometryTemplate["keys"][number];
   type ComplexAction = "tap_hold" | "layer" | "alias" | "macro" | "layers";
-  const managerCheckIntervalMS = 15_000;
   const defaultTapHoldTimeoutMS = 200;
   const modifierSourceKeys = new Set([
     "caps",
@@ -101,7 +100,7 @@
   };
 
   let info: AppInfo = { name: "KeyboarDeer", version: "starting…" };
-  let workspace: ManagerWorkspace = { status: initialStatus };
+  let workspace: ManagerWorkspace = { status: initialStatus, stale: false };
   let view: View = "devices";
   let selectedDevice: Device | null = null;
   let profiles: Profile[] = [];
@@ -150,7 +149,6 @@
   let feedback = "";
   let pollTimer: ReturnType<typeof setInterval> | undefined;
   let identifyCountdownTimer: ReturnType<typeof setInterval> | undefined;
-  let managerCheckTimer: ReturnType<typeof setInterval> | undefined;
   let stopWorkspaceEvents: (() => void) | undefined;
 
   const unavailableCapability = (name: string): Capability => ({
@@ -166,10 +164,13 @@
   $: deviceIdentification =
     capabilities.find((item) => item.name === "device_identification") ??
     unavailableCapability("device_identification");
+  $: workspaceLive = workspace.status.state === "ready" && !workspace.stale;
   $: canShowDevices =
-    workspace.status.state === "ready" && deviceDiscovery.available;
+    deviceDiscovery.available &&
+    !!workspace.snapshot &&
+    (workspaceLive || workspace.stale);
   $: canIdentify =
-    workspace.status.state === "ready" && deviceIdentification.available;
+    workspaceLive && deviceIdentification.available;
   $: devices = workspace.snapshot?.devices ?? [];
   // Device roles are manager-owned semantics. Keep an absent role visible for
   // compatibility with older managers, but never configure an explicit
@@ -222,12 +223,13 @@
     profilePreview?.profile_id === activeProfile.id &&
     profilePreview.draft_revision === activeProfile.draft_revision &&
     profilePreview.manager_server_id === workspace.status.server_id &&
-    profilePreview.state_revision === workspace.snapshot?.state_revision
+    profilePreview.state_revision === workspace.snapshot?.state_revision &&
+    workspaceLive
       ? profilePreview
       : null;
   $: canApply =
     !!activeProfile &&
-    workspace.status.state === "ready" &&
+    workspaceLive &&
     managedConfigurations.available &&
     !!selectedDevice &&
     isConnected(selectedDevice) &&
@@ -454,16 +456,6 @@
       Math.ceil((identifyDeadlineMS - Date.now()) / 1000),
     );
   }
-  function clearManagerCheckTimer() {
-    if (managerCheckTimer) clearInterval(managerCheckTimer);
-    managerCheckTimer = undefined;
-  }
-  function startManagerCheckTimer() {
-    clearManagerCheckTimer();
-    managerCheckTimer = setInterval(() => {
-      if (!loading) void refresh();
-    }, managerCheckIntervalMS);
-  }
   function explain(error: unknown) {
     return error instanceof Error
       ? error.message
@@ -492,6 +484,7 @@
       if (workspaceBindingReady) void loadLocalDrafts();
     } catch (error) {
       const desktopUnavailable = !workspaceBindingReady;
+      const previous = workspace;
       workspace = {
         status: {
           state: desktopUnavailable ? "browser_preview" : "unavailable",
@@ -499,7 +492,11 @@
             ? "This browser preview has no Wails desktop bindings, so it cannot contact the local manager. Use the native KeyboarDeer window launched by scripts/desktop.sh."
             : `The desktop app could not load the manager workspace: ${explain(error)}`,
           endpoint: "",
+          capabilities: previous.status.capabilities,
         },
+        snapshot: previous.snapshot,
+        stale: !!previous.snapshot,
+        snapshot_at: previous.snapshot_at,
       };
       feedback = explain(error);
     } finally {
@@ -988,7 +985,7 @@
       workspace.snapshot?.state_revision !== next.snapshot?.state_revision ||
       JSON.stringify(workspace.status.capabilities ?? []) !==
         JSON.stringify(next.status.capabilities ?? []);
-    workspace = next;
+    workspace = { ...next, stale: next.stale ?? false };
     if (environmentChanged && activeProfile) {
       profilePreview = null;
       schedulePreview(activeProfile);
@@ -1028,11 +1025,9 @@
     // corrupt or unavailable profile store may disable setup, but it cannot
     // leave the device workspace indefinitely stuck in its initial state.
     void refresh();
-    startManagerCheckTimer();
   });
   onDestroy(() => {
     clearPolling();
-    clearManagerCheckTimer();
     if (previewTimer) clearTimeout(previewTimer);
     stopWorkspaceEvents?.();
   });
@@ -1054,10 +1049,12 @@
     <div class="header-actions">
       <span
         class:ready={workspace.status.state === "ready"}
-        class:attention={workspace.status.state !== "ready"}
+        class:attention={workspace.status.state !== "ready" || workspace.stale}
         class="connection-status"
       >
-        <i></i>{workspace.status.state === "ready"
+        <i></i>{workspace.stale
+          ? "Manager state stale"
+          : workspace.status.state === "ready"
           ? "Manager ready"
           : humanize(workspace.status.state)}
       </span>
@@ -1076,7 +1073,27 @@
           <span class="build-label">{info.version}</span>
         </div>
 
-        {#if workspace.status.state === "checking"}
+        {#if workspace.stale}
+          <section
+            class="manager-notice"
+            data-state="stale"
+            aria-labelledby="manager-title"
+          >
+            <span class="notice-symbol" aria-hidden="true">!</span>
+            <div>
+              <p class="eyebrow">LAST KNOWN MANAGER STATE</p>
+              <h2 id="manager-title">Keyboard status may be out of date</h2>
+              <p>
+                {workspace.status.message} KeyboarDeer is showing the last
+                authoritative snapshot and will refresh it when the manager is
+                reachable again.
+              </p>
+              {#if workspace.snapshot_at}<small
+                  >Last snapshot: {new Date(workspace.snapshot_at).toLocaleString()}</small
+                >{/if}
+            </div>
+          </section>
+        {:else if workspace.status.state === "checking"}
           <section
             class="manager-notice loading-notice"
             data-state="checking"
@@ -1232,7 +1249,7 @@
                   <button
                     class="button primary"
                     on:click={() => openDraft(device)}
-                    disabled={!canShowDevices ||
+                    disabled={!workspaceLive ||
                       !isConfigurable(device) ||
                       geometries.length === 0}
                     title={geometries.length === 0
@@ -1259,6 +1276,7 @@
                         type="checkbox"
                         checked={configuration.enabled}
                         disabled={!!lifecycleBusyID ||
+                          !workspaceLive ||
                           !managedConfigurations.available ||
                           !isConfigurable(device)}
                         on:change={(event) =>

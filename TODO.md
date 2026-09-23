@@ -65,7 +65,7 @@ supervision code in KeyboarDeer.
 - [x] **DEV-04** Integrate bounded identification, countdown, cancellation,
   timeout/hotplug/conflict handling, and operation polling; explain that only
   the chosen mapping may pause. **Normal UI gate: MGR-01.**
-- [ ] **STATE-01** Add bounded snapshot refresh while events are unsupported;
+- [x] **STATE-01** Add bounded snapshot refresh while events are unsupported;
   mark stale state on disconnect rather than presenting it as live health.
 - [ ] **STATE-02** Add events with a gap-free snapshot handoff, replay cursor,
   unknown-event tolerance, manager restart handling, and resync after backlog.

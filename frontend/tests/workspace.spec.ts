@@ -449,6 +449,43 @@ test("hides manager output devices while retaining legacy role-less inputs", asy
   await expect(page.getByText("2 known", { exact: true })).toBeVisible();
 });
 
+test("keeps the last snapshot visibly stale when the manager disconnects", async ({
+  page,
+}) => {
+  const staleWorkspace: ManagerWorkspace = structuredClone(workspace);
+  staleWorkspace.status = {
+    state: "unavailable",
+    message: "The manager socket could not be reached.",
+    endpoint: workspace.status.endpoint,
+    server_id: "server-1",
+    capabilities: workspace.status.capabilities,
+  };
+  staleWorkspace.stale = true;
+  staleWorkspace.snapshot_at = "2026-09-24T12:00:00Z";
+  await page.addInitScript((fixture) => {
+    window.go = {
+      main: {
+        App: {
+          Info: async () => ({ name: "KeyboarDeer", version: "test" }),
+          Workspace: async () => fixture,
+          Profiles: async () => [],
+          Geometries: async () => [],
+        },
+      },
+    };
+  }, staleWorkspace);
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Keyboard status may be out of date" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Unconfigured keyboard" }),
+  ).toBeVisible();
+  await expect(page.getByText("1 known", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Set up" })).toBeDisabled();
+  await expect(page.getByLabel("Identify")).toBeDisabled();
+});
+
 test("explains unavailable and conflicting keyboard states", async ({
   page,
 }) => {

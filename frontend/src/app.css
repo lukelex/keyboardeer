@@ -193,7 +193,8 @@ h1 {
   padding: 22px;
 }
 .manager-notice[data-state="unavailable"],
-.manager-notice[data-state="reconnecting"] {
+.manager-notice[data-state="reconnecting"],
+.manager-notice[data-state="stale"] {
   background: #f9f1e9;
 }
 .manager-notice.loading-notice {

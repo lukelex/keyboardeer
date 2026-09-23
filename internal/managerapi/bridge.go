@@ -68,8 +68,10 @@ func (c *APIClient) StatusWithTimeout(timeout time.Duration) ConnectionStatus {
 // Workspace is the capability-gated normal application read model. The
 // snapshot is the authoritative source for Devices and runtime state.
 type Workspace struct {
-	Status   ConnectionStatus `json:"status"`
-	Snapshot *Snapshot        `json:"snapshot,omitempty"`
+	Status     ConnectionStatus `json:"status"`
+	Snapshot   *Snapshot        `json:"snapshot,omitempty"`
+	Stale      bool             `json:"stale"`
+	SnapshotAt time.Time        `json:"snapshot_at,omitempty"`
 }
 
 func CapabilityAvailable(capabilities []Capability, name string) (bool, string) {
@@ -101,5 +103,6 @@ func (c *APIClient) LoadWorkspace(ctx context.Context) Workspace {
 		return workspace
 	}
 	workspace.Snapshot = &snapshot
+	workspace.SnapshotAt = time.Now().UTC()
 	return workspace
 }

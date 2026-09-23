@@ -16,6 +16,11 @@ import (
 
 const appVersion = "0.1.0-dev"
 
+const (
+	workspaceRefreshInterval = 15 * time.Second
+	workspaceRetryInterval   = 2 * time.Second
+)
+
 // App is deliberately small: platform input and KMonad process management
 // belong to kmonad-device-manager, not the desktop application.
 type App struct {
@@ -26,6 +31,10 @@ type App struct {
 	monitorMu         sync.Mutex
 	monitor           *managerapi.EventSubscription
 	monitorGeneration uint64
+	workspaceMu       sync.Mutex
+	lastWorkspace     *managerapi.Workspace
+	refreshTimer      *time.Timer
+	refreshDue        time.Time
 	shuttingDown      bool
 }
 
@@ -60,7 +69,12 @@ func (a *App) shutdown(context.Context) {
 	monitor := a.monitor
 	a.monitor = nil
 	a.monitorGeneration++
+	refreshTimer := a.refreshTimer
+	a.refreshTimer = nil
 	a.monitorMu.Unlock()
+	if refreshTimer != nil {
+		refreshTimer.Stop()
+	}
 	if monitor != nil {
 		_ = monitor.Close()
 	}
@@ -361,32 +375,96 @@ func (a *App) ManagerStatus() managerapi.ConnectionStatus {
 func (a *App) Workspace() managerapi.Workspace {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	workspace := a.manager.LoadWorkspace(ctx)
+	workspace := a.recordWorkspace(a.manager.LoadWorkspace(ctx))
 	a.observeWorkspace(workspace)
+	return workspace
+}
+
+// recordWorkspace retains the last authoritative snapshot only as explicitly
+// stale context. It never relabels cached health as live after the manager call
+// fails or loses a capability.
+func (a *App) recordWorkspace(workspace managerapi.Workspace) managerapi.Workspace {
+	a.workspaceMu.Lock()
+	defer a.workspaceMu.Unlock()
+	if workspace.Snapshot != nil {
+		workspace.Stale = false
+		copy := workspace
+		a.lastWorkspace = &copy
+		return workspace
+	}
+	if a.lastWorkspace == nil || a.lastWorkspace.Snapshot == nil {
+		return workspace
+	}
+	last := a.lastWorkspace
+	workspace.Snapshot = last.Snapshot
+	workspace.Stale = true
+	workspace.SnapshotAt = last.SnapshotAt
+	// Capability metadata describes whether the retained inventory can be
+	// displayed. Runtime actions remain disabled because Status is not ready.
+	if len(workspace.Status.Capabilities) == 0 {
+		workspace.Status.Capabilities = last.Status.Capabilities
+	}
+	if workspace.Status.ServerID == "" {
+		workspace.Status.ServerID = last.Status.ServerID
+	}
+	if workspace.Status.Version == "" {
+		workspace.Status.Version = last.Status.Version
+	}
 	return workspace
 }
 
 // observeWorkspace maintains one dedicated event-stream connection. Events are
 // hints, not source of truth: every burst is coalesced into a fresh snapshot.
 func (a *App) observeWorkspace(workspace managerapi.Workspace) {
-	if workspace.Snapshot == nil || a.ctx == nil {
+	a.monitorMu.Lock()
+	if a.shuttingDown {
+		a.monitorMu.Unlock()
+		return
+	}
+	if a.monitorGeneration == 0 {
+		a.monitorGeneration++
+	}
+	generation := a.monitorGeneration
+	if !workspaceEventStreamAvailable(workspace) {
+		previous := a.monitor
+		a.monitor = nil
+		if previous != nil {
+			a.monitorGeneration++
+			generation = a.monitorGeneration
+		}
+		a.monitorMu.Unlock()
+		if previous != nil {
+			_ = previous.Close()
+		}
+		delay := workspaceRefreshInterval
+		if workspace.Snapshot == nil || workspace.Stale {
+			delay = workspaceRetryInterval
+		}
+		a.scheduleWorkspaceResync(generation, delay)
 		return
 	}
 	cursor := workspace.Snapshot.EventCursor
-	a.monitorMu.Lock()
-	if a.shuttingDown || (a.monitor != nil && a.monitor.Info.ServerID == cursor.ServerID) {
+	if a.ctx == nil || (a.monitor != nil && a.monitor.Info.ServerID == cursor.ServerID) {
 		a.monitorMu.Unlock()
 		return
 	}
 	previous := a.monitor
 	a.monitor = nil
 	a.monitorGeneration++
-	generation := a.monitorGeneration
+	generation = a.monitorGeneration
 	a.monitorMu.Unlock()
 	if previous != nil {
 		_ = previous.Close()
 	}
 	go a.openWorkspaceMonitor(generation, cursor)
+}
+
+func workspaceEventStreamAvailable(workspace managerapi.Workspace) bool {
+	if workspace.Stale || workspace.Status.State != "ready" || workspace.Snapshot == nil {
+		return false
+	}
+	available, _ := managerapi.CapabilityAvailable(workspace.Status.Capabilities, "event_stream")
+	return available
 }
 
 func (a *App) openWorkspaceMonitor(generation uint64, cursor managerapi.EventCursor) {
@@ -443,8 +521,36 @@ func (a *App) clearWorkspaceMonitor(generation uint64, monitor *managerapi.Event
 }
 
 func (a *App) scheduleWorkspaceResync(generation uint64, delay time.Duration) {
+	if delay <= 0 {
+		delay = workspaceRetryInterval
+	}
+	due := time.Now().Add(delay)
+	a.monitorMu.Lock()
+	if a.shuttingDown || generation != a.monitorGeneration {
+		a.monitorMu.Unlock()
+		return
+	}
+	if a.refreshTimer != nil && !a.refreshDue.After(due) {
+		a.monitorMu.Unlock()
+		return
+	}
+	if a.refreshTimer != nil {
+		a.refreshTimer.Stop()
+	}
+	timer := time.NewTimer(delay)
+	a.refreshTimer = timer
+	a.refreshDue = due
+	a.monitorMu.Unlock()
 	go func() {
-		time.Sleep(delay)
+		<-timer.C
+		a.monitorMu.Lock()
+		if a.refreshTimer != timer {
+			a.monitorMu.Unlock()
+			return
+		}
+		a.refreshTimer = nil
+		a.refreshDue = time.Time{}
+		a.monitorMu.Unlock()
 		a.refreshWorkspace(generation)
 	}()
 }
@@ -458,13 +564,9 @@ func (a *App) refreshWorkspace(generation uint64) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	workspace := a.manager.LoadWorkspace(ctx)
+	workspace := a.recordWorkspace(a.manager.LoadWorkspace(ctx))
 	a.emitWorkspace(workspace)
-	if workspace.Snapshot != nil {
-		a.observeWorkspace(workspace)
-		return
-	}
-	a.scheduleWorkspaceResync(generation, time.Second)
+	a.observeWorkspace(workspace)
 }
 
 func (a *App) emitWorkspace(workspace managerapi.Workspace) {
