@@ -27,11 +27,13 @@ go run ./cmd/manager-api-harness -action list
 go run ./cmd/manager-api-harness -action preview -device dev_opaque_id \
   -behavior '(defsrc a)\n(deflayer base a)'
 go run ./cmd/manager-api-harness -action identify -device dev_opaque_id
+go run ./cmd/manager-api-harness -action cancel -device op_opaque_id
 ```
 
 Use opaque IDs printed by `list`. Identification pauses only the mapping chosen
 by the manager, and is bounded to 15 seconds in this harness. Poll the returned
-operation with `-action operation -device op_opaque_id`.
+operation with `-action operation -device op_opaque_id`, or cancel it with the
+same operation ID.
 
 The API contract fixtures and socket-server tests cover negotiation, request
 correlation, size bounds, endpoint resolution, unknown enum values, errors, and

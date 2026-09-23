@@ -39,7 +39,7 @@ explains sequencing; this file is the place to track completion.
   handle unsupported versions, and expose a small typed Wails bridge to Svelte.
 - [x] **API-03** Define Go/domain/frontend types and contract fixtures, including
   unknown fields/enums, structured errors, unavailable capabilities, and timeouts.
-- [ ] **API-04** Add an explicit integration harness for implemented device list,
+- [x] **API-04** Add an explicit integration harness for implemented device list,
   identify start/cancel, identification operation polling, and model preview.
   Prove these calls against the supported manager revision, not just mocks.
 - [ ] **API-05** Implement normal capability negotiation using `manager.get`;
