@@ -1,217 +1,163 @@
-# VALIDATE-05/06 implementation handover
+# Manager handover: validation locations for VALIDATE-05/06
 
-This plan is intentionally specific enough for an implementation agent. It
-covers only **VALIDATE-05** (targeted recovery) and **VALIDATE-06** (the
-corresponding race and recovery test matrix).
+This handover is for **`kmonad-device-manager`**, not KeyboarDeer. Its purpose
+is to remove the manager-side blocker for KeyboarDeer tasks **VALIDATE-05**
+(safe per-key recovery) and **VALIDATE-06** (its recovery/race test suite).
 
-## Product outcome
+## The problem to solve
 
-When a complete-draft preview is rejected and the manager identifies an exact
-assignment, KeyboarDeer offers a **Revert [key]** action. It restores only that
-assignment, retains every unrelated edit, records the change in undo history,
-and previews the resulting complete draft again.
+`validation.preview` currently returns outcome, reason, remediation, and an
+optional resource. That is sufficient for a keymap-wide result but not for a
+per-key result: a resource or KMonad error message does not reliably identify a
+physical source key or a behavior assignment.
 
-When the manager cannot identify an exact assignment, KeyboarDeer shows a
-keymap-wide issue. It must **not** blame the last clicked key or offer a
-targeted revert.
+KeyboarDeer must not infer a key from:
 
-This is draft recovery only. It never alters an active mapping and never asks
-the GUI to perform manager rollback.
+- the last clicked key;
+- a configuration or device resource ID;
+- a display name;
+- KMonad diagnostic prose; or
+- manager logs/files.
 
-## Current implementation and constraints
+Without a reliable location, KeyboarDeer can show only a keymap-wide rejection.
+It cannot safely offer **Revert [key]**.
 
-Relevant current code:
+## Manager deliverable
 
-- `frontend/src/App.svelte` schedules complete-draft preview after semantic
-  edits, serializes preview requests, and invalidates a result when the draft
-  revision, manager server ID, snapshot revision, or capability environment
-  changes.
-- `app.go:PreviewProfile` compiles the persisted profile, calls
-  `validation.preview`, and returns the compiler `SourceMap` with the
-  revision-bound result.
-- `internal/compiler/compiler.go` maps generated `deflayer` slot spans to
-  `{layer_id, source_key}`.
-- `internal/profile/profile.go` and `internal/profile/store.go` own profile
-  persistence and revision checks.
-- `internal/managerapi/types.go` represents diagnostics, but current manager
-  diagnostics contain severity/reason/remediation/resource only. They do **not**
-  promise a physical-key, layer, or generated-text location.
+Extend `validation.preview` diagnostics with an optional location that identifies
+a span in the **submitted behavior text**, not in the manager-rendered full
+KMonad configuration.
 
-Do not use display names, diagnostic prose, `configured_by`, KMonad logs, or
-manager files to guess an offending assignment. See `docs/live-validation.md`
-and `docs/manager-api-status.md` for the ownership and source-location rules.
-
-## Gate 0 — establish a reliable diagnostic-location contract
-
-VALIDATE-05 cannot provide a per-key revert until at least one of these is
-available:
-
-1. The manager returns structured `{layer_id, source_key}` data for a submitted
-   behavior-model diagnostic; **or**
-2. The manager returns a stable generated-behavior range, and KeyboarDeer maps
-   that range through the exact `ProfilePreview.SourceMap` returned for the same
-   candidate.
-
-The preferred contract is structured node data, for example:
+Recommended wire shape:
 
 ```json
 {
-  "id": "diag_opaque",
-  "severity": "error",
-  "reason_code": "…",
-  "summary": "…",
-  "remediation": "…",
-  "location": {
-    "kind": "assignment",
-    "layer_id": "base",
-    "source_key": "caps"
+  "validation": {
+    "outcome": "rejected",
+    "candidate_digest": "sha256:…",
+    "diagnostics": [
+      {
+        "id": "diag_opaque",
+        "severity": "error",
+        "reason_code": "kmonad_parse_error",
+        "summary": "…",
+        "remediation": "…",
+        "location": {
+          "scope": "submitted_behavior",
+          "start_line": 14,
+          "start_column": 3,
+          "end_line": 14,
+          "end_column": 31
+        }
+      }
+    ]
   }
 }
 ```
 
-The location must describe the exact behavior candidate supplied by the GUI.
-Unknown `kind` values, malformed coordinates, mismatched candidate identity,
-and ranges spanning multiple assignments are **unmapped** diagnostics.
+### Contract rules
 
-### Deliverables for Gate 0
+1. `location` is optional. Its absence means **unmapped**, not a default key.
+2. `scope: "submitted_behavior"` is mandatory for a GUI-mappable location. Line
+   and column values are 1-based, half-open at the end, and refer exactly to the
+   UTF-8 behavior string supplied in `{model: {device_id, behavior}}`.
+3. The manager must translate locations from any generated full configuration
+   back through its manager-owned `defcfg` wrapper. Do not expose generated-file
+   coordinates as submitted-behavior coordinates.
+4. Emit a location only when the manager can establish it reliably. Errors in
+   manager-owned `defcfg`, device rendering, output setup, permissions,
+   unavailable devices, conflicts, timeouts, or process/runtime state must have
+   no assignment location.
+5. A range covering multiple behavior forms, a whole `deflayer`, or an unknown
+   region must be omitted rather than approximated.
+6. `candidate_digest` is a SHA-256 digest of the exact submitted behavior
+   string, prefixed `sha256:`. It lets clients reject a response accidentally
+   associated with another candidate. The existing JSON Lines request ID remains
+   the request/response correlation mechanism.
+7. Unknown future `scope` values are allowed. Clients must treat them as
+   unmapped unless explicitly supported.
 
-1. Extend manager API fixtures and `internal/managerapi` types with an optional
-   `DiagnosticLocation`; retain unknown fields/enums safely.
-2. Extend `frontend/src/desktop.ts` with the same optional wire shape.
-3. Add a diagnostic adapter that yields either:
-   - `MappedIssue { layerID, sourceKey, diagnostic }`; or
-   - `UnmappedIssue { diagnostic }`.
-4. Add tests proving that only contract-valid locations map to a key. Text-only
-   diagnostics and unknown resources must remain unmapped.
+## Outcome semantics the manager must preserve
 
-Do not start the targeted-revert UI before this gate is met. It is acceptable to
-ship keymap-wide diagnostics without a revert button.
+| Outcome | Meaning | Key location allowed? |
+| --- | --- | ---: |
+| `valid` | Candidate passed manager/KMonad validation. | No need. |
+| `rejected` | The submitted behavior is invalid. | Yes, only when exact. |
+| `blocked` | Environment prevents validation: device, conflict, permission, dependency, timeout, or manager condition. | No. |
 
-## VALIDATE-05 implementation
+The manager must not turn an environmental condition into `rejected` merely to
+attach an error. KeyboarDeer uses this distinction to avoid marking a user key
+invalid when the keyboard is disconnected or inaccessible.
 
-### 1. Persist validation provenance without changing the draft revision
+## Implementation approach in the manager
 
-Add an application-owned validation checkpoint to `profile.Profile`, or store
-it alongside the profile in the same atomic profile-store document. It must be
-written with a revision-guarded store method analogous to `SetApplyState`, not
-through the normal `Upsert` path: recording validation metadata must not count
-as a user draft edit.
+Relevant manager-owned pipeline:
 
-Suggested schema:
-
-```go
-type ValidationCheckpoint struct {
-    DraftRevision      uint64       `json:"draft_revision"`
-    CandidateDigest    string       `json:"candidate_digest"`
-    ManagerServerID    string       `json:"manager_server_id"`
-    StateRevision      uint64       `json:"state_revision"`
-    EnvironmentKey     string       `json:"environment_key"`
-    Assignments        []Assignment `json:"assignments"`
-    ValidatedAt        time.Time    `json:"validated_at"`
-}
+```text
+submitted behavior model
+  → manager renders platform-owned defcfg + behavior
+  → KMonad/parser validation
+  → manager translates diagnostics
+  → validation.preview response
 ```
 
-Requirements:
+1. Capture the submitted behavior text before rendering the complete candidate.
+2. When rendering the full candidate, retain a source map from each byte/line
+   region in the submitted behavior to its region in the rendered candidate.
+   The map must account for inserted `defcfg` text and any manager-owned forms.
+3. Adapt validator/parser diagnostics through that map. If a diagnostic range is
+   fully contained in one mapped submitted-behavior region, return the submitted
+   range. Otherwise omit `location`.
+4. Compute the digest from the original submitted behavior bytes, before any
+   normalisation or manager rendering.
+5. Leave existing `resource`, `reason_code`, `summary`, and `remediation`
+   fields intact for backward compatibility.
+6. Do not add device-file, output-form, profile, GUI-layer, or GUI-source-key
+   fields to the manager request. Those are KeyboarDeer-owned concepts. The GUI
+   maps a submitted-behavior span through its own compiler source map.
 
-- Compute `CandidateDigest` from the exact compiled behavior text, using a
-  stable digest such as SHA-256. Do not use a display string.
-- Save a checkpoint only after a `validation.valid` response still matches the
-  current profile revision, candidate digest, manager server ID, and validation
-  environment.
-- Keep a per-assignment pre-edit fallback in application state/storage before a
-  semantic assignment change. It is labelled **Assignment before these edits**;
-  it is not described as validated.
-- Clear/invalidate checkpoint availability when its environment identity no
-  longer matches the current manager connection/state/capabilities.
-- Add migration behavior for existing profile files: missing checkpoints are
-  valid and simply mean that no validated fallback is available.
+## Manager test requirements
 
-### 2. Add a guarded backend revert operation
+Add deterministic unit/integration tests in `kmonad-device-manager` for:
 
-Prefer a thin Wails binding over frontend-only mutation so the store can enforce
-all guards atomically. Suggested API:
+1. **Exact behavior error:** a validator error inside a submitted `deflayer`
+   behavior yields `scope: submitted_behavior`, a correct 1-based range, and
+   the correct candidate digest.
+2. **Wrapper error:** an error in manager-rendered `defcfg` has no location.
+3. **Environmental block:** disconnected/inaccessible/conflicting device,
+   dependency failure, and timeout return `blocked` with no location.
+4. **Ambiguous range:** an error spanning forms or an untranslatable KMonad
+   range has no location.
+5. **Digest stability:** digest is deterministic for identical bytes and changes
+   when behavior bytes change.
+6. **Compatibility:** diagnostics without a location remain valid API responses;
+   unknown future location scopes round-trip safely.
+7. **No side effects:** `validation.preview` still does not persist a
+   configuration, enable a binding, or start/reload a mapping.
 
-```go
-type RevertAssignmentRequest struct {
-    ProfileID              string `json:"profile_id"`
-    LayerID                string `json:"layer_id"`
-    SourceKey              string `json:"source_key"`
-    ExpectedDraftRevision  uint64 `json:"expected_draft_revision"`
-    ExpectedCurrentValue   string `json:"expected_current_value_digest"`
-    CheckpointDraftVersion uint64 `json:"checkpoint_draft_revision"`
-}
-```
+Add a JSON Lines fixture that KeyboarDeer can consume for one mapped rejection,
+one unmapped rejection, and one blocked result.
 
-The operation must:
+## Explicit non-goals for the manager
 
-1. Load the current profile from the store.
-2. Verify all request guards and the checkpoint environment/candidate identity.
-3. Verify that the affected layer/source key still exists and that the fallback
-   behavior has no missing alias, macro, or layer dependency.
-4. Replace or remove **only** the target assignment. Removing an explicit Base
-   assignment restores its original source key; removing an overlay assignment
-   restores transparent fall-through.
-5. Save through the normal draft-edit revision path so it enters undo history
-   once undo/redo exists.
-6. Return the saved profile. The frontend immediately schedules a new full
-   preview.
+The manager must **not** implement any of the following for VALIDATE-05/06:
 
-Never silently revert, replace the entire draft with the checkpoint, recreate a
-deleted layer, or retry against a stale revision.
+- GUI profile checkpoints or undo history;
+- restoring a GUI assignment;
+- choosing which key to revert;
+- parsing KeyboarDeer profile storage;
+- device-specific `defcfg` input supplied by the GUI; or
+- automatic rollback of a currently running mapping because preview failed.
 
-### 3. UI flow
+Those remain KeyboarDeer responsibilities after it receives a reliable location.
 
-In `frontend/src/App.svelte`:
+## Acceptance gate for KeyboarDeer
 
-1. Display mapped issues on the affected key/layer and add a **Show key**
-   control that selects that key and layer without moving focus unexpectedly.
-2. For a mapped issue, show one of:
-   - **Last validated assignment: [description]** and a Revert button; or
-   - **Assignment before these edits: [description]** and a clearly less
-     authoritative Revert button.
-3. Disable/remove the control immediately after any edit that breaks its guard.
-4. Show unmapped issues only at keymap level. Do not render a key marker or
-   targeted revert.
-5. Announce rejection/recovery outcome once through an appropriate live region;
-   do not steal keyboard focus when async preview completes.
+KeyboarDeer can begin per-key recovery only after a supported manager revision
+returns the location/digest contract above and its integration fixture proves:
 
-## VALIDATE-06 test matrix
+- a location maps to exactly one GUI compiler source-map entry;
+- an unmapped range never produces a key marker or targeted revert; and
+- blocked results never produce a key marker or targeted revert.
 
-Use deterministic manager socket fixtures for protocol behavior and Playwright
-for user-visible flows. Add focused Go tests for profile-store atomicity and
-compiler/source-map mapping.
-
-| Scenario | Required assertion |
-| --- | --- |
-| Rapid edits | Only latest candidate can update UI/checkpoint; older response is ignored. |
-| Concurrent preview queue | At most one preview is in flight per device and globally; only newest queued candidate runs. |
-| Device switch | A result for device A cannot affect device B. |
-| Manager reconnect/server ID change | Prior valid result and checkpoint are invalidated; fresh preview is required. |
-| Snapshot/capability change | Prior success disappears immediately; stale response cannot restore it. |
-| Mapped single issue | Marker, Show key, guarded revert, one-assignment mutation, and re-preview work. |
-| Multiple mapped issues | Each control targets only its own current assignment. |
-| Unmapped issue | Keymap-level explanation only; no guessed key/revert. |
-| Missing fallback dependency | Revert is unavailable with a clear explanation; no deleted alias/macro/layer is recreated. |
-| Repeat bad edit | Old revert controls are invalidated; new pre-edit fallback is correctly captured. |
-| Revert then undo | Revert is a normal semantic edit and is previewed again; undo does not restore an invalid stale checkpoint. |
-| Blocked/timeout/transport failure | No invalid-key marker or targeted revert; edit remains available. |
-| Profile/store restart | Valid checkpoint survives when its identity remains current; stale/unknown checkpoint is rejected safely. |
-
-## Suggested commit sequence
-
-1. `feat: add validation diagnostic location types and fixtures`
-2. `feat: persist revision-bound validation checkpoints`
-3. `feat: map reliable validation diagnostics to assignments`
-4. `feat: add guarded assignment recovery`
-5. `test: cover validation races and recovery guards`
-6. Update `TODO.md` only after the Gate 0 contract and every acceptance row
-   above passes.
-
-## Definition of done
-
-- No targeted recovery is offered from an unmapped diagnostic.
-- A valid checkpoint is revision-, candidate-, manager-, and environment-bound.
-- Revert mutates only one guarded assignment and revalidates the whole draft.
-- Blocked, timeout, and transport failures never appear as invalid key edits.
-- All entries in the test matrix pass in CI.
-- `TODO.md` can truthfully mark both VALIDATE-05 and VALIDATE-06 complete.
+Until then, the correct behavior is the existing keymap-wide diagnostic UI.
