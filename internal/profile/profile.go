@@ -155,6 +155,9 @@ func Validate(profile Profile) error {
 		if name == "" || len(macro) == 0 {
 			return fmt.Errorf("macro has an empty name or body")
 		}
+		if _, exists := profile.Aliases[name]; exists {
+			return fmt.Errorf("alias and macro share the name %q", name)
+		}
 		for _, behavior := range macro {
 			if err := validateBehavior(behavior, layers, profile.Aliases, profile.Macros); err != nil {
 				return fmt.Errorf("macro %q: %w", name, err)
@@ -170,7 +173,7 @@ func validateBehavior(b Behavior, layers map[string]bool, aliases map[string]Beh
 			return fmt.Errorf("key behavior needs a key")
 		}
 	case "transparent", "disabled":
-	case "hold_layer", "toggle_layer":
+	case "hold_layer", "switch_layer":
 		if !layers[b.Target] {
 			return fmt.Errorf("layer behavior targets an unknown layer")
 		}

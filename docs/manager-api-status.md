@@ -55,8 +55,8 @@ model, or a required runtime capability is unavailable.
 | Devices landing page | `snapshot.get` | Yes | Partial | Current app uses the authoritative snapshot; event synchronization and richer state presentation remain. |
 | Runtime health, desired/active revisions, conflicts | `snapshot.get` | Yes | Partial | Devices show associated configuration phase and desired/active revisions; add dedicated diagnostics and event-driven refresh. Do not derive health from names or CLI output. |
 | Identify a keyboard | `device.identify.start`, `operation.get`, `device.identify.cancel` | Yes | Partial | Current UI is capability-gated; smoke test it against a source build. |
-| Create and reopen an editor draft | None; application-owned persistence | N/A | No | `PROFILE-01`, `PROFILE-02`, and a verified geometry. This can proceed now. |
-| Compile behavior and live preview | `validation.preview` | Yes | No | Local compiler, source mapping, persisted profile model, and validation scheduler. |
+| Create and reopen an editor draft | None; application-owned persistence | N/A | Partial | Versioned atomic local persistence and one explicit US ANSI 60% geometry exist; create/reopen UI remains disabled until the visual editor lands. |
+| Compile behavior and live preview | `validation.preview` | Yes | Partial | Deterministic behavior-only compiler and local source map exist; add editor persistence binding, validation scheduler, diagnostics adapter, and UI. |
 | Receive device/runtime changes | `snapshot.get`, `events.subscribe` | Yes | Partial | The app coalesces stream events into fresh snapshots and emits workspace updates. Persist the cursor across restart and add reconnect/resync integration tests. |
 | Apply a managed profile | `configuration.create` / `update` / `apply`, then snapshot/events | Mostly | No | Local compiler/profile/editor and an idempotency decision below. |
 | Enable, disable, or delete managed runtime config | `configuration.set_enabled`, `configuration.delete` | Yes | No | Configuration inventory/UI, expected-revision handling, operation recovery. |
