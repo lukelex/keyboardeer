@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KeyboarDeer · Interface prototype</title>
+  <link rel="stylesheet" href="prototype.css">
+</head>
+<body>
+<svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+  <symbol id="keyboard-icon" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01M7 15h10"/></symbol>
+  <symbol id="arrow-icon" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></symbol>
+  <symbol id="check-icon" viewBox="0 0 24 24"><path d="m5 12 4 4 10-10"/></symbol>
+  <symbol id="layers-icon" viewBox="0 0 24 24"><path d="m12 3 10 5-10 5L2 8Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></symbol>
+  <symbol id="help-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 .5c0 2-2.5 2-2.5 4M12 17h.01"/></symbol>
+  <symbol id="chevron-icon" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+  <symbol id="undo-icon" viewBox="0 0 24 24"><path d="m9 5-5 5 5 5M4 10h9a6 6 0 0 1 0 12"/></symbol>
+  <symbol id="target-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></symbol>
+  <symbol id="leaf-icon" viewBox="0 0 24 24"><path d="M20 3C9 2 3 6 4 13s14 10 16-10ZM5 20 15 9"/></symbol>
+</defs></svg>
+<div class="prototype-bar"><span><span class="prototype-dot"></span> DESIGN PROTOTYPE <span class="prototype-description">/ illustrative data · no device access</span></span><div><a href="low-fidelity.html">Wireframes</a><label for="scenario">Scenario</label><select id="scenario"><option value="normal">Happy path</option><option value="offline">Manager unavailable</option><option value="blocked">Keyboard disconnected</option><option value="rejected">Validation rejected</option><option value="rollback">Apply rolled back</option><option value="limited">Read-only manager</option></select></div></div>
+<div class="app">
+  <aside class="sidebar">
+    <a href="#devices" class="brand"><img src="../../assets/icon.svg" alt="" width="40" height="40"><span>KeyboarDeer<span class="brand-caption">MAKE IT SECOND NATURE.</span></span></a>
+    <div class="nav-label">WORKSPACE</div>
+    <a href="#devices" class="nav-item active"><svg><use href="#keyboard-icon"/></svg>Keyboards<span class="nav-count">3</span></a>
+    <div id="device-nav" class="device-nav" hidden><span class="small-dot"></span><span>Keychron Q1</span></div>
+    <div class="sidebar-bottom"><div class="sidebar-note"><svg><use href="#leaf-icon"/></svg><p>Your habits, made yours.<br><span>One key at a time.</span></p></div><button class="nav-item" id="help-button"><svg><use href="#help-icon"/></svg>A little help</button><div class="service"><span class="small-dot"></span><div>Manager connected<small>Mappings keep running on their own</small></div></div></div>
+  </aside>
+  <main>
+    <div class="topbar"><div id="breadcrumb">Workspace <span>/</span> <strong>Keyboards</strong></div><span class="local-label"><span class="small-dot"></span> Local workspace</span></div>
+    <section id="devices-screen" class="screen">
+      <div class="page-heading"><div><span class="eyebrow">A LITTLE WILD. A LITTLE WIRED.</span><h1>Your keyboards.</h1><p>Find your keyboard. Make yourself at home.</p></div><span class="count-label">2 connected <span>·</span> 3 known</span></div>
+      <div id="connection-banner" class="notice" hidden></div>
+      <div class="section-label"><span>YOUR DEVICES</span><span>CONNECTION & ACTIVITY</span></div>
+      <article class="device-card featured"><div class="keyboard-art" data-mini="q1"></div><div class="device-info"><div class="device-title"><h2>Keychron Q1</h2><span class="badge green">Connected</span></div><p>75% keyboard <span>·</span> USB</p><div class="mapping-label"><span class="small-dot"></span><strong>Everyday</strong> profile active</div></div><button class="button primary" data-open-device="Keychron Q1">Configure <svg><use href="#arrow-icon"/></svg></button></article>
+      <article class="device-card"><div class="keyboard-art laptop" data-mini="framework"></div><div class="device-info"><div class="device-title"><h2>Framework keyboard</h2><span class="badge green">Connected</span></div><p>Laptop keyboard <span>·</span> Built-in</p><div class="mapping-label muted">A fresh start. No profile yet.</div></div><button class="button secondary" data-open-device="Framework keyboard">Set up <svg><use href="#arrow-icon"/></svg></button></article>
+      <article class="device-card disconnected"><div class="keyboard-art slim" data-mini="mx"></div><div class="device-info"><div class="device-title"><h2>Logitech MX Keys</h2><span class="badge neutral">Disconnected</span></div><p>Full-size keyboard <span>·</span> Wireless</p><div class="mapping-label muted">Work profile saved <span>·</span> Waiting for keyboard</div></div><button class="button text" data-open-device="Logitech MX Keys">View profile <svg><use href="#arrow-icon"/></svg></button></article>
+      <div class="quiet-tip"><div class="tip-icon"><svg><use href="#target-icon"/></svg></div><p><strong>Not sure which is which?</strong><br>Open a keyboard and choose <em>Identify</em>. A keypress will confirm it.</p></div>
+      <footer class="workspace-footer"><svg><use href="#leaf-icon"/></svg>Your mappings stay with you, even when this window is closed.</footer>
+    </section>
+    <section id="editor-screen" class="screen" hidden>
+      <div class="page-heading editor-heading"><div><a href="#devices" class="back-link">← All keyboards</a><div class="editor-title"><h1 id="device-name">Keychron Q1</h1><span id="editor-connection" class="badge green">Connected</span></div><p>Your keys. A little more you.</p></div><button class="button secondary" id="identify-button"><svg><use href="#target-icon"/></svg>Identify</button></div>
+      <div class="profile-bar"><div class="profile-icon"><svg><use href="#layers-icon"/></svg></div><div><span class="field-eyebrow">PROFILE</span><strong id="profile-name">Everyday</strong></div><span class="profile-divider"></span><div id="active-status" class="mapping-label"><span class="small-dot"></span>Active on this keyboard</div><span class="layout-label" id="layout-label">ANSI · 75%</span></div>
+      <div class="editor-grid"><div class="canvas">
+        <div class="canvas-toolbar"><div class="layer-tabs" role="tablist" aria-label="Preview layer"><button role="tab" aria-selected="true" data-layer="Base">Base <span>0</span></button><button role="tab" aria-selected="false" data-layer="Navigation">Navigation <span>1</span></button></div><span class="preview-label">LAYER PREVIEW</span></div>
+        <div class="canvas-intro"><h2>A shortcut to feeling at home.</h2><p>Choose a key to change what it does.</p></div>
+        <div class="keyboard-container"><div id="keyboard" class="keyboard" aria-label="Keyboard layout"></div></div>
+        <div class="keyboard-legend"><span><i class="legend-selected"></i>Selected key</span><span><i class="legend-edited"></i>Changed in draft</span><span class="legend-hint">Click a key to get started</span></div>
+        <div class="layer-note"><svg><use href="#layers-icon"/></svg><p id="layer-description"><strong>Base layer</strong> is your everyday layout. Start here, make it yours.</p></div>
+      </div><aside class="inspector" aria-label="Selected key editor">
+        <div class="inspector-heading"><span class="field-eyebrow">SELECTED KEY</span><span id="key-position">Base layer</span></div><div class="selected-key-title"><div class="key-preview" id="key-preview">Caps</div><div><h2 id="selected-key-name">Caps Lock</h2><p>Give this key a new habit.</p></div></div>
+        <label class="field-label" for="behavior">What should it do?</label><select id="behavior" class="input"><option value="single">Send a key</option><option value="dual" selected>Tap & hold</option></select>
+        <div class="field-section"><label class="field-label" for="tap-key" id="tap-label">On tap <span>A quick press</span></label><select id="tap-key" class="input"><option>Escape</option><option>Caps Lock</option><option>Control</option><option>Backspace</option><option>Enter</option><option>Space</option><option>Tab</option><option>A</option><option>B</option><option>C</option><option>Left</option><option>Down</option><option>Up</option><option>Right</option></select></div>
+        <div class="field-section" id="hold-field"><label class="field-label" for="hold-key">On hold <span>Press and keep holding</span></label><select id="hold-key" class="input"><option>Control</option><option>Shift</option><option>Alt</option><option>Super</option><option>Navigation layer</option></select></div>
+        <div class="behavior-description" id="behavior-description">Tap for <strong>Escape</strong>.<br>Hold for <strong>Control</strong> shortcuts.</div>
+        <button class="button primary full" id="save-key">Save to draft <svg><use href="#check-icon"/></svg></button><button class="reset-key" id="reset-key">Restore original key</button>
+        <div class="inspector-footnote"><svg><use href="#leaf-icon"/></svg>Try a new habit. You can always change it back.</div>
+      </aside></div>
+      <div class="draft-bar"><div class="draft-info"><span id="draft-indicator" class="draft-indicator"></span><div><strong id="draft-title">Your draft is up to date</strong><p id="draft-subtitle">The current mapping is still running.</p></div></div><div class="draft-actions"><button id="undo-button" class="button text" disabled><svg><use href="#undo-icon"/></svg>Undo</button><button id="review-button" class="button primary" disabled>Review & apply <svg><use href="#arrow-icon"/></svg></button></div></div>
+    </section>
+  </main>
+</div>
+<dialog id="review-dialog" aria-labelledby="review-title"><div class="dialog-content"><button class="close-dialog" aria-label="Close review">×</button><span class="eyebrow" id="review-device">KEYCHRON Q1 / EVERYDAY</span><h2 id="review-title">Ready for a new habit?</h2><p class="dialog-subtitle" id="review-summary">Review your changes before they go live.</p><div id="review-changes" class="review-changes"></div><div id="validation-result" class="validation-result" role="status"></div><p class="review-footnote">Your manager checks again before applying. If activation fails, it attempts to restore the last working mapping.</p><div class="dialog-actions"><button class="button secondary close-review">Keep editing</button><button class="button primary" id="apply-button">Apply to keyboard <svg><use href="#arrow-icon"/></svg></button></div></div></dialog>
+<dialog id="identify-dialog" aria-labelledby="identify-title"><div class="dialog-content"><button class="close-dialog" aria-label="Close identification">×</button><div class="large-icon"><svg><use href="#target-icon"/></svg></div><span class="eyebrow">LET’S FIND YOUR KEYBOARD</span><h2 id="identify-title">Is this the one?</h2><p class="dialog-subtitle" id="identify-description">Press any key on your selected keyboard.</p><div class="identification-wait"><span class="pulse"></span>Waiting for a keypress <span id="identify-timer">15s</span></div><p class="review-footnote">Its mapping pauses briefly during identification. Other keyboards keep working.</p><div class="demo-note">Prototype: use the button below to simulate a keypress.</div><div class="dialog-actions"><button class="button secondary" id="cancel-identify">Cancel</button><button class="button primary" id="simulate-key">Simulate keypress <svg><use href="#check-icon"/></svg></button></div></div></dialog>
+<dialog id="help-dialog" aria-labelledby="help-title"><div class="dialog-content"><button class="close-dialog" aria-label="Close help">×</button><span class="eyebrow">A LITTLE HELP</span><h2 id="help-title">Make it second nature.</h2><ol class="help-steps"><li><strong>Choose your keyboard.</strong><p>Configure an existing profile, or start with a new one.</p></li><li><strong>Give a key a new job.</strong><p>Select a key, choose its behavior, then save it to your draft.</p></li><li><strong>Review, then apply.</strong><p>Draft changes stay separate from the mapping that is running.</p></li></ol><div class="demo-note">This is an interactive design prototype. Validation, device state, and applying are simulated. Drafts live in this tab and reset on reload.</div><button class="button primary full close-help">Got it</button></div></dialog>
+<dialog id="setup-dialog" aria-labelledby="setup-title"><div class="dialog-content"><button class="close-dialog" aria-label="Close setup">×</button><span class="eyebrow">A FRESH START</span><h2 id="setup-title">Meet your keyboard.</h2><p class="dialog-subtitle">Start with a familiar layout. You can fine-tune it later.</p><label class="field-label" for="setup-name">Profile name</label><input id="setup-name" class="input" value="Everyday" maxlength="40"><label class="field-label setup-layout" for="setup-layout">Physical layout</label><select id="setup-layout" class="input"><option>ANSI · 75%</option><option>ISO · 75%</option></select><div class="demo-note">This prototype includes an illustrative ANSI 75% canvas. Exact laptop geometry and additional layouts are follow-up designs.</div><div class="dialog-actions"><button class="button secondary close-setup">Cancel</button><button class="button primary" id="create-profile">Create draft <svg><use href="#arrow-icon"/></svg></button></div></div></dialog>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<script src="prototype.js"></script>
+</body>
+</html>
