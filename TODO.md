@@ -1,5 +1,12 @@
 # KeyboarDeer completion checklist
 
+**Current interface scope:** the seven-screen keyboard-draft workspace in
+[the high-fidelity prototype](docs/design/high-fidelity-workspace.html).
+Profiles and Review & Apply are parked; related tasks below are retained as
+future product backlog rather than work for the current design iteration.
+Automatic whole-keymap preview after each edit and targeted invalid-key recovery
+are active scope; see [the interaction plan](docs/live-validation.md).
+
 This is the delivery checklist for an installable **Linux v1**, followed by
 explicit expansion work toward the cross-platform product. A checked design or
 planning item does not mean the application feature is implemented.
@@ -16,12 +23,14 @@ explains sequencing; this file is the place to track completion.
 - [x] Prototype devices, key editing, layers, review, identification, and failure states.
 - [x] Audit every API v1 method against pinned upstream source; correct the stale
   claim that all resource methods are unavailable.
+- [x] Prototype subtle live-valid status, actionable invalid-key diagnostics,
+  and selective assignment revert without discarding other draft edits.
 
 ## P0 — Bootstrap and real API integration
 
-- [ ] **APP-01** Select and pin supported Wails/Go/Node/package-manager versions;
+- [x] **APP-01** Select and pin supported Wails/Go/Node/package-manager versions;
   scaffold the Svelte 5 TypeScript app and document Linux development prerequisites.
-- [ ] **APP-02** Establish formatting, lint/type checks, unit-test commands,
+- [x] **APP-02** Establish formatting, lint/type checks, unit-test commands,
   build commands, lockfiles, and CI from a clean checkout.
 - [ ] **API-01** Implement a Go socket client: endpoint discovery, JSON Lines,
   bounded frames, request correlation, deadlines, transport failures, reconnect
@@ -76,7 +85,7 @@ terminal, and reconnect restores an authoritative view.
   multiple profiles and keyboards, preserving pending edits per profile.
 - [ ] **GEOMETRY-01** Provide a verified first layout and explicit selection;
   map every drawn key to a source key without guessing from a product name.
-- [ ] **EDIT-01** Implement keyboard rendering, selection, inspector, key search,
+- [ ] **EDIT-01** Implement keyboard rendering, selection, bottom action palette, key search,
   single-key remapping, restore-original, undo/redo, and persistent draft status.
 - [ ] **EDIT-02** Implement layer create/rename/delete/reorder, transparency,
   reachability, and layer-switch behaviors; previews must not change live state.
@@ -91,13 +100,33 @@ terminal, and reconnect restores an authoritative view.
 **Exit:** a user can reopen and edit a saved profile, add a reachable layer,
 and obtain deterministic behavior without writing KMonad syntax.
 
-## P1 — Preview, apply, and lifecycle
+## P1 — Continuous preview and per-key recovery (active)
 
 - [ ] **VALIDATE-01** Connect `{model: {device_id, behavior}}` to
   `validation.preview`; map diagnostics to the relevant editor fields where
-  possible. Separate valid, rejected, blocked, timeout, and transport errors.
-- [ ] **VALIDATE-02** Invalidate preview after any draft/device change; never
-  imply a preview guarantees later activation.
+  possible. Check the entire compiled candidate automatically after semantic
+  edits; coalesce rapid input and bound per-device/global preview concurrency.
+  Separate valid, rejected, blocked, timeout, and transport errors.
+- [ ] **VALIDATE-02** Invalidate success immediately after draft or environment
+  changes. Correlate responses with draft revision, device, candidate, manager
+  connection, and environment generation. Ignore stale/out-of-order responses;
+  avoid duplicate checks for pure selection. Never imply validity means active.
+- [ ] **VALIDATE-03** Build compiler node/source mapping and a diagnostic adapter.
+  Use only reliable manager locations; general errors must not blame the last
+  clicked key. Coordinate structured key/source metadata upstream if necessary.
+- [ ] **VALIDATE-04** Implement quiet valid/checking status, prominent rejection
+  with causes/remedies, affected keys and layer counts, accessible announcements,
+  and issue-to-key navigation. Separate environmental blockage from bad edits.
+- [ ] **VALIDATE-05** Keep last validated assignment provenance and per-key
+  pre-edit fallback. Revert only an identified offending assignment with current
+  revision/value guards, preserve unrelated edits, protect missing dependencies,
+  record undo, and revalidate the complete draft. Do not silently auto-revert.
+- [ ] **VALIDATE-06** Verify rapid edit races, device switching, reconnect,
+  capability changes, cross-layer/multiple issues, partial recovery, repeated bad
+  edits, revert/undo, unavailable checkpoints, and unmapped diagnostics.
+
+## P1 — Apply and lifecycle (parked)
+
 - [ ] **APPLY-01** Implement a human-readable review diff and explicit apply;
   distinguish local draft saved, candidate accepted, and active/healthy.
 - [ ] **APPLY-02** Integrate managed create/update with configuration association,

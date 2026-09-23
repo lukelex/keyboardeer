@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KeyboarDeer · Low-fidelity application flow</title>
+  <link rel="stylesheet" href="palette-wireframe.css">
+  <link rel="stylesheet" href="pages-wireframe.css">
+</head>
+<body>
+  <header class="design-header"><div><span class="eyebrow">KEYBOARDEER / CHOSEN DIRECTION / LOW FIDELITY</span><h1>The rest of the workspace.</h1></div><span class="demo-caption">Linked wireframes · illustrative data · no device access</span></header>
+  <nav class="screen-index" aria-label="Wireframe gallery">
+    <a href="#keyboards">01 Keyboards</a><a href="#setup">02 Setup</a><a href="#identify">03 Identify</a><a href="low-fidelity-palette.html">04 Keymap ↗</a><a href="#profiles">05 Profiles</a><a href="#layers">06 Layers</a><a href="#review">07 Review & apply</a><a href="#diagnostics">08 Diagnostics</a><a href="#external">09 External config</a>
+  </nav>
+
+  <main class="app-frame flow-frame">
+    <header class="app-header"><a class="wordmark" href="#keyboards">[deer] KeyboarDeer</a><nav class="app-nav" aria-label="Workspace"><a href="#keyboards" data-nav="keyboards">Keyboards</a><a href="#profiles" data-nav="profiles">Profiles</a><a href="#diagnostics" data-nav="diagnostics">Diagnostics</a></nav><a class="manager-link" href="#diagnostics">● Manager connected</a></header>
+
+    <section class="flow-page" id="keyboards" aria-labelledby="keyboards-title">
+      <div class="page-title"><div><span class="eyebrow">WORKSPACE</span><h2 id="keyboards-title" tabindex="-1">Your keyboards</h2><p>Choose a keyboard, then make its keys your own.</p></div><label class="scenario-control">Wireframe state<select id="devices-state"><option value="normal">Connected devices</option><option value="empty">No keyboards</option><option value="offline">Manager unavailable</option></select></label></div>
+      <div id="devices-offline" class="message" hidden><strong>Manager unavailable · live state is unknown</strong><p>Your saved profiles are still available. Reconnect to refresh device status.</p><a href="#diagnostics">See connection details →</a></div>
+      <div id="device-list"><div class="table-label"><span>KEYBOARD</span><span>CONNECTION / MAPPING</span><span>NEXT STEP</span></div>
+        <article class="device-line"><div class="device-identity"><div class="keyboard-placeholder" aria-hidden="true"></div><div><h3>Keychron Q1</h3><p>75% · USB</p></div></div><div><span class="device-state">Connected</span><p class="runtime-state">Everyday active · Healthy</p></div><div class="row-actions"><a href="#identify">Identify</a><a class="primary-button" href="low-fidelity-palette.html">Configure →</a></div></article>
+        <article class="device-line"><div class="device-identity"><div class="keyboard-placeholder laptop-placeholder" aria-hidden="true"></div><div><h3>Framework keyboard</h3><p>Built-in keyboard</p></div></div><div><span class="device-state">Connected</span><p class="runtime-state">No profile yet</p></div><div class="row-actions"><a class="secondary-button" href="#setup" data-setup-device="Framework keyboard">Set up →</a></div></article>
+        <article class="device-line"><div class="device-identity"><div class="keyboard-placeholder" aria-hidden="true"></div><div><h3>Logitech MX Keys</h3><p>Full-size · Wireless</p></div></div><div><span class="device-state">Disconnected</span><p class="runtime-state">Work saved · Waiting for keyboard</p></div><div class="row-actions"><a href="#profiles">View saved profiles →</a></div></article>
+        <article class="device-line"><div class="device-identity"><div class="keyboard-placeholder" aria-hidden="true"></div><div><h3>ThinkPad keyboard</h3><p>External configuration</p></div></div><div><span class="device-state">Connected</span><p class="runtime-state">thinkpad.kbd running · Read-only</p></div><div class="row-actions"><a href="#external">View configuration →</a></div></article>
+      </div>
+      <div id="devices-empty" class="large-empty" hidden><div class="empty-keyboard">[ keyboard ]</div><h3>No keyboards found yet</h3><p>Connect a keyboard and it will appear here.<br>If one is already connected, check device access.</p><a class="secondary-button" href="#diagnostics">Check diagnostics</a><a href="#profiles">Browse saved profiles</a></div>
+      <div class="bottom-panel"><strong>Not sure which keyboard is which?</strong><p>Select Identify next to a keyboard. The manager waits for a keypress from that device.</p></div>
+      <footer class="page-footer"><span>Your mappings keep running when you close this window.</span><a href="#profiles">Manage profiles →</a></footer>
+    </section>
+
+    <section class="flow-page" id="setup" aria-labelledby="setup-title" hidden>
+      <div class="page-title"><div><span class="eyebrow">NEW PROFILE / <span id="setup-device-label">KEYCHRON Q1</span></span><h2 id="setup-title" tabindex="-1">Start with your physical layout</h2><p>The shape tells the editor where your keys are. Mapping comes next.</p></div><a class="secondary-button" href="#identify">Identify this keyboard</a></div>
+      <div class="steps"><strong>1 · Choose layout</strong><span>2 · Edit keymap</span><span>3 · Review & apply</span></div>
+      <form id="setup-form"><div class="setup-content"><fieldset class="layout-choices"><legend>Physical layout</legend><label><input type="radio" name="geometry" value="ANSI 75%" checked><strong>ANSI · 75%</strong><span class="shape-sketch">[ ─── ]<br>[ ──↵ ]</span><small>Wide Enter · compact function row</small></label><label><input type="radio" name="geometry" value="ISO 75%"><strong>ISO · 75%</strong><span class="shape-sketch">[ ─┐ ]<br>[ ─┘ ]</span><small>Tall Enter · extra key by left Shift</small></label><label><input type="radio" name="geometry" value="Full-size ANSI"><strong>Full-size · ANSI</strong><span class="shape-sketch">[ ─── ] [ ▦ ]<br>[ ─── ] [ ▦ ]</span><small>Function row, arrows, and numpad</small></label></fieldset><div class="layout-preview"><span class="label">SELECTED LAYOUT</span><div class="large-layout-sketch" aria-hidden="true"></div><strong id="geometry-summary">ANSI 75%</strong><p>Compare the Enter key, left Shift, arrows, and numpad with your physical keyboard.</p><p class="small-note">Illustrative geometry only. Exact laptop and custom layouts need separate templates.</p></div></div>
+      <div class="bottom-panel setup-fields"><label>Profile name<input id="new-profile-name" value="Everyday" required maxlength="40"></label><div><strong>A fresh, unchanged keymap</strong><p>Start with the original assignments. Creating a draft does not change your running keyboard.</p></div></div>
+      <footer class="page-footer"><a href="#keyboards">← Back to keyboards</a><div><span id="setup-feedback" class="small-note" role="status"></span><button class="primary-button" type="submit">Create draft & open editor →</button></div></footer></form>
+    </section>
+
+    <section class="flow-page" id="identify" aria-labelledby="identify-title" hidden>
+      <div class="page-title"><div><span class="eyebrow">KEYBOARD IDENTIFICATION</span><h2 id="identify-title" tabindex="-1">Is this the keyboard you mean?</h2><p>Confirm the physical device before you start editing.</p></div><span class="outline-badge">One device at a time</span></div>
+      <div class="identify-stage"><div class="identify-device"><div class="large-layout-sketch" aria-hidden="true"></div><h3 id="identify-device-name">Keychron Q1</h3><p>Connected · USB</p></div><div class="identify-instructions"><span class="eyebrow">PRESS A KEY ON THIS KEYBOARD</span><h3 id="identify-result-title">Ready when you are.</h3><p id="identify-result-copy">Start identification, then press any key on the keyboard you want to confirm.</p><div class="identify-progress" role="status"><span id="identify-state">Not started</span><strong id="identify-countdown">15 seconds</strong></div><p class="small-note">The selected keyboard’s mapping may pause briefly. It resumes when identification finishes. Other keyboards keep working.</p><button class="primary-button" id="start-identify">Start identification</button><div id="identify-demo-controls" class="demo-box" hidden><span>Wireframe simulation</span><button class="secondary-button" id="identify-keypress">Simulate matching keypress</button><button class="plain-button" id="identify-disconnect">Simulate unplug</button></div></div></div>
+      <div class="bottom-panel"><strong id="identify-bottom-title">The manager handles the keypress check</strong><p id="identify-bottom-copy">No keys are recorded by the GUI. The result only confirms which device responded.</p></div>
+      <footer class="page-footer"><a href="#keyboards" id="identify-back">← Back to keyboards</a><div><button class="secondary-button" id="cancel-identify" disabled>Cancel identification</button><a class="primary-button" id="identify-editor-link" href="low-fidelity-palette.html">Open keymap →</a></div></footer>
+    </section>
+
+    <section class="flow-page" id="profiles" aria-labelledby="profiles-title" hidden>
+      <div class="page-title"><div><span class="eyebrow">SAVED IN KEYBOARDEER</span><h2 id="profiles-title" tabindex="-1">Profiles</h2><p>Your saved layouts and behaviors, kept separately from what is running.</p></div><a class="primary-button" href="#setup" data-setup-device="Keychron Q1">New profile →</a></div>
+      <div class="profile-table"><div class="table-label"><span>PROFILE / KEYBOARD</span><span>DRAFT</span><span>LIVE STATE</span><span></span></div><article class="profile-line selected-row"><div><h3>Everyday</h3><p>Keychron Q1 · ANSI 75%</p></div><div><strong>2 pending changes</strong><p>Saved locally</p></div><div><strong>Revision 6 active</strong><p>Healthy</p></div><a class="secondary-button" href="low-fidelity-palette.html">Edit keymap →</a></article><article class="profile-line"><div><h3>Writing</h3><p>Keychron Q1 · ANSI 75%</p></div><div><strong>Saved</strong><p>No pending edits</p></div><div><strong>Not active</strong><p>Everyday is running instead</p></div><button class="secondary-button" id="preview-writing">Preview activation →</button></article><article class="profile-line"><div><h3>Work</h3><p>Logitech MX Keys · Full-size</p></div><div><strong>Saved</strong><p>Available offline</p></div><div><strong>Waiting for keyboard</strong><p>Disconnected</p></div><button class="plain-button" id="work-details">View details</button></article></div>
+      <div class="bottom-panel profile-detail"><div><span class="label">SELECTED PROFILE</span><h3>Everyday</h3><p>Keychron Q1 · 2 layers · 2 draft changes</p></div><div class="detail-actions"><button class="secondary-button" id="rename-profile">Rename</button><button class="secondary-button" id="duplicate-profile">Duplicate</button><button class="secondary-button" id="profile-files">Import / export</button></div></div>
+      <div class="message subtle"><strong>Opening a profile does not activate it.</strong><p>Preview the differences, validate, then apply explicitly. Local drafts remain editable if the manager is unavailable.</p></div>
+      <footer class="page-footer"><a href="#keyboards">← Keyboards</a><a class="primary-button" href="#review" data-review-reset>Review Everyday changes →</a></footer>
+    </section>
+
+    <section class="flow-page" id="layers" aria-labelledby="layers-title" hidden>
+      <div class="page-title"><div><span class="eyebrow">KEYCHRON Q1 / EVERYDAY</span><h2 id="layers-title" tabindex="-1">Layers</h2><p>A second set of jobs for the same physical keys.</p></div><button class="secondary-button" id="add-layer">+ Add layer</button></div>
+      <nav class="context-nav" aria-label="Profile"><a href="low-fidelity-palette.html">Keymap</a><a href="#layers" aria-current="page">Layers</a><a href="#profiles">Profiles</a></nav>
+      <div class="layers-content"><div class="layer-list" aria-label="Layers"><button class="layer-card" data-layer-detail="base" aria-pressed="false"><span class="layer-number">0</span><span><strong>Base</strong><small>Always available · Original key assignments</small></span><span class="outline-badge">Default</span></button><button class="layer-card chosen" data-layer-detail="navigation" aria-pressed="true"><span class="layer-number">1</span><span><strong>Navigation</strong><small>H J K L → arrow keys</small></span><span class="outline-badge">Reachable</span></button></div><div class="layer-explainer"><h3>Layers are previews, not live switches.</h3><p>Choosing a layer in the editor shows its assignments. A key behavior determines how you reach it while typing.</p><div class="mini-assignment"><span>[ Fn ]</span><span>hold →</span><strong>Navigation</strong></div><p>Release Fn to return to Base. Keys marked ▽ inherit their action from the lower layer.</p></div></div>
+      <div class="bottom-panel layer-settings"><div><span class="label">SELECTED LAYER</span><h3 id="layer-detail-name">Navigation</h3><p id="layer-detail-copy">Layer 1 · entered by holding Fn</p></div><div class="layer-behavior"><strong id="layer-access">✓ This layer can be reached</strong><p id="layer-fallback">Unassigned keys pass through to Base.</p></div><button class="secondary-button" id="rename-layer">Rename layer</button></div>
+      <footer class="page-footer"><span>Layer changes stay in the profile draft until applied.</span><a class="primary-button" href="low-fidelity-palette.html">Assign keys in the palette →</a></footer>
+    </section>
+
+    <section class="flow-page" id="review" aria-labelledby="review-title" hidden>
+      <div class="page-title"><div><span class="eyebrow">KEYCHRON Q1 / <span id="review-profile-label">EVERYDAY</span></span><h2 id="review-title" tabindex="-1">Review before it goes live</h2><p id="review-intro">Your current mapping keeps running while you review this draft.</p></div><label class="scenario-control">Wireframe result<select id="review-state"><option value="ready">Validation passed</option><option value="blocked">Keyboard disconnected</option><option value="rejected">Validation rejected</option><option value="stale">Newer revision exists</option><option value="rollback">Activation rolls back</option><option value="success">Applied successfully</option></select></label></div>
+      <div class="revision-strip"><div><span class="label">RUNNING NOW</span><strong id="running-revision">Everyday · revision 6</strong></div><span>→</span><div><span class="label">YOUR DRAFT</span><strong id="candidate-revision">Everyday · 2 changes</strong></div><span class="outline-badge" id="revision-badge">Not live yet</span></div>
+      <div class="change-table"><div class="table-label"><span>KEY / LAYER</span><span>ACTIVE ASSIGNMENT</span><span>PROPOSED ASSIGNMENT</span></div><div class="change-line"><div><strong>Caps Lock</strong><small>Base layer</small></div><span>Caps Lock</span><strong>Tap Escape / Hold Control</strong></div><div class="change-line"><div><strong>H</strong><small>Navigation layer</small></div><span>H</span><strong>Left arrow</strong></div></div>
+      <div class="bottom-panel validation-panel" role="status"><span class="result-symbol" id="validation-symbol">✓</span><div><h3 id="validation-title">Validation passed</h3><p id="validation-copy">The candidate passed the manager’s preview checks. It will be checked again immediately before activation.</p><a id="validation-help" href="#diagnostics" hidden>View diagnostics →</a></div><span class="outline-badge">Simulated result</span></div>
+      <div class="review-explanation"><strong>Only this keyboard is updated.</strong><p>The manager keeps the known-good revision until replacement is confirmed and attempts rollback if activation fails. An accepted apply continues even if the GUI closes.</p></div>
+      <footer class="page-footer"><a href="low-fidelity-palette.html">← Keep editing</a><div><span id="apply-status" class="small-note" role="status"></span><button class="primary-button" id="apply-draft">Apply to Keychron Q1 →</button></div></footer>
+    </section>
+
+    <section class="flow-page" id="diagnostics" aria-labelledby="diagnostics-title" hidden>
+      <div class="page-title"><div><span class="eyebrow">MANAGER / DEVICE HEALTH</span><h2 id="diagnostics-title" tabindex="-1">What needs attention?</h2><p>Plain-language findings, with a next step for each one.</p></div><label class="scenario-control">Wireframe state<select id="diagnostics-state"><option value="permission">Device permission problem</option><option value="healthy">All checks clear</option><option value="offline">Manager unavailable</option><option value="incomplete">API incomplete</option></select></label></div>
+      <div class="health-summary"><div><span class="label">CONNECTION</span><strong id="health-connection">Manager connected</strong></div><div><span class="label">ACTIVE MAPPINGS</span><strong id="health-mappings">2 healthy</strong></div><div><span class="label">ATTENTION</span><strong id="health-attention">1 device needs access</strong></div></div>
+      <div class="finding" id="primary-finding"><span class="finding-symbol">!</span><div><span class="outline-badge" id="finding-severity">Action needed</span><h3 id="finding-title">Framework keyboard cannot be opened</h3><p id="finding-copy">The manager can see the keyboard but does not have permission to read it.</p><div class="remediation"><strong>Next step</strong><p id="finding-remediation">Complete the manager’s input-access setup, then sign out and back in if group membership changed.</p></div><span class="reason-code" id="finding-code">device_inaccessible · Framework keyboard</span></div></div>
+      <div class="check-list" id="diagnostic-checks"><div><span>✓</span><strong>KMonad available</strong><span>Dependency check passed</span></div><div><span>✓</span><strong>Keychron Q1 mapping healthy</strong><span>Everyday · revision 6</span></div><div><span>○</span><strong>Logitech MX Keys disconnected</strong><span>Waiting for device · Not an invalid profile</span></div></div>
+      <div class="bottom-panel"><strong>Diagnostics come from the manager.</strong><p>Messages are grouped by affected device. The GUI displays structured findings and remediation without inspecting input devices or parsing logs.</p></div>
+      <footer class="page-footer"><a href="#keyboards">← Keyboards</a><div><button class="secondary-button" id="diagnostic-details">Technical details</button><button class="primary-button" id="refresh-diagnostics">Refresh checks ↻</button></div></footer>
+    </section>
+
+    <section class="flow-page" id="external" aria-labelledby="external-title" hidden>
+      <div class="page-title"><div><span class="eyebrow">THINKPAD KEYBOARD / EXTERNAL CONFIGURATION</span><h2 id="external-title" tabindex="-1">thinkpad.kbd</h2><p>Created outside KeyboarDeer. Supervised by the device manager.</p></div><span class="outline-badge">Read-only</span></div>
+      <div class="health-summary"><div><span class="label">DEVICE</span><strong>ThinkPad keyboard · Connected</strong></div><div><span class="label">RUNTIME</span><strong>Running · Healthy</strong></div><div><span class="label">OWNERSHIP</span><strong>External file</strong></div></div>
+      <div class="external-source"><div class="source-toolbar"><strong>Raw configuration</strong><span>Illustrative excerpt · not loaded from disk</span></div><pre aria-label="Illustrative read-only KMonad behavior">; External configuration — behavior excerpt
+; Device-specific configuration is omitted here.
+
+(defsrc
+  caps  a  s  d  f
+)
+
+(defalias
+  esc-ctrl (tap-hold-next-release 200 esc lctl)
+)
+
+(deflayer base
+  @esc-ctrl  a  s  d  f
+)</pre></div>
+      <div class="bottom-panel"><strong>This file is not a visual profile.</strong><p>Connecting KeyboarDeer does not modify or adopt it. To build a visual profile, start a new draft; the manager must resolve any device claim conflict before it can be applied.</p></div>
+      <div class="small-note external-note">Implementation dependency: the current API needs a documented content-read method before the raw source panel can ship. Adoption is a later, explicit workflow.</div>
+      <footer class="page-footer"><a href="#keyboards">← Keyboards</a><div><a class="secondary-button" href="#diagnostics">Runtime details</a><a class="primary-button" href="#setup" data-setup-device="ThinkPad keyboard">Start a separate visual draft →</a></div></footer>
+    </section>
+  </main>
+  <div class="page-annotation"><strong id="annotation-title">Design principle</strong><p id="annotation-copy"></p></div>
+
+  <dialog id="detail-dialog" aria-labelledby="detail-title"><form method="dialog" class="detail-content"><span class="eyebrow">WIREFRAME DETAIL</span><h2 id="detail-title"></h2><p id="detail-copy"></p><label id="detail-field" hidden><span id="detail-label">Name</span><input id="detail-input" maxlength="40"></label><p class="small-note" id="detail-note">This is a design example, not a live manager operation.</p><div class="dialog-footer"><button class="secondary-button" value="cancel">Close</button><button class="primary-button" id="detail-save" value="save" hidden>Save example</button></div></form></dialog>
+  <div id="flow-toast" class="flow-toast" role="status" hidden></div>
+  <script src="pages-wireframe.js"></script>
+</body>
+</html>

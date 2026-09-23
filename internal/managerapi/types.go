@@ -116,6 +116,9 @@ type Event struct {
 type Device struct {
 	ID                string   `json:"id"`
 	DisplayName       string   `json:"display_name"`
+	// Role is optional for compatibility with managers that predate semantic
+	// device roles. Explicit non-input roles are not configurable.
+	Role              string   `json:"role,omitempty"`
 	Vendor            string   `json:"vendor,omitempty"`
 	Product           string   `json:"product,omitempty"`
 	Serial            string   `json:"serial,omitempty"`

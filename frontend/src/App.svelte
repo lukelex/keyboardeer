@@ -28,7 +28,21 @@
   } from "./desktop";
 
   type View = "devices" | "setup" | "editor";
+  type KeyOption = GeometryTemplate["keys"][number];
+  type ComplexAction = "tap_hold" | "layer" | "alias" | "macro";
   const managerCheckIntervalMS = 15_000;
+  const modifierSourceKeys = new Set([
+    "caps",
+    "cmp",
+    "lalt",
+    "lctl",
+    "lmet",
+    "lsft",
+    "ralt",
+    "rctl",
+    "rmet",
+    "rsft",
+  ]);
   const browserCodeToSourceKey: Record<string, string> = {
     Escape: "esc",
     Backquote: "grv",
@@ -69,14 +83,16 @@
     ArrowLeft: "left",
     ArrowRight: "rght",
   };
-  for (let digit = 0; digit <= 9; digit += 1)
+  for (let digit = 0; digit <= 9; digit += 1) {
     browserCodeToSourceKey[`Digit${digit}`] = String(digit);
+  }
   for (let letter = 65; letter <= 90; letter += 1) {
     const key = String.fromCharCode(letter);
     browserCodeToSourceKey[`Key${key}`] = key.toLowerCase();
   }
-  for (let functionKey = 1; functionKey <= 12; functionKey += 1)
+  for (let functionKey = 1; functionKey <= 12; functionKey += 1) {
     browserCodeToSourceKey[`F${functionKey}`] = `f${functionKey}`;
+  }
   const initialStatus: ManagerStatus = {
     state: "checking",
     message: "Checking the local manager connection…",
@@ -93,6 +109,21 @@
   let profileName = "";
   let activeProfile: Profile | null = null;
   let selectedSourceKey = "";
+  let selectedLayerID = "base";
+  let behaviorDialog: ComplexAction | null = null;
+  let tapKey = "";
+  let tapHoldMode: "key" | "layer" = "key";
+  let holdKey = "";
+  let tapHoldLayerID = "base";
+  let tapHoldTimeoutMS = 200;
+  let layerAction: "hold_layer" | "switch_layer" = "hold_layer";
+  let layerTargetID = "base";
+  let newLayerName = "";
+  let aliasName = "";
+  let aliasKey = "";
+  let macroName = "";
+  let macroNextKey = "";
+  let macroSteps: string[] = [];
   let flashingSourceKey = "";
   let keyFlashTimer: ReturnType<typeof setTimeout> | undefined;
   let profileBusy = false;
@@ -130,6 +161,12 @@
   $: canIdentify =
     workspace.status.state === "ready" && deviceIdentification.available;
   $: devices = workspace.snapshot?.devices ?? [];
+  // Device roles are manager-owned semantics. Keep an absent role visible for
+  // compatibility with older managers, but never configure an explicit
+  // non-input role.
+  $: visibleBoards = devices.filter(
+    (device) => device.role === undefined || device.role === "input",
+  );
   $: configurations = workspace.snapshot?.configurations ?? [];
   $: managedConfigurations =
     capabilities.find((item) => item.name === "managed_configurations") ??
@@ -141,11 +178,20 @@
   // in the selected geometry. It never guesses a larger physical layout or
   // presents unverified KMonad key aliases as editor options.
   $: basicKeyOptions = activeGeometry?.keys ?? [];
+  // The palette is an action catalog, not another representation of the
+  // physical layout. Repeated source codes (for example on a split board)
+  // therefore appear once, in a predictable category and alphabetical order.
+  $: paletteKeyOptions = [
+    ...new Map(basicKeyOptions.map((key) => [key.source_key, key])).values(),
+  ].sort(comparePaletteKeys);
   $: activeRows = activeGeometry
     ? [...new Set(activeGeometry.keys.map((key) => key.row))].sort(
         (left, right) => left - right,
       )
     : [];
+  $: activeLayer = activeProfile?.layers.find(
+    (layer) => layer.id === selectedLayerID,
+  );
   $: editorOpen = view === "editor" && Boolean(activeProfile);
   $: currentPreview =
     activeProfile &&
@@ -171,8 +217,32 @@
   function isConnected(device: Device) {
     return device.availability === "connected";
   }
-  function paletteLabel(key: GeometryTemplate["keys"][number]) {
-    const compactLabels: Record<string, string> = { bspc: "Bksp", fwd: "Fwd" };
+  function isConfigurable(device: Device) {
+    return device.role === undefined || device.role === "input";
+  }
+  function paletteKeyGroup(key: KeyOption) {
+    if (/^[0-9]$/.test(key.source_key)) return 0;
+    if (/^[a-z]$/.test(key.source_key)) return 1;
+    if (modifierSourceKeys.has(key.source_key)) return 2;
+    return 3;
+  }
+  function comparePaletteKeys(left: KeyOption, right: KeyOption) {
+    const groupDifference = paletteKeyGroup(left) - paletteKeyGroup(right);
+    if (groupDifference) return groupDifference;
+    if (paletteKeyGroup(left) === 0) {
+      return Number(left.source_key) - Number(right.source_key);
+    }
+    return (
+      left.label.localeCompare(right.label, undefined, {
+        sensitivity: "base",
+      }) || left.source_key.localeCompare(right.source_key)
+    );
+  }
+  function paletteLabel(key: KeyOption) {
+    const compactLabels: Record<string, string> = {
+      bspc: "Bksp",
+      fwd: "Fwd",
+    };
     return compactLabels[key.source_key] ?? key.label;
   }
   function terminal(state: string) {
@@ -212,7 +282,8 @@
   function behaviorFor(sourceKey: string): ProfileBehavior | undefined {
     return activeProfile?.assignments?.find(
       (assignment) =>
-        assignment.layer_id === "base" && assignment.source_key === sourceKey,
+        assignment.layer_id === selectedLayerID &&
+        assignment.source_key === sourceKey,
     )?.behavior;
   }
   function behaviorLabel(
@@ -223,7 +294,23 @@
     if (behavior.kind === "key") return behavior.key ?? sourceKey;
     if (behavior.kind === "transparent") return "Pass through";
     if (behavior.kind === "disabled") return "Disabled";
+    if (behavior.kind === "tap_hold") {
+      return `Tap ${behavior.tap?.key ?? "…"} / hold ${
+        behavior.hold?.kind === "hold_layer"
+          ? layerName(behavior.hold.target)
+          : (behavior.hold?.key ?? "…")
+      }`;
+    }
+    if (behavior.kind === "hold_layer")
+      return `Hold ${layerName(behavior.target)}`;
+    if (behavior.kind === "switch_layer")
+      return `Switch ${layerName(behavior.target)}`;
+    if (behavior.kind === "alias") return `@${behavior.target}`;
+    if (behavior.kind === "macro") return `Macro ${behavior.target}`;
     return humanize(behavior.kind);
+  }
+  function layerName(id: string | undefined) {
+    return activeProfile?.layers.find((layer) => layer.id === id)?.name ?? id;
   }
   function clearPolling() {
     if (pollTimer) clearInterval(pollTimer);
@@ -291,7 +378,7 @@
   }
 
   function openIdentify(device: Device) {
-    if (!canIdentify || !isConnected(device)) return;
+    if (!canIdentify || !isConfigurable(device) || !isConnected(device)) return;
     selectedDevice = device;
     operation = null;
     feedback = "";
@@ -301,8 +388,10 @@
     if (operation && !terminal(operation.state)) void cancelIdentify();
     identifyOpen = false;
   }
-  function handleGlobalKeydown(event: KeyboardEvent) {
+  function handleIdentifyKeydown(event: KeyboardEvent) {
     if (event.key === "Escape" && identifyOpen) closeIdentify();
+  }
+  function handleEditorKeydown(event: KeyboardEvent) {
     if (
       !editorOpen ||
       selectedSourceKey ||
@@ -325,8 +414,12 @@
       keyFlashTimer = undefined;
     }, 240);
   }
+  function handleGlobalKeydown(event: KeyboardEvent) {
+    handleIdentifyKeydown(event);
+    handleEditorKeydown(event);
+  }
   function openDraft(device: Device) {
-    if (!canShowDevices) return;
+    if (!canShowDevices || !isConfigurable(device)) return;
     selectedDevice = device;
     feedback = "";
     profilePreview = null;
@@ -400,6 +493,7 @@
   }
   function schedulePreview(draft: Profile) {
     if (previewTimer) clearTimeout(previewTimer);
+    if (keyFlashTimer) clearTimeout(keyFlashTimer);
     const generation = ++previewGeneration;
     previewBusy = true;
     previewTimer = setTimeout(() => {
@@ -524,7 +618,6 @@
     clearPolling();
     clearManagerCheckTimer();
     if (previewTimer) clearTimeout(previewTimer);
-    if (keyFlashTimer) clearTimeout(keyFlashTimer);
     stopWorkspaceEvents?.();
   });
 </script>
@@ -612,11 +705,11 @@
         <div class="list-caption">
           <span>YOUR KEYBOARDS</span><span
             >{canShowDevices
-              ? `${devices.length} known`
+              ? `${visibleBoards.length} known`
               : "Waiting for manager capability"}</span
           >
         </div>
-        {#if canShowDevices && devices.length === 0}
+        {#if canShowDevices && visibleBoards.length === 0}
           <section class="empty-state">
             <span aria-hidden="true">⌨</span>
             <h2>A little quiet here.</h2>
@@ -627,7 +720,7 @@
           </section>
         {:else if canShowDevices}
           <div class="device-list">
-            {#each devices as device (device.id)}
+            {#each visibleBoards as device (device.id)}
               {@const deviceConfigurations = configurationsForDevice(device)}
               <article class:offline={!isConnected(device)} class="device-card">
                 <div class="device-glyph" aria-hidden="true">⌨</div>
@@ -663,27 +756,28 @@
                   <button
                     class="button text identify-trigger"
                     on:click={() => openIdentify(device)}
-                    disabled={!canIdentify || !isConnected(device)}
+                    disabled={!canIdentify ||
+                      !isConfigurable(device) ||
+                      !isConnected(device)}
                     aria-label="Identify"
                     title={!canIdentify
                       ? deviceIdentification.reason
                       : !isConnected(device)
                         ? "Identification needs a connected keyboard."
                         : "Identify this keyboard"}
-                    ><svg viewBox="0 0 24 24" aria-hidden="true"
-                      ><path d="M12 4a8 8 0 1 1-8 8" /><path
-                        d="M12 8a4 4 0 1 1-4 4"
-                      /><path d="M4 4l8 8" /><circle
-                        cx="12"
-                        cy="12"
-                        r="1.5"
-                      /></svg
-                    ></button
+                    ><svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 4a8 8 0 1 1-8 8" />
+                      <path d="M12 8a4 4 0 1 1-4 4" />
+                      <path d="M4 4l8 8" />
+                      <circle cx="12" cy="12" r="1.5" />
+                    </svg></button
                   >
                   <button
                     class="button primary"
                     on:click={() => openDraft(device)}
-                    disabled={!canShowDevices || geometries.length === 0}
+                    disabled={!canShowDevices ||
+                      !isConfigurable(device) ||
+                      geometries.length === 0}
                     title={geometries.length === 0
                       ? "Loading verified keyboard geometries."
                       : profileForDevice(device)
@@ -708,7 +802,8 @@
                         type="checkbox"
                         checked={configuration.enabled}
                         disabled={!!lifecycleBusyID ||
-                          !managedConfigurations.available}
+                          !managedConfigurations.available ||
+                          !isConfigurable(device)}
                         on:change={(event) =>
                           setLifecycleEnabled(
                             configuration,
@@ -752,15 +847,12 @@
                   aria-label="Identify"
                   title="Device discovery is unavailable"
                   disabled
-                  ><svg viewBox="0 0 24 24" aria-hidden="true"
-                    ><path d="M12 4a8 8 0 1 1-8 8" /><path
-                      d="M12 8a4 4 0 1 1-4 4"
-                    /><path d="M4 4l8 8" /><circle
-                      cx="12"
-                      cy="12"
-                      r="1.5"
-                    /></svg
-                  ></button
+                  ><svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 4a8 8 0 1 1-8 8" />
+                    <path d="M12 8a4 4 0 1 1-4 4" />
+                    <path d="M4 4l8 8" />
+                    <circle cx="12" cy="12" r="1.5" />
+                  </svg></button
                 ><button class="button primary" disabled>Set up</button>
               </div>
             </article>
@@ -846,14 +938,17 @@
               ? "MANAGED PROFILE"
               : "DRAFT ONLY"}</span
           >
-          {#if previewBusy}<span
+          {#if previewBusy}
+            <span
               class="configuration-indicator checking"
               aria-label="Checking draft preview"
-
-            ></span>{:else if currentPreview?.validation.outcome === "valid"}<span
+            ></span>
+          {:else if currentPreview?.validation.outcome === "valid"}
+            <span
               class="configuration-indicator valid"
               aria-label="Valid configuration"><i></i>Valid configuration</span
-            >{/if}
+            >
+          {/if}
           <button
             class="button primary editor-apply"
             type="button"
@@ -910,47 +1005,45 @@
                 </div>
               {/each}
             </div>
-            {#if activeProfile.apply_pending}<p class="apply-status">
+            {#if activeProfile.apply_pending}
+              <p class="apply-status">
                 An Apply sent at {new Date(
                   activeProfile.apply_pending.started_at,
                 ).toLocaleString()} has an unknown outcome. To prevent a duplicate
                 configuration, KeyboarDeer will not retry it automatically.
-              </p>{:else if applyOperation}<p class="apply-status">
-                Manager Apply: {humanize(applyOperation.state)} — {applyOperation.reason}
-              </p>{/if}
+              </p>
+            {:else if applyOperation}
+              <p class="apply-status">
+                Manager Apply: {humanize(applyOperation.state)} —
+                {applyOperation.reason}
+              </p>
+            {/if}
             {#if feedback}<p class="inline-feedback" role="status">
                 {feedback}
               </p>{/if}
           </div>
           <section class="key-palette" aria-label="Basic key assignments">
             <div class="palette-buttons">
-              {#each activeRows as row}
-                <div class="palette-row">
-                  {#each basicKeyOptions.filter((key) => key.row === row) as key (key.id)}
-                    <button
-                      class="button secondary palette-key"
-                      style={`--key-width: ${key.width}; --key-gap-before: ${key.gap_before ?? 0}`}
-                      on:click={() =>
-                        assignBaseBehavior({
-                          kind: "key",
-                          key: key.source_key,
-                        })}
-                      disabled={profileBusy}
-                      title={`Assign ${key.label} (${key.source_key})`}
-                      ><span>{paletteLabel(key)}</span><small
-                        >{key.source_key}</small
-                      ></button
-                    >
-                  {/each}
-                </div>
-              {/each}
-              <div class="palette-row palette-utility">
+              {#each paletteKeyOptions as key (key.source_key)}
                 <button
-                  class="button secondary palette-disable"
-                  on:click={() => assignBaseBehavior({ kind: "disabled" })}
-                  disabled={profileBusy}>Disable selected key</button
+                  class="button secondary palette-key"
+                  on:click={() =>
+                    assignBaseBehavior({
+                      kind: "key",
+                      key: key.source_key,
+                    })}
+                  disabled={profileBusy}
+                  title={`Assign ${key.label} (${key.source_key})`}
+                  ><span>{paletteLabel(key)}</span><small
+                    >{key.source_key}</small
+                  ></button
                 >
-              </div>
+              {/each}
+              <button
+                class="button secondary palette-disable"
+                on:click={() => assignBaseBehavior({ kind: "disabled" })}
+                disabled={profileBusy}>Disable selected key</button
+              >
             </div>
           </section>
         {:else}

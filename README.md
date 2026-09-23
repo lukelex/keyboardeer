@@ -39,27 +39,48 @@ These are design goals, not currently available features.
 
 ## Still growing its antlers
 
-**Status: interface design and implementation planning.** This repository
-contains the project identity, low-fidelity wireframes, a clickable
-high-fidelity prototype, and an API integration plan. There is no installable
-application yet. The selected stack is **Wails + Go + Svelte 5 + TypeScript**.
+**Status: desktop foundation in progress.** This repository contains the project
+identity, low-fidelity wireframes, a clickable high-fidelity prototype, an API
+integration plan, and a Wails desktop shell. The selected stack is **Wails + Go
++ Svelte 5 + TypeScript**. The shell deliberately keeps manager-dependent
+controls disabled until their real API integration is available.
 
 The next milestones are:
 
 - [x] Design the choose → edit → review workflow in low- and high-fidelity mockups.
 - [x] Select the GUI stack and document the manager boundary.
-- [ ] Scaffold the application and connect the implemented API methods.
+- [x] Scaffold the application with reproducible frontend/backend checks.
+- [ ] Connect the implemented manager API methods.
 - [ ] Ship a capability-aware, read-only device view.
 - [ ] Implement profiles, visual editing, and validation preview.
 - [ ] Connect safe apply and lifecycle operations as the manager provides them.
 
+### Run the desktop shell
+
+On Linux with the [documented prerequisites](docs/development.md), launch the current desktop app with:
+
+```sh
+./scripts/desktop.sh
+```
+
+Manager-dependent controls stay disabled until the connected manager advertises the required API capabilities.
+
 ### Explore the design and plan
 
+The current interface work covers Keyboards, Setup, Identify, the bottom-palette
+Keymap editor, Layers, Diagnostics, and read-only External configuration.
+Profiles and Review & Apply are parked for a later iteration.
+Key edits are checked continuously in the current design: valid state is subtle,
+while invalid assignments explain their cause and offer per-key draft recovery.
+
 - [Interface mockups and viewing instructions](docs/design/README.md)
+- [Current high-fidelity workspace](docs/design/high-fidelity-workspace.html)
 - [Project description](docs/project-description.md)
 - [Verified manager API status](docs/manager-api-status.md)
 - [Integration roadmap](docs/gui-integration-roadmap.md)
 - [Completion checklist](TODO.md)
+- [Live validation and per-key recovery](docs/live-validation.md)
+- [Development setup and commands](docs/development.md)
 
 The manager already implements device listing, keypress identification, and
 candidate preview through API v1. Capability reporting, full snapshots,

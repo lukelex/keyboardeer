@@ -3,6 +3,7 @@
     {
       "id": "dev_test",
       "display_name": "Contract fixture keyboard",
+      "role": "manager_output",
       "availability": "mystery_future_state",
       "identity_stability": "unknown",
       "configured_by": [],

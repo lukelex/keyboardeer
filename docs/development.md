@@ -7,6 +7,8 @@
 - Node.js **22.12+** and npm **10+**
 - Linux desktop development dependencies required by Wails (WebKitGTK, GTK3,
   and build tooling); follow the [Wails Linux prerequisites](https://wails.io/docs/gettingstarted/installation/#linux).
+- On Arch Linux: `sudo pacman -S --needed gtk3 webkit2gtk-4.1`. The launcher
+  detects the 4.1 ABI and selects Wails' matching build tag automatically.
 
 The lockfile is authoritative for frontend dependencies. Do not substitute
 manager CLI output, files, or input-device access for the versioned API.

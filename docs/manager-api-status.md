@@ -19,6 +19,15 @@ the missing-output preview failure remained. It was then updated to
 input and output forms, and a real behavior-only preview returned
 `validation.valid` from KMonad dry-run.
 
+**Device-role contract:** Unreleased manager worktree based on commit
+[`14eec6b63bbf`](https://github.com/lukelex/kmonad-device-manager/commit/14eec6b63bbf)
+adds `Device.role` to `snapshot.get` and `device.list`. Supported values are `input` and
+`manager_output`. A `manager_output` is a manager-created KMonad uinput-sink
+device and must not be shown, identified, previewed, configured, or have
+bindings enabled/disabled by KeyboarDeer. KeyboarDeer treats a missing role as
+`input` for compatibility with older managers, and uses no device-name
+heuristic.
+
 This is KeyboarDeer's maintained list of manager interactions. It is a source
 compatibility audit, **not** a statement about released manager binaries or a
 substitute for an integration smoke test. Re-audit this matrix whenever the

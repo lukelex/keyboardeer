@@ -68,6 +68,10 @@ managed-configuration lifecycle operations from the manager.
 
 ## Delivery sequence
 
+Current interface scope is the seven-screen keyboard-draft workspace. Profiles
+and Review & Apply are parked. **Live validation is part of editing now**, not
+dependent on those future screens; see [live validation and recovery](live-validation.md).
+
 ### 0. Lock the boundary and shared fixtures
 
 **KeyboarDeer**
@@ -141,7 +145,7 @@ any shell-out, polling of manager-private files, or hardware access by the GUI.
 updates, and identification results reach the GUI reliably, while a dropped
 event stream safely recovers from a snapshot.
 
-### 3. Managed profile editor and preview
+### 3. Keyboard draft editor and continuous validation
 
 **KeyboarDeer**
 
@@ -151,20 +155,33 @@ event stream safely recovers from a snapshot.
 - Compile the profile into platform-neutral KMonad behavior only. The generated
   `.kbd` candidate remains an artifact and is never parsed back into the
   profile.
-- Add a preview action that uses `validation.preview`, rendering `valid`,
-  `rejected`, and temporary `blocked` outcomes distinctly, including structured
-  diagnostics and remediation.
+- Schedule `validation.preview` for the complete compiled candidate after each
+  semantic key/layer/behavior/geometry edit, restore, undo/redo, and targeted
+  revert. Pure selection and browsing reuse the current result.
+- Coalesce rapid changes, bound concurrent requests, and tie results to local
+  draft revision, device, connection, candidate, and environment generation.
+  Immediately remove stale success; discard out-of-date responses.
+- Keep **Keymap is valid** subtle. Make rejection prominent with affected-key
+  and layer markers, cause/remedy details, and issue-to-key navigation. Show
+  blocked/unavailable states distinctly; they do not blame key assignments.
+- Retain the last fully validated draft as recovery provenance, but revert only
+  the selected invalid assignment in the current draft. Preserve other edits,
+  record undo, and revalidate. Do not guess key locations for general errors.
+- Maintain compiler source mapping; the current manager diagnostics contract
+  does not guarantee key-level locations. Keep unmapped errors at keymap level.
 
 **Manager**
 
 - Use the implemented side-effect-free `validation.preview` model route.
   Verify preview/apply consistency when managed lifecycle methods land.
 
-**Exit criterion:** A preview cannot persist a configuration, claim a device,
-or alter a running mapping. A disconnected/conflicting device is visibly
-blocked rather than reported as invalid behavior.
+**Exit criterion:** Every edited candidate is checked automatically without
+blocking interaction. Stale results cannot turn the indicator green; individual
+invalid assignments can be repaired without losing other edits. Preview cannot
+persist a configuration, claim a device, or alter a running mapping. A
+disconnected/conflicting device is blocked rather than reported as invalid behavior.
 
-### 4. Safe managed configuration lifecycle
+### 4. Safe managed configuration lifecycle (parked)
 
 **KeyboarDeer**
 
@@ -209,9 +226,9 @@ interrupts another.
 | 5 | KeyboarDeer | Connect Devices screen to manager snapshot/capabilities | 2, 4 |
 | 6 | Manager | Implement event stream/resync | EVENT-001/002 |
 | 7 | KeyboarDeer | Add live updates and identify UX | 5–6 |
-| 8 | KeyboarDeer | Build local profiles, compiler, editor, and preview | 1, 3; can proceed alongside events |
+| 8 | KeyboarDeer | Build keyboard drafts, compiler/source map, live whole-draft validation, and per-key recovery | 1, 3; can proceed alongside events |
 | 9 | Manager | Implement transactional apply, rollback, and managed storage | CFG-003–006 |
-| 10 | KeyboarDeer | Connect managed lifecycle UX and meet release gates | 8–9 |
+| 10 | KeyboarDeer | Connect managed lifecycle UX and meet release gates (parked) | 8–9 |
 
 ## References
 

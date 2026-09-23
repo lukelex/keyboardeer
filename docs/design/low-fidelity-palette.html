@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KeyboarDeer · Bottom-palette wireframe</title>
+  <link rel="stylesheet" href="palette-wireframe.css">
+</head>
+<body>
+  <header class="design-header">
+    <div><span class="eyebrow">KEYBOARDEER / CHOSEN DIRECTION / LOW FIDELITY</span><h1>See the options. Pick a key.</h1></div>
+    <a href="low-fidelity-pages.html">All application screens ↗</a>
+  </header>
+
+  <main class="app-frame">
+    <header class="app-header">
+      <div><strong id="editor-device-name">Keychron Q1</strong><span class="separator">/</span><span id="editor-profile-name">Everyday profile</span><span class="status">Connected</span></div>
+      <span class="prototype-label">Interactive wireframe · simulated data</span>
+    </header>
+
+    <nav class="editor-page-links" aria-label="Keyboard workspace"><a href="low-fidelity-pages.html#keyboards">← Keyboards</a><strong aria-current="page">Keymap</strong><a href="low-fidelity-pages.html#layers">Layers</a><a href="low-fidelity-pages.html#profiles">Profiles</a><a href="low-fidelity-pages.html#identify">Identify</a><span>Linked screens use example data</span></nav>
+
+    <section class="layout-section" aria-labelledby="layout-title">
+      <div class="layout-toolbar">
+        <div class="layer-control"><h2 id="layout-title">01 <span>Select a key</span></h2><span class="divider"></span><span class="label">Layer</span><div class="layer-tabs" role="tablist" aria-label="Preview layer"><button role="tab" aria-selected="true" data-layer="Base">0 · Base</button><button role="tab" aria-selected="false" tabindex="-1" data-layer="Navigation">1 · Navigation</button></div></div>
+        <span class="layout-meta">ANSI · 75% <span>Preview only</span></span>
+      </div>
+      <div class="keyboard-scroll"><div id="physical-keyboard" class="physical-keyboard" aria-label="Select a physical key to remap"></div></div>
+      <div class="canvas-caption"><span>Choose a key above, then assign anything from the panel below.</span><span><i class="selected-marker"></i> Selected <i class="changed-marker"></i> Changed in draft</span></div>
+    </section>
+
+    <div class="selection-strip">
+      <div class="selection-summary"><span class="label">SELECTED</span><strong id="selected-name">Caps Lock</strong><span class="separator">→</span><span id="selected-assignment">Caps Lock</span><span id="selected-layer" class="layer-badge">Base layer</span></div>
+      <button id="restore-key" class="plain-button">Restore original</button>
+    </div>
+
+    <section class="palette-section" aria-labelledby="palette-title">
+      <div class="palette-heading"><div><h2 id="palette-title">02 <span>Choose its new action</span></h2><p>One click assigns to your draft. Nothing changes on your keyboard yet.</p></div><label class="search"><span aria-hidden="true">⌕</span><input type="search" id="key-search" placeholder="Search all actions…" aria-label="Search all key actions"><kbd>/</kbd></label></div>
+      <div class="category-bar"><div class="category-tabs" role="tablist" aria-label="Key action category"><button role="tab" aria-selected="true" data-category="Basic">Basic</button><button role="tab" aria-selected="false" tabindex="-1" data-category="Modifiers">Modifiers</button><button role="tab" aria-selected="false" tabindex="-1" data-category="Layers">Layers</button><button role="tab" aria-selected="false" tabindex="-1" data-category="Media & system">Media & system</button><button role="tab" aria-selected="false" tabindex="-1" data-category="Tap & hold">Tap & hold</button></div><span id="option-count" class="option-count"></span></div>
+      <div id="palette" class="palette-content" aria-label="Available assignments"></div>
+      <div class="palette-description"><span id="action-description">Tip: Escape is at the top left. Select it to give Caps Lock a new job.</span><span>Click to assign · Undo anytime</span></div>
+    </section>
+
+    <footer class="draft-footer"><div><strong id="draft-count">No changes in draft</strong><p id="draft-status" role="status" aria-live="polite">Everyday is active. Your running mapping is unchanged.</p></div><div class="footer-actions"><button id="undo" class="secondary-button" disabled>↶ Undo</button><button id="review" class="primary-button" disabled>Review draft <span>→</span></button></div></footer>
+  </main>
+
+  <section class="design-notes" aria-label="Design decisions">
+    <div><span class="note-number">A</span><h3>Keyboard above, choices below.</h3><p>The VIA/Vial pattern keeps the destination and the available assignments visible together. No inspector to open.</p></div>
+    <div><span class="note-number">B</span><h3>Recognition before recall.</h3><p>Basic keys use familiar keyboard positions. Categories expose other actions; search looks across every category.</p></div>
+    <div><span class="note-number">C</span><h3>Fast editing, deliberate apply.</h3><p>Clicking an option updates the draft immediately. Undo and review stay visible; applying remains a separate step.</p></div>
+  </section>
+  <footer class="reference">Layout reference: <a href="https://getreuer.info/posts/keyboards/vial/vial-editor.webp">Vial editor screenshot, via getreuer.info</a>. This variant explores layout and interaction, not final styling or the complete KMonad action catalog.</footer>
+
+  <dialog id="review-dialog" aria-labelledby="review-title"><div class="review-content"><span class="eyebrow" id="editor-review-profile">EVERYDAY / DRAFT REVIEW</span><h2 id="review-title">Your changes, at a glance.</h2><div id="review-list"></div><p class="review-note">In the application, manager validation and explicit apply follow this review. This wireframe only edits a temporary draft.</p><p class="review-note"><a href="low-fidelity-pages.html#review">Explore the full review & apply flow →</a><br>Opens a separate, fixed example of validation and activation states.</p><button id="close-review" class="primary-button">Back to editor</button></div></dialog>
+  <script src="palette-wireframe.js"></script>
+</body>
+</html>

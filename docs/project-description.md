@@ -265,3 +265,23 @@ Start with a read-only Devices view, then local profiles and visual editing,
 manager validation preview, and revision-aware managed apply. Advanced behaviors
 and additional layouts follow the same profile/compiler boundary. The visual
 prototype illustrates the intended UX; it does not establish backend readiness.
+
+The chosen editor direction follows VIA/Vial: a keyboard canvas above a
+full-width, categorized action palette. Select a physical key, then select an
+action below to update its draft assignment. Surrounding screens use the same
+compact, full-width structure with contextual actions at the bottom. See the
+[linked low-fidelity application flow](design/low-fidelity-pages.html).
+
+Current interface scope: Keyboards, Setup, Identify, Keymap, Layers, Diagnostics,
+and External configuration. Profiles and Review & Apply are parked for a later
+iteration. The [current high-fidelity workspace](design/high-fidelity-workspace.html)
+edits per-keyboard drafts only; the broader profile and apply architecture above
+remains a future product goal, not a current interface deliverable.
+
+Key assignment includes automatic, side-effect-free validation of the complete
+draft after every semantic edit. A valid map gets a subtle status; invalid
+assignments get prominent explanations, key/layer markers, and per-key revert
+actions that preserve other edits. Responses are revision-bound and blocked
+validation is distinct from invalid behavior. See the
+[live validation and recovery plan](live-validation.md). This does not activate
+draft changes or reinstate the parked Review & Apply workflow.

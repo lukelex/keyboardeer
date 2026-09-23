@@ -99,6 +99,34 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
                   row: 0,
                   width: 1,
                 },
+                {
+                  id: "z",
+                  label: "Z",
+                  source_key: "z",
+                  row: 1,
+                  width: 1,
+                },
+                {
+                  id: "left-control",
+                  label: "Ctrl",
+                  source_key: "lctl",
+                  row: 1,
+                  width: 1.3,
+                },
+                {
+                  id: "digit-2",
+                  label: "2",
+                  source_key: "2",
+                  row: 2,
+                  width: 1,
+                },
+                {
+                  id: "a",
+                  label: "A",
+                  source_key: "a",
+                  row: 2,
+                  width: 1,
+                },
               ],
             },
           ],
@@ -108,7 +136,10 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
               name,
               device_id: deviceID,
               draft_revision: 1,
-              geometry: { id: geometryID, source_keys: ["caps"] },
+              geometry: {
+                id: geometryID,
+                source_keys: ["caps", "z", "lctl", "2", "a"],
+              },
               layers: [{ id: "base", name: "Base" }],
               assignments: null,
               settings: { version: 1 },
@@ -176,12 +207,10 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   }, workspace);
   await page.goto("/");
   await expect(page.getByText("Manager ready", { exact: true })).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Refresh", exact: true }),
-  ).toHaveCount(0);
   const identify = page.getByRole("button", { name: "Identify", exact: true });
   await expect(identify).toBeEnabled();
   await expect(identify).toHaveAttribute("title", "Identify this keyboard");
+  await expect(identify.locator("svg")).toBeVisible();
   await identify.click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page
@@ -203,12 +232,21 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   ).toBeVisible();
   await page.getByRole("button", { name: "Set up", exact: true }).click();
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
-  await expect(page.locator(".editor-key")).toHaveCount(1);
-  await expect(page.locator(".editor-key").first()).toHaveCSS("width", "42px");
-  await expect(page.locator(".editor-key").first()).toHaveCSS("height", "42px");
-  await page.keyboard.press("CapsLock");
-  await expect(page.locator(".editor-key").first()).toHaveClass(/flashing-key/);
-  await page.locator(".editor-key").first().click();
+  await expect(page.locator(".app-header")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "← All keyboards", exact: true }),
+  ).toBeVisible();
+  const editorHeading = await page.locator(".editor-heading").boundingBox();
+  expect(editorHeading).not.toBeNull();
+  expect(Math.round(editorHeading!.height)).toBeGreaterThanOrEqual(54);
+  await expect(page.locator(".editor-key")).toHaveCount(5);
+  const firstEditorKey = await page
+    .locator(".editor-key")
+    .first()
+    .boundingBox();
+  expect(firstEditorKey).not.toBeNull();
+  expect(Math.round(firstEditorKey!.width)).toBe(42);
+  expect(Math.round(firstEditorKey!.height)).toBe(42);
   await expect(page.locator(".editor-scroll-region")).toHaveCSS(
     "overflow-y",
     "auto",
@@ -220,18 +258,42 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   expect(palette!.x).toBe(0);
   expect(Math.round(palette!.width)).toBe(viewport!.width);
   expect(Math.round(palette!.y + palette!.height)).toBe(viewport!.height);
+  const paletteKeys = page.locator(".palette-key");
+  await expect(paletteKeys).toHaveCount(5);
+  expect(
+    await paletteKeys.evaluateAll((keys) =>
+      keys.map((key) => key.getAttribute("title")),
+    ),
+  ).toEqual([
+    "Assign 2 (2)",
+    "Assign A (a)",
+    "Assign Z (z)",
+    "Assign Caps (caps)",
+    "Assign Ctrl (lctl)",
+  ]);
+  expect(
+    await paletteKeys.evaluateAll((keys) =>
+      keys.map((key) => Math.round(key.getBoundingClientRect().width)),
+    ),
+  ).toEqual([52, 52, 52, 52, 52]);
   await expect(page.getByText("SELECTED KEY", { exact: true })).toHaveCount(0);
+  await page.keyboard.press("CapsLock");
+  await expect(page.locator(".editor-key").first()).toHaveClass(/flashing-key/);
+  await page.locator(".editor-key").first().click();
   await page
     .locator('.palette-buttons button[title="Assign Caps (caps)"]')
     .click();
   await expect(
-    page.getByText("Base layer · saved locally · revision 2"),
+    page.getByRole("heading", { name: "Unconfigured keyboard draft" }),
   ).toBeVisible();
-  await expect(page.locator(".editor-key small")).toHaveText("caps");
+  await expect(page.locator(".editor-key").first().locator("small")).toHaveText(
+    "caps",
+  );
   await expect(page.locator(".configuration-indicator.valid")).toBeVisible();
   await expect(
     page.getByText("Manager preview: Valid", { exact: true }),
   ).toHaveCount(0);
+  await expect(page.getByText("MANAGED APPLY", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Apply to keyboard" }).click();
   await expect(
     page.getByText(
@@ -246,4 +308,52 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
     page.getByRole("button", { name: "Edit draft", exact: true }),
   ).toBeEnabled();
   expect(errors).toEqual([]);
+});
+
+test("hides manager output devices while retaining legacy role-less inputs", async ({
+  page,
+}) => {
+  const mixedWorkspace: ManagerWorkspace = structuredClone(workspace);
+  mixedWorkspace.snapshot!.devices = [
+    {
+      ...workspace.snapshot!.devices![0],
+      id: "input-device",
+      display_name: "Physical keyboard",
+      role: "input",
+    },
+    {
+      ...workspace.snapshot!.devices![0],
+      id: "manager-output",
+      display_name: "kmonad-device-manager-2438b2cc423091fb",
+      role: "manager_output",
+    },
+    {
+      ...workspace.snapshot!.devices![0],
+      id: "legacy-device",
+      display_name: "Legacy keyboard",
+    },
+  ];
+  await page.addInitScript((fixture) => {
+    window.go = {
+      main: {
+        App: {
+          Info: async () => ({ name: "KeyboarDeer", version: "test" }),
+          Workspace: async () => fixture,
+          Profiles: async () => [],
+          Geometries: async () => [],
+        },
+      },
+    };
+  }, mixedWorkspace);
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Physical keyboard" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Legacy keyboard" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("kmonad-device-manager-2438b2cc423091fb"),
+  ).toHaveCount(0);
+  await expect(page.getByText("2 known", { exact: true })).toBeVisible();
 });

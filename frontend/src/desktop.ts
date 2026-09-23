@@ -23,6 +23,8 @@ export interface ManagerStatus {
 export interface Device {
   id: string;
   display_name: string;
+  /** Missing on manager versions that predate semantic device roles. */
+  role?: string;
   availability: string;
   identity_stability: string;
   configured_by: string[] | null;
