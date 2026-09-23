@@ -195,6 +195,17 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   await page.getByRole("button", { name: "Set up", exact: true }).click();
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
   await expect(page.locator(".editor-key")).toHaveCount(1);
+  await expect(page.locator(".editor-scroll-region")).toHaveCSS(
+    "overflow-y",
+    "auto",
+  );
+  const palette = await page.locator(".key-palette").boundingBox();
+  const viewport = page.viewportSize();
+  expect(palette).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(palette!.x).toBe(0);
+  expect(Math.round(palette!.width)).toBe(viewport!.width);
+  expect(Math.round(palette!.y + palette!.height)).toBe(viewport!.height);
   await expect(page.getByText("SELECTED KEY", { exact: true })).toHaveCount(0);
   await page
     .locator('.palette-buttons button[title="Assign Caps (caps)"]')

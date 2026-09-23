@@ -93,6 +93,7 @@
         (left, right) => left - right,
       )
     : [];
+  $: editorOpen = view === "editor" && Boolean(activeProfile);
   $: currentPreview =
     activeProfile &&
     profilePreview?.profile_id === activeProfile.id &&
@@ -432,7 +433,7 @@
 
 <svelte:head><title>{info.name}</title></svelte:head>
 
-<div class="app-shell">
+<div class:editor-mode={editorOpen} class="app-shell">
   <header class="app-header">
     <div class="brand">
       <img src="/appicon.png" alt="" width="44" height="44" />
@@ -458,7 +459,7 @@
     </div>
   </header>
 
-  <main>
+  <main class:editor-main={editorOpen}>
     {#if view === "devices"}
       <section aria-labelledby="keyboards-title">
         <div class="page-heading">
@@ -779,45 +780,109 @@
       </section>
     {:else if view === "editor" && activeProfile}
       <section class="editor-page" aria-labelledby="editor-title">
-        <button class="back-link" on:click={backToDevices}
-          >← All keyboards</button
-        >
-        <div class="page-heading">
-          <div>
-            <p class="eyebrow">{selectedDevice?.display_name ?? "KEYBOARD"}</p>
-            <h1 id="editor-title">{activeProfile.name}</h1>
-            <p>
-              Base layer · saved locally · revision {activeProfile.draft_revision}
-            </p>
-          </div>
-          <span class="build-label"
-            >{activeProfile.manager_configuration_id
-              ? "MANAGED PROFILE"
-              : "DRAFT ONLY"}</span
+        <div class="editor-heading">
+          <button class="back-link" on:click={backToDevices}
+            >← All keyboards</button
           >
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">
+                {selectedDevice?.display_name ?? "KEYBOARD"}
+              </p>
+              <h1 id="editor-title">{activeProfile.name}</h1>
+              <p>
+                Base layer · saved locally · revision {activeProfile.draft_revision}
+              </p>
+            </div>
+            <span class="build-label"
+              >{activeProfile.manager_configuration_id
+                ? "MANAGED PROFILE"
+                : "DRAFT ONLY"}</span
+            >
+          </div>
         </div>
         {#if activeGeometry}
-          <div class="keyboard-editor" aria-label={activeGeometry.name}>
-            {#each activeRows as row}
-              <div class="keyboard-row">
-                {#each activeGeometry.keys.filter((key) => key.row === row) as key (key.id)}
-                  <button
-                    class:selected-key={selectedSourceKey === key.source_key}
-                    class="editor-key"
-                    style={`--key-width: ${key.width}; --key-gap-before: ${key.gap_before ?? 0}`}
-                    on:click={() => (selectedSourceKey = key.source_key)}
-                    aria-pressed={selectedSourceKey === key.source_key}
-                  >
-                    <strong>{key.label}</strong><small
-                      >{behaviorLabel(
-                        behaviorFor(key.source_key),
-                        key.source_key,
-                      )}</small
+          <div class="editor-scroll-region">
+            <div class="keyboard-editor" aria-label={activeGeometry.name}>
+              {#each activeRows as row}
+                <div class="keyboard-row">
+                  {#each activeGeometry.keys.filter((key) => key.row === row) as key (key.id)}
+                    <button
+                      class:selected-key={selectedSourceKey === key.source_key}
+                      class="editor-key"
+                      style={`--key-width: ${key.width}; --key-gap-before: ${key.gap_before ?? 0}`}
+                      on:click={() => (selectedSourceKey = key.source_key)}
+                      aria-pressed={selectedSourceKey === key.source_key}
                     >
-                  </button>
-                {/each}
+                      <strong>{key.label}</strong><small
+                        >{behaviorLabel(
+                          behaviorFor(key.source_key),
+                          key.source_key,
+                        )}</small
+                      >
+                    </button>
+                  {/each}
+                </div>
+              {/each}
+            </div>
+            <section
+              class:rejected={currentPreview?.validation.outcome === "rejected"}
+              class="preview-status"
+              aria-live="polite"
+            >
+              <strong
+                >{previewBusy
+                  ? "Checking complete draft…"
+                  : currentPreview
+                    ? `Manager preview: ${humanize(currentPreview.validation.outcome)}`
+                    : "Preview not checked"}</strong
+              >
+              <p>
+                {currentPreview?.validation.reason ??
+                  "Every semantic edit is checked against the complete compiled draft."}
+              </p>
+              {#if currentPreview?.validation.outcome === "rejected"}
+                <p>
+                  No keyboard mapping has been applied. The manager did not
+                  provide a reliable key location for this result.
+                </p>
+              {/if}
+              {#if activeProfile.apply_pending}
+                <p>
+                  An Apply sent at {new Date(
+                    activeProfile.apply_pending.started_at,
+                  ).toLocaleString()} has an unknown outcome. To prevent a duplicate
+                  configuration, KeyboarDeer will not retry it automatically.
+                </p>
+              {:else if applyOperation}
+                <p>
+                  Manager Apply: {humanize(applyOperation.state)} —
+                  {applyOperation.reason}
+                </p>
+              {/if}
+            </section>
+            <div class="apply-actions">
+              <div>
+                <p class="eyebrow">MANAGED APPLY</p>
+                <p>
+                  The manager will render, validate, persist, and supervise this
+                  profile. It owns all device and KMonad lifecycle work.
+                </p>
               </div>
-            {/each}
+              <button
+                class="button primary"
+                type="button"
+                on:click={applyDraft}
+                disabled={!canApply || applyBusy}
+                title={canApply
+                  ? "Apply this validated draft to the keyboard"
+                  : "Apply requires a current valid manager preview, a connected keyboard, and the managed-configurations capability."}
+                >{applyBusy ? "Applying…" : "Apply to keyboard"}</button
+              >
+            </div>
+            {#if feedback}<p class="inline-feedback" role="status">
+                {feedback}
+              </p>{/if}
           </div>
           <section class="key-palette" aria-label="Basic key assignments">
             <div class="palette-buttons">
@@ -849,73 +914,22 @@
               </div>
             </div>
           </section>
-          <section
-            class:rejected={currentPreview?.validation.outcome === "rejected"}
-            class="preview-status"
-            aria-live="polite"
-          >
-            <strong
-              >{previewBusy
-                ? "Checking complete draft…"
-                : currentPreview
-                  ? `Manager preview: ${humanize(currentPreview.validation.outcome)}`
-                  : "Preview not checked"}</strong
-            >
-            <p>
-              {currentPreview?.validation.reason ??
-                "Every semantic edit is checked against the complete compiled draft."}
-            </p>
-            {#if currentPreview?.validation.outcome === "rejected"}
-              <p>
-                No keyboard mapping has been applied. The manager did not
-                provide a reliable key location for this result.
-              </p>
-            {/if}
-            {#if activeProfile.apply_pending}
-              <p>
-                An Apply sent at {new Date(
-                  activeProfile.apply_pending.started_at,
-                ).toLocaleString()} has an unknown outcome. To prevent a duplicate
-                configuration, KeyboarDeer will not retry it automatically.
-              </p>
-            {:else if applyOperation}
-              <p>
-                Manager Apply: {humanize(applyOperation.state)} —
-                {applyOperation.reason}
-              </p>
-            {/if}
-          </section>
-          <div class="apply-actions">
-            <div>
-              <p class="eyebrow">MANAGED APPLY</p>
-              <p>
-                The manager will render, validate, persist, and supervise this
-                profile. It owns all device and KMonad lifecycle work.
-              </p>
-            </div>
-            <button
-              class="button primary"
-              type="button"
-              on:click={applyDraft}
-              disabled={!canApply || applyBusy}
-              title={canApply
-                ? "Apply this validated draft to the keyboard"
-                : "Apply requires a current valid manager preview, a connected keyboard, and the managed-configurations capability."}
-              >{applyBusy ? "Applying…" : "Apply to keyboard"}</button
-            >
-          </div>
         {:else}
-          <section class="manager-notice" data-state="incomplete">
-            <span class="notice-symbol" aria-hidden="true">!</span>
-            <div>
-              <h2>Geometry unavailable</h2>
-              <p>This draft refers to a geometry this version cannot render.</p>
-            </div>
-          </section>
+          <div class="editor-scroll-region">
+            <section class="manager-notice" data-state="incomplete">
+              <span class="notice-symbol" aria-hidden="true">!</span>
+              <div>
+                <h2>Geometry unavailable</h2>
+                <p>
+                  This draft refers to a geometry this version cannot render.
+                </p>
+              </div>
+            </section>
+            {#if feedback}<p class="inline-feedback" role="status">
+                {feedback}
+              </p>{/if}
+          </div>
         {/if}
-        {#if feedback}<p class="inline-feedback" role="status">
-            {feedback}
-          </p>{/if}
       </section>
     {/if}
   </main>

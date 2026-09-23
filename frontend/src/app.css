@@ -24,6 +24,15 @@ button:focus-visible {
   display: grid;
   grid-template-rows: auto 1fr auto;
 }
+.app-shell.editor-mode {
+  height: 100dvh;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+.editor-mode footer {
+  display: none;
+}
 .app-header {
   align-items: center;
   background: #14382e;
@@ -118,6 +127,13 @@ main {
   max-width: 1090px;
   padding: clamp(45px, 9vh, 92px) 28px 62px;
   width: 100%;
+}
+main.editor-main {
+  margin: 0;
+  max-width: none;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
 }
 .page-heading {
   align-items: flex-start;
@@ -351,6 +367,27 @@ h1 {
   margin: 0 0 27px;
   padding: 0;
 }
+.editor-page {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.editor-heading {
+  background: #f7f5ed;
+  border-bottom: 1px solid #dfe5d6;
+  padding: 22px clamp(22px, 6vw, 88px);
+}
+.editor-heading .back-link {
+  margin-bottom: 18px;
+}
+.editor-scroll-region {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0 clamp(22px, 6vw, 88px) 32px;
+}
 .identify-card {
   align-items: center;
   background: #fffdf8;
@@ -556,7 +593,14 @@ h1 {
   white-space: nowrap;
 }
 .key-palette {
-  padding: clamp(16px, 3vw, 29px);
+  background: #fffdf8;
+  border-color: #d6e1cc;
+  border-radius: 0;
+  border-width: 1px 0 0;
+  box-shadow: 0 -7px 20px rgb(31 60 43 / 8%);
+  margin: 0;
+  padding: 12px clamp(22px, 6vw, 88px);
+  width: 100%;
 }
 .preview-status p {
   color: #647669;
