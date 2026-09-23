@@ -7,8 +7,10 @@
 in an isolated worktree and exercised `session.hello`, `manager.get`,
 `snapshot.get`, `device.list`, and `validation.preview` over its real Unix
 socket. The manager reported healthy Linux/evdev capabilities and a coherent
-two-device snapshot. The deliberately minimal preview candidate was rejected by
-KMonad as expected; no configuration was applied or device mapping changed.
+two-device snapshot. An otherwise-valid behavior model reached KMonad but was
+rejected because the manager-rendered `defcfg` lacked an output form (see the
+source-contract gap below); no configuration was applied or device mapping
+changed.
 
 This is KeyboarDeer's maintained list of manager interactions. It is a source
 compatibility audit, **not** a statement about released manager binaries or a
@@ -43,7 +45,7 @@ Relevant source:
 | `device.identify.start` | Implemented. One bounded 1–30-second session for a connected device. | Implemented. | Normal UI is capability-gated; harness can exercise it. |
 | `device.identify.cancel` | Implemented. | Implemented. | Only while the matching identification operation is live. |
 | `operation.get` | Implemented over the retained operation store, despite the historical helper name. | Implemented. | Can read identify and retained apply/lifecycle operations. Polling is useful before events are integrated. |
-| `validation.preview` | Implemented. Model preview is side-effect-free; returns valid, rejected, or blocked. | Implemented. | Use `{model:{device_id,behavior}}`; GUI profiles never supply `defcfg` or `device-file`. |
+| `validation.preview` | Implemented. Model preview is side-effect-free; returns valid, rejected, or blocked. | Implemented; successful model preview is blocked by the observed render gap. | Use `{model:{device_id,behavior}}`; GUI profiles never supply `defcfg` or `device-file`. |
 | `configuration.apply` | Implemented by `2516765`; transactional render, validation, persistence, activation confirmation, and rollback pipeline. | Not yet implemented. | Eventual combined create/update UI route. Revalidates at apply time. |
 | `configuration.create` / `configuration.update` | Implemented. Create accepts name/model; update requires configuration ID and expected revision. | Not yet implemented. | Managed lifecycle once local profiles/compiler are ready. |
 | `configuration.set_enabled` / `configuration.delete` | Implemented by `f8ea0ec`. Both require expected revision. | Not yet implemented. | Explicit runtime lifecycle; distinct from deleting a local profile. |
@@ -63,7 +65,7 @@ model, or a required runtime capability is unavailable.
 | Runtime health, desired/active revisions, conflicts | `snapshot.get` | Yes | Partial | Devices show associated configuration phase and desired/active revisions; add dedicated diagnostics and event-driven refresh. Do not derive health from names or CLI output. |
 | Identify a keyboard | `device.identify.start`, `operation.get`, `device.identify.cancel` | Yes | Partial | Current UI is capability-gated; smoke test it against a source build. |
 | Create and reopen an editor draft | None; application-owned persistence | N/A | Partial | Versioned atomic local persistence and one explicit US ANSI 60% geometry exist; create/reopen UI remains disabled until the visual editor lands. |
-| Compile behavior and live preview | `validation.preview` | Yes | Partial | Deterministic behavior-only compiler, source map, and typed profile bridge exist; add validation scheduler, diagnostics adapter, and UI. |
+| Compile behavior and live preview | `validation.preview` | Yes | Partial | Deterministic behavior-only compiler, source map, and typed profile bridge exist; the manager must render a complete runnable `defcfg` before model previews can succeed. Then add validation scheduler, diagnostics adapter, and UI. |
 | Receive device/runtime changes | `snapshot.get`, `events.subscribe` | Yes | Partial | The app coalesces stream events into fresh snapshots and emits workspace updates. Persist the cursor across restart and add reconnect/resync integration tests. |
 | Apply a managed profile | `configuration.create` / `update` / `apply`, then snapshot/events | Mostly | No | Local compiler/profile/editor and an idempotency decision below. |
 | Enable, disable, or delete managed runtime config | `configuration.set_enabled`, `configuration.delete` | Yes | No | Configuration inventory/UI, expected-revision handling, operation recovery. |
@@ -104,6 +106,17 @@ Validation diagnostics include severity, reason, remediation, and an optional
 resource. They do not promise a physical source key or behavior span. The
 per-key recovery design still needs KeyboarDeer's local compiler/source map and
 must leave unmappable manager errors at keymap level.
+
+### 5. Model rendering currently omits an output form
+
+The smoke test sent a standard `(defsrc …)/(deflayer …)` behavior model for a
+connected device. `validation.preview` reached KMonad, which rejected the
+manager-generated candidate with `Missing setting in 'defcfg': output`. At this
+revision `renderManagedConfiguration` emits only the manager-owned input form.
+This conflicts with the model contract needed by KeyboarDeer: the GUI must not
+choose a device-specific `defcfg` representation, but the manager must render
+a complete runnable one. Keep preview/apply UI disabled for this source revision
+until the manager supplies the output form (and re-run a valid-model smoke test).
 
 ## Required API behavior
 
