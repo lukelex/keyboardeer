@@ -207,6 +207,11 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   }, workspace);
   await page.goto("/");
   await expect(page.getByText("Manager ready", { exact: true })).toBeVisible();
+  const configurationState = page.locator(".configuration-state");
+  await expect(configurationState).toContainText("Managed fixture");
+  await expect(configurationState).toContainText("Desired");
+  await expect(configurationState).toContainText("Active");
+  await expect(configurationState).toContainText("Healthy");
   const identify = page.getByRole("button", { name: "Identify", exact: true });
   await expect(identify).toBeEnabled();
   await expect(identify).toHaveAttribute("title", "Identify this keyboard");

@@ -54,6 +54,7 @@ export interface Configuration {
   desired_revision: number;
   active_revision: number;
   runtime: RuntimeState;
+  last_operation?: Operation | null;
 }
 export interface Snapshot {
   state_revision: number;

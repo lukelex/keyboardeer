@@ -56,7 +56,7 @@ supervision code in KeyboarDeer.
 
 - [x] **DEV-01** Implement the Devices view with loading, empty, disconnected,
   inaccessible, unsupported, conflict, and manager-unavailable states.
-- [ ] **DEV-02** Join authoritative devices/configurations/diagnostics by opaque
+- [x] **DEV-02** Join authoritative devices/configurations/diagnostics by opaque
   IDs; separate device availability, desired revision, active revision, and
   runtime health. Never infer active profiles from `configured_by` names.
   **Upstream gate: MGR-02.**

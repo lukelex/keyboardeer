@@ -170,6 +170,7 @@
     (device) => device.role === undefined || device.role === "input",
   );
   $: configurations = workspace.snapshot?.configurations ?? [];
+  $: operations = workspace.snapshot?.operations ?? [];
   $: setUpBoards = visibleBoards.filter(
     (device) =>
       profiles.some((profile) => profile.device_id === device.id) ||
@@ -291,6 +292,28 @@
   function configurationsForDevice(device: Device): Configuration[] {
     return configurations.filter(
       (configuration) => configuration.device_id === device.id,
+    );
+  }
+  function operationForConfiguration(configuration: Configuration) {
+    return (
+      configuration.last_operation ??
+      operations.find(
+        (operation) =>
+          operation.resource?.kind === "configuration" &&
+          operation.resource.id === configuration.id,
+      )
+    );
+  }
+  function runtimeHealthLabel(configuration: Configuration) {
+    if (!configuration.enabled) return "Disabled";
+    if (configuration.runtime.healthy) return "Healthy";
+    if (!configuration.runtime.connected) return "Waiting for keyboard";
+    return "Needs attention";
+  }
+  function runtimeHealthDetail(configuration: Configuration) {
+    return (
+      configuration.runtime.reason ||
+      "The manager did not provide a runtime explanation for this configuration."
     );
   }
   async function setLifecycleEnabled(
@@ -1055,19 +1078,35 @@
                       >{deviceStateSummary(device)}</small
                     >
                   {/if}
-                  {#if device.configured_by?.length}<small
-                      >External configuration: {device.configured_by.join(
-                        ", ",
-                      )}</small
-                    >{/if}
                   {#each deviceConfigurations as configuration (configuration.id)}
-                    <small
-                      >{configuration.ownership} configuration · bindings
-                      {configuration.enabled ? "enabled" : "disabled"} ·
-                      {humanize(configuration.runtime.phase)} · desired
-                      {configuration.desired_revision} / active
-                      {configuration.active_revision}</small
+                    {@const lastOperation = operationForConfiguration(configuration)}
+                    <section
+                      class:unhealthy={!configuration.runtime.healthy &&
+                        configuration.enabled}
+                      class="configuration-state"
                     >
+                      <strong>{configuration.name || "Unnamed configuration"}</strong>
+                      <span>{humanize(configuration.ownership)} configuration</span>
+                      <dl>
+                        <div>
+                          <dt>Desired</dt>
+                          <dd>{configuration.desired_revision}</dd>
+                        </div>
+                        <div>
+                          <dt>Active</dt>
+                          <dd>{configuration.active_revision}</dd>
+                        </div>
+                        <div>
+                          <dt>Runtime</dt>
+                          <dd>{runtimeHealthLabel(configuration)}</dd>
+                        </div>
+                      </dl>
+                      <small>{runtimeHealthDetail(configuration)}</small>
+                      {#if lastOperation}<small class="configuration-operation"
+                          >Latest manager operation: {humanize(lastOperation.state)}
+                          — {lastOperation.reason}</small
+                        >{/if}
+                    </section>
                   {/each}
                 </div>
                 <div class="device-actions">

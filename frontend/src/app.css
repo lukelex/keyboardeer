@@ -374,6 +374,51 @@ h1 {
   color: #866c3b;
   line-height: 1.4;
 }
+.configuration-state {
+  background: #f4f7f0;
+  border-left: 3px solid #8fbd79;
+  display: grid;
+  gap: 4px;
+  margin-top: 9px;
+  padding: 8px 10px;
+}
+.configuration-state.unhealthy {
+  background: #fcf3e9;
+  border-left-color: #c78c59;
+}
+.configuration-state strong {
+  color: #486453;
+  font-size: 11px;
+}
+.configuration-state > span {
+  color: #73846b;
+  font-size: 10px;
+  text-transform: capitalize;
+}
+.configuration-state dl {
+  display: flex;
+  gap: 15px;
+  margin: 2px 0;
+}
+.configuration-state dl div {
+  display: grid;
+  gap: 1px;
+}
+.configuration-state dt {
+  color: #78867a;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.55px;
+  text-transform: uppercase;
+}
+.configuration-state dd {
+  color: #315541;
+  font-size: 11px;
+  margin: 0;
+}
+.configuration-state .configuration-operation {
+  color: #79684a;
+}
 .device-actions {
   align-items: center;
   display: flex;
