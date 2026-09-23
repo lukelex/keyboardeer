@@ -83,6 +83,10 @@
   $: activeGeometry = activeProfile
     ? geometries.find((geometry) => geometry.id === activeProfile?.geometry.id)
     : undefined;
+  // Basic remapping deliberately offers every explicitly verified source key
+  // in the selected geometry. It never guesses a larger physical layout or
+  // presents unverified KMonad key aliases as editor options.
+  $: basicKeyOptions = activeGeometry?.keys ?? [];
   $: currentPreview =
     activeProfile &&
     profilePreview?.profile_id === activeProfile.id &&
@@ -772,14 +776,22 @@
                   (key) => key.source_key === selectedSourceKey,
                 )?.label ?? selectedSourceKey}
               </h2>
-              <p>Choose a basic behavior for the Base layer.</p>
+              <p>
+                Choose a basic behavior for the Base layer. All
+                {basicKeyOptions.length} keys in this verified layout are available
+                below.
+              </p>
             </div>
             <div class="palette-buttons">
-              {#each ["esc", "tab", "caps", "lctl", "lsft", "spc", "ret", "bspc", "a", "b", "c", "v", "x", "z"] as key}
+              {#each basicKeyOptions as key (key.id)}
                 <button
                   class="button secondary"
-                  on:click={() => assignBaseBehavior({ kind: "key", key })}
-                  disabled={profileBusy}>{key}</button
+                  on:click={() =>
+                    assignBaseBehavior({ kind: "key", key: key.source_key })}
+                  disabled={profileBusy}
+                  title={`Assign ${key.label} (${key.source_key})`}
+                  ><span>{key.label}</span><small>{key.source_key}</small
+                  ></button
                 >
               {/each}
               <button

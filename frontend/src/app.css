@@ -552,8 +552,19 @@ h1 {
   gap: 7px;
 }
 .palette-buttons .button {
+  align-items: center;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
   min-height: 34px;
-  padding: 7px 10px;
+  min-width: 42px;
+  padding: 5px 8px;
+}
+.palette-buttons .button small {
+  color: #65776b;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1;
 }
 .preview-status {
   background: #f0f5e9;
