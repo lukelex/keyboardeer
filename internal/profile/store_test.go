@@ -32,7 +32,7 @@ func TestStoreCreatesLoadsAndUpdatesProfile(t *testing.T) {
 	}
 
 	profile := testProfile(t, "First board")
-	if err := store.Upsert(profile); err != nil {
+	if _, err := store.Upsert(profile); err != nil {
 		t.Fatal(err)
 	}
 	metadata, err := os.Stat(path)
@@ -53,7 +53,7 @@ func TestStoreCreatesLoadsAndUpdatesProfile(t *testing.T) {
 	profile = loaded.Profiles[0]
 	profile.Name = "Renamed board"
 	profile.UpdatedAt = time.Time{}
-	if err := store.Upsert(profile); err != nil {
+	if _, err := store.Upsert(profile); err != nil {
 		t.Fatal(err)
 	}
 	loaded, err = store.Load()
@@ -63,12 +63,33 @@ func TestStoreCreatesLoadsAndUpdatesProfile(t *testing.T) {
 	if loaded.Profiles[0].Name != "Renamed board" || !loaded.Profiles[0].CreatedAt.Equal(created) || !loaded.Profiles[0].UpdatedAt.After(created) || loaded.Profiles[0].DraftRevision != 2 {
 		t.Fatalf("profile timestamps were not preserved/updated: %#v", loaded.Profiles[0])
 	}
-	if err := store.Delete(profile.ID); err != nil {
+	if err := store.Delete(profile.ID, loaded.Profiles[0].DraftRevision); err != nil {
 		t.Fatal(err)
 	}
 	loaded, err = store.Load()
 	if err != nil || len(loaded.Profiles) != 0 {
 		t.Fatalf("delete did not persist: %#v, %v", loaded, err)
+	}
+}
+
+func TestStoreRejectsStaleDraftWrites(t *testing.T) {
+	store := NewStore(filepath.Join(t.TempDir(), "profiles.json"))
+	profile := testProfile(t, "First")
+	saved, err := store.Upsert(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := saved
+	updated.Name = "Newer"
+	updated, err = store.Upsert(updated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved.Name = "Stale"
+	_, err = store.Upsert(saved)
+	var stale *StaleDraftError
+	if !errors.As(err, &stale) || stale.Actual != updated.DraftRevision {
+		t.Fatalf("stale save error = %v", err)
 	}
 }
 

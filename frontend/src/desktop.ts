@@ -71,11 +71,71 @@ export interface Operation {
 export interface PreviewResult {
   validation: { outcome: string; reason_code: string; reason: string };
 }
+export interface ProfileGeometry {
+  id: string;
+  source_keys: string[];
+}
+export interface ProfileLayer {
+  id: string;
+  name: string;
+}
+export interface ProfileBehavior {
+  kind: string;
+  key?: string;
+  target?: string;
+  tap?: ProfileBehavior;
+  hold?: ProfileBehavior;
+  timeout_ms?: number;
+}
+export interface ProfileAssignment {
+  layer_id: string;
+  source_key: string;
+  behavior: ProfileBehavior;
+}
+export interface Profile {
+  id: string;
+  name: string;
+  device_id: string;
+  manager_configuration_id?: string;
+  draft_revision: number;
+  geometry: ProfileGeometry;
+  layers: ProfileLayer[];
+  assignments: ProfileAssignment[];
+  aliases?: Record<string, ProfileBehavior>;
+  macros?: Record<string, ProfileBehavior[]>;
+  settings: { version: number };
+  created_at: string;
+  updated_at: string;
+}
+export interface CompileResult {
+  behavior: string;
+  source_map: Array<{
+    layer_id: string;
+    source_key: string;
+    explicit: boolean;
+    span: {
+      start_line: number;
+      start_column: number;
+      end_line: number;
+      end_column: number;
+    };
+  }>;
+}
 
 type AppBindings = {
   Info?: () => Promise<AppInfo>;
   ManagerStatus?: () => Promise<ManagerStatus>;
   Workspace?: () => Promise<ManagerWorkspace>;
+  Profiles?: () => Promise<Profile[]>;
+  CreateProfile?: (
+    deviceID: string,
+    name: string,
+    geometryID: string,
+  ) => Promise<Profile>;
+  SaveProfile?: (profile: Profile) => Promise<Profile>;
+  DeleteProfile?: (id: string, expectedDraftRevision: number) => Promise<void>;
+  CompileProfile?: (id: string) => Promise<CompileResult>;
+  RecoverCorruptProfileStore?: () => Promise<string>;
   IdentifyStart?: (deviceID: string, timeoutMS: number) => Promise<Operation>;
   IdentifyCancel?: (operationID: string) => Promise<Operation>;
   IdentifyOperation?: (operationID: string) => Promise<Operation>;
@@ -115,6 +175,25 @@ export const ManagerStatus = () =>
   binding<() => Promise<ManagerStatus>>("ManagerStatus")();
 export const Workspace = () =>
   binding<() => Promise<ManagerWorkspace>>("Workspace")();
+export const Profiles = () => binding<() => Promise<Profile[]>>("Profiles")();
+export const CreateProfile = (
+  deviceID: string,
+  name: string,
+  geometryID: string,
+) =>
+  binding<
+    (deviceID: string, name: string, geometryID: string) => Promise<Profile>
+  >("CreateProfile")(deviceID, name, geometryID);
+export const SaveProfile = (profile: Profile) =>
+  binding<(profile: Profile) => Promise<Profile>>("SaveProfile")(profile);
+export const DeleteProfile = (id: string, expectedDraftRevision: number) =>
+  binding<(id: string, expectedDraftRevision: number) => Promise<void>>(
+    "DeleteProfile",
+  )(id, expectedDraftRevision);
+export const CompileProfile = (id: string) =>
+  binding<(id: string) => Promise<CompileResult>>("CompileProfile")(id);
+export const RecoverCorruptProfileStore = () =>
+  binding<() => Promise<string>>("RecoverCorruptProfileStore")();
 export const IdentifyStart = (id: string, timeout: number) =>
   binding<(id: string, timeout: number) => Promise<Operation>>("IdentifyStart")(
     id,

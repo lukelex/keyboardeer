@@ -46,6 +46,16 @@ func (e *UnsupportedStoreVersionError) Error() string {
 	return fmt.Sprintf("profile store %q uses unsupported version %d", e.Path, e.Version)
 }
 
+type StaleDraftError struct {
+	ProfileID string
+	Expected  uint64
+	Actual    uint64
+}
+
+func (e *StaleDraftError) Error() string {
+	return fmt.Sprintf("profile %q is stale: expected draft revision %d, current revision %d", e.ProfileID, e.Expected, e.Actual)
+}
+
 func (s *Store) Load() (StoreData, error) { s.mu.Lock(); defer s.mu.Unlock(); return s.load() }
 func (s *Store) load() (StoreData, error) {
 	data, err := os.ReadFile(s.path)
@@ -122,20 +132,23 @@ func (s *Store) save(data StoreData) error {
 	defer dir.Close()
 	return dir.Sync()
 }
-func (s *Store) Upsert(profile Profile) error {
+func (s *Store) Upsert(profile Profile) (Profile, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	store, err := s.load()
 	if err != nil {
-		return err
+		return Profile{}, err
 	}
 	profile.UpdatedAt = time.Now().UTC()
 	found := false
 	for i := range store.Profiles {
 		if store.Profiles[i].ID == profile.ID {
+			if profile.DraftRevision != store.Profiles[i].DraftRevision {
+				return Profile{}, &StaleDraftError{ProfileID: profile.ID, Expected: profile.DraftRevision, Actual: store.Profiles[i].DraftRevision}
+			}
 			profile.CreatedAt = store.Profiles[i].CreatedAt
 			if store.Profiles[i].DraftRevision == ^uint64(0) {
-				return fmt.Errorf("profile %q draft revision overflow", profile.ID)
+				return Profile{}, fmt.Errorf("profile %q draft revision overflow", profile.ID)
 			}
 			profile.DraftRevision = store.Profiles[i].DraftRevision + 1
 			store.Profiles[i] = profile
@@ -146,9 +159,12 @@ func (s *Store) Upsert(profile Profile) error {
 		profile.DraftRevision = 1
 		store.Profiles = append(store.Profiles, profile)
 	}
-	return s.save(store)
+	if err := s.save(store); err != nil {
+		return Profile{}, err
+	}
+	return profile, nil
 }
-func (s *Store) Delete(id string) error {
+func (s *Store) Delete(id string, expectedDraftRevision uint64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	store, err := s.load()
@@ -156,10 +172,19 @@ func (s *Store) Delete(id string) error {
 		return err
 	}
 	next := store.Profiles[:0]
+	found := false
 	for _, profile := range store.Profiles {
 		if profile.ID != id {
 			next = append(next, profile)
+			continue
 		}
+		found = true
+		if profile.DraftRevision != expectedDraftRevision {
+			return &StaleDraftError{ProfileID: id, Expected: expectedDraftRevision, Actual: profile.DraftRevision}
+		}
+	}
+	if !found {
+		return fmt.Errorf("profile %q does not exist", id)
 	}
 	store.Profiles = next
 	return s.save(store)

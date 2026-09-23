@@ -234,13 +234,20 @@ func renderBehavior(behavior profile.Behavior) (string, error) {
 }
 
 func validateKeyAtom(value string) error {
-	if value == "\\" {
+	if value == "\\" || strings.ContainsRune("-=[];',./+*", runeValue(value)) {
 		return nil
 	}
 	if value == "" || value == "_" || value == "XX" || !keyAtom.MatchString(value) {
 		return fmt.Errorf("unsafe KMonad key token %q", value)
 	}
 	return nil
+}
+
+func runeValue(value string) rune {
+	if len(value) == 1 {
+		return rune(value[0])
+	}
+	return 0
 }
 
 func address(layerID, sourceKey string) string { return layerID + "\x00" + sourceKey }

@@ -2,10 +2,14 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/lukelex/keyboardeer/internal/compiler"
+	"github.com/lukelex/keyboardeer/internal/geometry"
 	"github.com/lukelex/keyboardeer/internal/managerapi"
+	"github.com/lukelex/keyboardeer/internal/profile"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -16,6 +20,8 @@ const appVersion = "0.1.0-dev"
 type App struct {
 	ctx               context.Context
 	manager           *managerapi.APIClient
+	profiles          *profile.Store
+	profileStoreError error
 	monitorMu         sync.Mutex
 	monitor           *managerapi.EventSubscription
 	monitorGeneration uint64
@@ -28,10 +34,19 @@ type AppInfo struct {
 }
 
 func NewApp() *App {
-	return &App{manager: managerapi.New(managerapi.Options{
+	path, err := profile.DefaultPath()
+	app := &App{manager: managerapi.New(managerapi.Options{
 		ClientName:    "keyboardeer",
 		ClientVersion: appVersion,
-	})}
+	}), profileStoreError: err}
+	if err == nil {
+		app.profiles = profile.NewStore(path)
+	}
+	return app
+}
+
+func newAppWithProfileStore(store *profile.Store) *App {
+	return &App{manager: managerapi.New(managerapi.Options{ClientName: "keyboardeer", ClientVersion: appVersion}), profiles: store}
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -54,6 +69,87 @@ func (a *App) shutdown(context.Context) {
 // Info gives the frontend a stable, side-effect-free binding.
 func (a *App) Info() AppInfo {
 	return AppInfo{Name: "KeyboarDeer", Version: appVersion}
+}
+
+// Profiles are application-owned editable drafts. None of these methods access
+// a device or mutate a manager configuration.
+func (a *App) Profiles() ([]profile.Profile, error) {
+	store, err := a.profileStore()
+	if err != nil {
+		return nil, err
+	}
+	data, err := store.Load()
+	if err != nil {
+		return nil, err
+	}
+	return data.Profiles, nil
+}
+
+func (a *App) CreateProfile(deviceID, name, geometryID string) (profile.Profile, error) {
+	store, err := a.profileStore()
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	template, found := geometry.Lookup(geometryID)
+	if !found {
+		return profile.Profile{}, fmt.Errorf("unknown verified geometry %q", geometryID)
+	}
+	profileGeometry, err := template.ProfileGeometry()
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	draft, err := profile.New(deviceID, name, profileGeometry)
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	return store.Upsert(draft)
+}
+
+func (a *App) SaveProfile(draft profile.Profile) (profile.Profile, error) {
+	store, err := a.profileStore()
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	return store.Upsert(draft)
+}
+
+func (a *App) DeleteProfile(id string, expectedDraftRevision uint64) error {
+	store, err := a.profileStore()
+	if err != nil {
+		return err
+	}
+	return store.Delete(id, expectedDraftRevision)
+}
+
+func (a *App) CompileProfile(id string) (compiler.Result, error) {
+	drafts, err := a.Profiles()
+	if err != nil {
+		return compiler.Result{}, err
+	}
+	for _, draft := range drafts {
+		if draft.ID == id {
+			return compiler.Compile(draft)
+		}
+	}
+	return compiler.Result{}, fmt.Errorf("profile %q does not exist", id)
+}
+
+func (a *App) RecoverCorruptProfileStore() (string, error) {
+	store, err := a.profileStore()
+	if err != nil {
+		return "", err
+	}
+	return store.BackupAndReset()
+}
+
+func (a *App) profileStore() (*profile.Store, error) {
+	if a.profileStoreError != nil {
+		return nil, fmt.Errorf("locate profile store: %w", a.profileStoreError)
+	}
+	if a.profiles == nil {
+		return nil, fmt.Errorf("profile store is unavailable")
+	}
+	return a.profiles, nil
 }
 
 // ManagerStatus performs the mandatory hello/capability negotiation. It does
