@@ -25,7 +25,7 @@ export interface Device {
   display_name: string;
   availability: string;
   identity_stability: string;
-  configured_by: string[];
+  configured_by: string[] | null;
   runtime_conflict: boolean;
   reason_code: string;
   reason: string;
@@ -56,9 +56,9 @@ export interface Configuration {
 export interface Snapshot {
   state_revision: number;
   event_cursor: { server_id: string; event_id: number; state_revision: number };
-  devices: Device[];
-  configurations: Configuration[];
-  operations: Operation[];
+  devices: Device[] | null;
+  configurations: Configuration[] | null;
+  operations: Operation[] | null;
   health: { healthy: boolean; reason_code: string; reason: string };
 }
 export interface Operation {
@@ -112,7 +112,7 @@ export interface Profile {
   draft_revision: number;
   geometry: ProfileGeometry;
   layers: ProfileLayer[];
-  assignments: ProfileAssignment[];
+  assignments: ProfileAssignment[] | null;
   aliases?: Record<string, ProfileBehavior>;
   macros?: Record<string, ProfileBehavior[]>;
   settings: { version: number };
@@ -149,7 +149,7 @@ export interface ProfilePreview {
       reason_code: string;
       summary: string;
       remediation: string;
-    }>;
+    }> | null;
   };
   source_map: CompileResult["source_map"];
 }

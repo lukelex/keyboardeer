@@ -11,3 +11,5 @@ frontend/dist/*
 /keyboardeer
 frontend/wailsjs/
 frontend/package.json.md5
+frontend/test-results/
+frontend/playwright-report/

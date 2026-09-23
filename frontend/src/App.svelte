@@ -101,7 +101,7 @@
     return profiles.find((profile) => profile.device_id === device.id);
   }
   function behaviorFor(sourceKey: string): ProfileBehavior | undefined {
-    return activeProfile?.assignments.find(
+    return activeProfile?.assignments?.find(
       (assignment) =>
         assignment.layer_id === "base" && assignment.source_key === sourceKey,
     )?.behavior;
@@ -228,7 +228,7 @@
     profileBusy = true;
     feedback = "";
     profilePreview = null;
-    const assignments = activeProfile.assignments.filter(
+    const assignments = (activeProfile.assignments ?? []).filter(
       (assignment) =>
         assignment.layer_id !== "base" ||
         assignment.source_key !== selectedSourceKey,
@@ -477,7 +477,7 @@
                     {device.reason ||
                       "The manager did not provide a display explanation."}
                   </p>
-                  {#if device.configured_by.length}<small
+                  {#if device.configured_by?.length}<small
                       >External configuration: {device.configured_by.join(
                         ", ",
                       )}</small
