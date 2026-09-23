@@ -232,6 +232,25 @@
   function isConnected(device: Device) {
     return device.availability === "connected";
   }
+  function deviceState(device: Device) {
+    return device.runtime_conflict ? "conflict" : device.availability || "unknown";
+  }
+  function deviceStateSummary(device: Device) {
+    switch (deviceState(device)) {
+      case "connected":
+        return "Ready to configure.";
+      case "disconnected":
+        return "Reconnect this keyboard to configure or identify it.";
+      case "inaccessible":
+        return "The manager cannot access this keyboard. Check its input-access permissions.";
+      case "unsupported":
+        return "The manager does not support this keyboard on the current backend.";
+      case "conflict":
+        return "Another configuration or mapping conflicts with this keyboard.";
+      default:
+        return "The manager reported an unfamiliar device state.";
+    }
+  }
   function isConfigurable(device: Device) {
     return device.role === undefined || device.role === "input";
   }
@@ -934,7 +953,20 @@
           <span class="build-label">{info.version}</span>
         </div>
 
-        {#if workspace.status.state !== "ready"}
+        {#if workspace.status.state === "checking"}
+          <section
+            class="manager-notice loading-notice"
+            data-state="checking"
+            aria-live="polite"
+          >
+            <span class="notice-symbol" aria-hidden="true">…</span>
+            <div>
+              <p class="eyebrow">KEYBOARD INVENTORY</p>
+              <h2>Loading keyboards</h2>
+              <p>Contacting the local manager for the current device snapshot.</p>
+            </div>
+          </section>
+        {:else if workspace.status.state !== "ready"}
           <section
             class="manager-notice"
             data-state={workspace.status.state}
@@ -999,7 +1031,11 @@
                 <div class="device-list-section">Not set up yet</div>
               {/if}
               {@const deviceConfigurations = configurationsForDevice(device)}
-              <article class:offline={!isConnected(device)} class="device-card">
+              <article
+                class:offline={!isConnected(device)}
+                class:attention={deviceState(device) !== "connected"}
+                class="device-card"
+              >
                 <div class="device-glyph" aria-hidden="true">⌨</div>
                 <div class="device-copy">
                   <div class="device-title">
@@ -1007,13 +1043,18 @@
                     <span
                       class:connected={isConnected(device)}
                       class="availability"
-                      >{humanize(device.availability || "unknown")}</span
+                        >{humanize(deviceState(device))}</span
                     >
                   </div>
                   <p>
                     {device.reason ||
                       "The manager did not provide a display explanation."}
                   </p>
+                  {#if deviceState(device) !== "connected"}
+                    <small class="device-state-summary"
+                      >{deviceStateSummary(device)}</small
+                    >
+                  {/if}
                   {#if device.configured_by?.length}<small
                       >External configuration: {device.configured_by.join(
                         ", ",

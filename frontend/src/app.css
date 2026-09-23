@@ -196,6 +196,11 @@ h1 {
 .manager-notice[data-state="reconnecting"] {
   background: #f9f1e9;
 }
+.manager-notice.loading-notice {
+  background: #f0f5e9;
+  border-color: #d9e6d2;
+  border-left-color: #7da26a;
+}
 .notice-symbol {
   align-items: center;
   background: #f0dfbb;
@@ -305,6 +310,9 @@ h1 {
 .device-card.offline {
   background: #faf9f4;
 }
+.device-card.attention {
+  border-color: #dfd2ad;
+}
 .device-glyph {
   align-items: center;
   background: #e4edda;
@@ -361,6 +369,10 @@ h1 {
   display: block;
   font-size: 11px;
   margin-top: 6px;
+}
+.device-copy .device-state-summary {
+  color: #866c3b;
+  line-height: 1.4;
 }
 .device-actions {
   align-items: center;

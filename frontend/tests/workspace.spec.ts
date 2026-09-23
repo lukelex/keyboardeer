@@ -408,3 +408,66 @@ test("hides manager output devices while retaining legacy role-less inputs", asy
   await expect(page.getByText("Not set up yet", { exact: true })).toBeVisible();
   await expect(page.getByText("2 known", { exact: true })).toBeVisible();
 });
+
+test("explains unavailable and conflicting keyboard states", async ({
+  page,
+}) => {
+  const stateWorkspace: ManagerWorkspace = structuredClone(workspace);
+  stateWorkspace.snapshot!.devices = [
+    {
+      ...workspace.snapshot!.devices![0],
+      id: "disconnected",
+      display_name: "Disconnected keyboard",
+      availability: "disconnected",
+    },
+    {
+      ...workspace.snapshot!.devices![0],
+      id: "inaccessible",
+      display_name: "Permission-limited keyboard",
+      availability: "inaccessible",
+    },
+    {
+      ...workspace.snapshot!.devices![0],
+      id: "unsupported",
+      display_name: "Unsupported keyboard",
+      availability: "unsupported",
+    },
+    {
+      ...workspace.snapshot!.devices![0],
+      id: "conflicting",
+      display_name: "Conflicting keyboard",
+      runtime_conflict: true,
+    },
+  ];
+  await page.addInitScript((fixture) => {
+    window.go = {
+      main: {
+        App: {
+          Info: async () => ({ name: "KeyboarDeer", version: "test" }),
+          Workspace: async () => fixture,
+          Profiles: async () => [],
+          Geometries: async () => [],
+        },
+      },
+    };
+  }, stateWorkspace);
+  await page.goto("/");
+  await expect(
+    page.getByText("Reconnect this keyboard to configure or identify it."),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "The manager cannot access this keyboard. Check its input-access permissions.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "The manager does not support this keyboard on the current backend.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Another configuration or mapping conflicts with this keyboard.",
+    ),
+  ).toBeVisible();
+});

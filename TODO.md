@@ -54,7 +54,7 @@ supervision code in KeyboarDeer.
 
 ## P1 — Devices and runtime visibility
 
-- [ ] **DEV-01** Implement the Devices view with loading, empty, disconnected,
+- [x] **DEV-01** Implement the Devices view with loading, empty, disconnected,
   inaccessible, unsupported, conflict, and manager-unavailable states.
 - [ ] **DEV-02** Join authoritative devices/configurations/diagnostics by opaque
   IDs; separate device availability, desired revision, active revision, and
