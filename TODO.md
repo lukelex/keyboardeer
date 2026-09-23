@@ -37,7 +37,7 @@ explains sequencing; this file is the place to track completion.
   backoff, and resource cleanup on GUI exit.
 - [x] **API-02** Negotiate hello on every connection, track server identity,
   handle unsupported versions, and expose a small typed Wails bridge to Svelte.
-- [ ] **API-03** Define Go/domain/frontend types and contract fixtures, including
+- [x] **API-03** Define Go/domain/frontend types and contract fixtures, including
   unknown fields/enums, structured errors, unavailable capabilities, and timeouts.
 - [ ] **API-04** Add an explicit integration harness for implemented device list,
   identify start/cancel, identification operation polling, and model preview.

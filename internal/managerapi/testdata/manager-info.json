@@ -1,0 +1,15 @@
+{
+  "api_versions": [1, 2],
+  "manager_version": "future-manager",
+  "server_id": "server_fixture",
+  "platform": "future-platform",
+  "backend": "future-backend",
+  "state_revision": 42,
+  "event_cursor": {"server_id": "server_fixture", "event_id": 8, "state_revision": 42},
+  "limits": {"api_frame_bytes": 1048576},
+  "capabilities": [
+    {"name": "future_capability", "available": false, "reason_code": "future_reason", "reason": "Not available yet"}
+  ],
+  "health": {"healthy": false, "reason_code": "future_health", "reason": "A future health state"},
+  "unknown_future_field": {"safe": true}
+}

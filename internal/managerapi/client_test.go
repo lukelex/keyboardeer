@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
@@ -166,6 +167,21 @@ func TestClientHonoursResponseCorrelation(t *testing.T) {
 	defer client.Close()
 	if _, err := client.IdentifyStart(context.Background(), IdentifyStartParams{DeviceID: "dev", TimeoutMS: 1000}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestClientReturnsContextDeadlineForAnUnresponsiveRequest(t *testing.T) {
+	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
+		if request.Method == "session.hello" {
+			writeResult(t, rw, request.ID, `{"selected_version":1,"server_id":"server","manager_version":"test"}`)
+		}
+	})
+	client := New(Options{Endpoint: socket})
+	defer client.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if _, err := client.DeviceList(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("unresponsive request error = %v", err)
 	}
 }
 

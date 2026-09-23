@@ -20,3 +20,17 @@ func TestDeviceFixtureKeepsUnknownEnumsReadable(t *testing.T) {
 		t.Fatalf("future values were not retained: %#v", result)
 	}
 }
+
+func TestManagerInfoFixtureKeepsUnknownFieldsAndEnumsReadable(t *testing.T) {
+	bytes, err := os.ReadFile(filepath.Join("testdata", "manager-info.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var info ManagerInfo
+	if err := json.Unmarshal(bytes, &info); err != nil {
+		t.Fatal(err)
+	}
+	if info.ServerID != "server_fixture" || info.Health.ReasonCode != "future_health" || len(info.Capabilities) != 1 || info.Capabilities[0].Name != "future_capability" {
+		t.Fatalf("future manager information was not retained: %#v", info)
+	}
+}
