@@ -45,11 +45,33 @@ func TestAppExposesOnlyVerifiedGeometries(t *testing.T) {
 	app := newAppWithProfileStore(profile.NewStore(filepath.Join(t.TempDir(), "profiles.json")))
 	defer app.manager.Close()
 	geometries := app.Geometries()
-	if len(geometries) != 1 || geometries[0].ID != geometry.ANSI60USID {
+	want := []string{geometry.ANSI60USID, geometry.ANSITKLUSID, geometry.KinesisFreestyle}
+	if len(geometries) != len(want) {
 		t.Fatalf("geometries = %#v", geometries)
 	}
-	if _, err := geometries[0].ProfileGeometry(); err != nil {
+	for index, template := range geometries {
+		if template.ID != want[index] {
+			t.Fatalf("geometry %d = %q, want %q", index, template.ID, want[index])
+		}
+		if _, err := template.ProfileGeometry(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestAppCompilesVerifiedSplitGeometryProfile(t *testing.T) {
+	app := newAppWithProfileStore(profile.NewStore(filepath.Join(t.TempDir(), "profiles.json")))
+	defer app.manager.Close()
+	draft, err := app.CreateProfile("device-1", "Split board", geometry.KinesisFreestyle)
+	if err != nil {
 		t.Fatal(err)
+	}
+	compiled, err := app.CompileProfile(draft.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(compiled.SourceMap) != len(draft.Geometry.SourceKeys) {
+		t.Fatalf("source map = %d, source keys = %d", len(compiled.SourceMap), len(draft.Geometry.SourceKeys))
 	}
 }
 

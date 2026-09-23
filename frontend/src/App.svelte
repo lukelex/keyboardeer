@@ -88,6 +88,11 @@
   // in the selected geometry. It never guesses a larger physical layout or
   // presents unverified KMonad key aliases as editor options.
   $: basicKeyOptions = activeGeometry?.keys ?? [];
+  $: activeRows = activeGeometry
+    ? [...new Set(activeGeometry.keys.map((key) => key.row))].sort(
+        (left, right) => left - right,
+      )
+    : [];
   $: currentPreview =
     activeProfile &&
     profilePreview?.profile_id === activeProfile.id &&
@@ -793,13 +798,13 @@
         </div>
         {#if activeGeometry}
           <div class="keyboard-editor" aria-label={activeGeometry.name}>
-            {#each [0, 1, 2, 3, 4] as row}
+            {#each activeRows as row}
               <div class="keyboard-row">
                 {#each activeGeometry.keys.filter((key) => key.row === row) as key (key.id)}
                   <button
                     class:selected-key={selectedSourceKey === key.source_key}
                     class="editor-key"
-                    style={`--key-width: ${key.width}`}
+                    style={`--key-width: ${key.width}; --key-gap-before: ${key.gap_before ?? 0}`}
                     on:click={() => (selectedSourceKey = key.source_key)}
                     aria-pressed={selectedSourceKey === key.source_key}
                   >
@@ -816,12 +821,12 @@
           </div>
           <section class="key-palette" aria-label="Basic key assignments">
             <div class="palette-buttons">
-              {#each [0, 1, 2, 3, 4] as row}
+              {#each activeRows as row}
                 <div class="palette-row">
                   {#each basicKeyOptions.filter((key) => key.row === row) as key (key.id)}
                     <button
                       class="button secondary palette-key"
-                      style={`--key-width: ${key.width}`}
+                      style={`--key-width: ${key.width}; --key-gap-before: ${key.gap_before ?? 0}`}
                       on:click={() =>
                         assignBaseBehavior({
                           kind: "key",

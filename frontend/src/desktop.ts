@@ -87,6 +87,7 @@ export interface GeometryTemplate {
     source_key: string;
     row: number;
     width: number;
+    gap_before?: number;
   }>;
 }
 export interface ProfileLayer {

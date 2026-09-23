@@ -531,6 +531,7 @@ h1 {
   height: 59px;
   justify-content: space-between;
   min-width: 36px;
+  margin-left: calc(var(--key-gap-before, 0) * 36px);
   padding: 7px;
   text-align: left;
 }
@@ -584,6 +585,7 @@ h1 {
   gap: 1px;
   justify-content: center;
   min-width: 34px;
+  margin-left: calc(var(--key-gap-before, 0) * 36px);
   padding: 5px 8px;
 }
 .palette-buttons .palette-key:hover {

@@ -127,9 +127,12 @@ func Validate(profile Profile) error {
 	}
 	sources, layers := map[string]bool{}, map[string]bool{}
 	for _, key := range profile.Geometry.SourceKeys {
-		if key == "" || sources[key] {
-			return fmt.Errorf("geometry has an invalid or duplicate source key")
+		if key == "" {
+			return fmt.Errorf("geometry has an invalid source key")
 		}
+		// Multiple physical positions can emit the same KMonad input code (for
+		// example, the two space keys on a Kinesis Freestyle 2). They share an
+		// assignment, rather than being given invented source tokens.
 		sources[key] = true
 	}
 	for _, layer := range profile.Layers {
