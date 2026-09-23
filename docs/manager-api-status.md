@@ -12,6 +12,12 @@ rejected because the manager-rendered `defcfg` lacked an output form (see the
 source-contract gap below); no configuration was applied or device mapping
 changed.
 
+**Deployed-manager recheck:** The running user service was updated to
+`ab37fad81b7aa1615ce3fd26d7810e957757a696` (a descendant of `aa3e88c`) on the
+same date. Its API handshake, metadata, and inventory work, but a model preview
+still reaches KMonad with a `defcfg` missing `output`. The exact revision's
+`renderManagedConfiguration` source still renders only an input form.
+
 This is KeyboarDeer's maintained list of manager interactions. It is a source
 compatibility audit, **not** a statement about released manager binaries or a
 substitute for an integration smoke test. Re-audit this matrix whenever the
@@ -117,6 +123,8 @@ This conflicts with the model contract needed by KeyboarDeer: the GUI must not
 choose a device-specific `defcfg` representation, but the manager must render
 a complete runnable one. Keep preview/apply UI disabled for this source revision
 until the manager supplies the output form (and re-run a valid-model smoke test).
+This was re-confirmed against deployed manager `ab37fad`, which is newer than
+the original source-audit commit.
 
 ## Required API behavior
 
