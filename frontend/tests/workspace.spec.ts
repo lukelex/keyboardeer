@@ -444,6 +444,33 @@ test("explains unavailable and conflicting keyboard states", async ({
       runtime_conflict: true,
     },
   ];
+  stateWorkspace.snapshot!.configurations = [
+    ...(stateWorkspace.snapshot!.configurations ?? []),
+    {
+      id: "external-1",
+      name: "Existing remap",
+      ownership: "external",
+      enabled: true,
+      device_id: "",
+      desired_revision: 0,
+      active_revision: 0,
+      runtime: {
+        phase: "failed",
+        reason_code: "runtime_failed",
+        reason: "The manager could not start this external mapping.",
+        connected: false,
+        healthy: false,
+        failure_count: 1,
+      },
+      last_operation: {
+        id: "op-external-1",
+        kind: "reconcile",
+        state: "failed",
+        reason_code: "runtime_failed",
+        reason: "Review the manager diagnostic before changing this mapping.",
+      },
+    },
+  ];
   await page.addInitScript((fixture) => {
     window.go = {
       main: {
@@ -473,6 +500,18 @@ test("explains unavailable and conflicting keyboard states", async ({
   await expect(
     page.getByText(
       "Another configuration or mapping conflicts with this keyboard.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "External configurations" }),
+  ).toBeVisible();
+  await expect(page.getByText("READ ONLY", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("The manager could not start this external mapping."),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Latest manager operation: Failed — Review the manager diagnostic before changing this mapping.",
     ),
   ).toBeVisible();
 });

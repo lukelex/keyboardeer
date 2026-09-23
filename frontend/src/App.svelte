@@ -1215,6 +1215,49 @@
             </article>
           </section>
         {/if}
+        {#if configurations.filter((configuration) => configuration.ownership === "external").length}
+          <section class="external-configurations" aria-labelledby="external-title">
+            <div class="external-heading">
+              <div>
+                <p class="eyebrow">MANAGER-SUPERVISED</p>
+                <h2 id="external-title">External configurations</h2>
+              </div>
+              <span class="build-label">READ ONLY</span>
+            </div>
+            <p>
+              These mappings are owned outside KeyboarDeer. Runtime details come
+              from the manager; editing their raw KMonad source is unavailable.
+            </p>
+            <div class="external-configuration-list">
+              {#each configurations.filter((configuration) => configuration.ownership === "external") as configuration (configuration.id)}
+                {@const lastOperation = operationForConfiguration(configuration)}
+                <article class="external-configuration">
+                  <div>
+                    <h3>{configuration.name || "Unnamed external configuration"}</h3>
+                    <span>{runtimeHealthLabel(configuration)}</span>
+                  </div>
+                  <dl>
+                    <div>
+                      <dt>Runtime</dt>
+                      <dd>{humanize(configuration.runtime.phase)}</dd>
+                    </div>
+                    <div>
+                      <dt>Desired / active</dt>
+                      <dd
+                        >{configuration.desired_revision} / {configuration.active_revision}</dd
+                      >
+                    </div>
+                  </dl>
+                  <p>{runtimeHealthDetail(configuration)}</p>
+                  {#if lastOperation}<small
+                      >Latest manager operation: {humanize(lastOperation.state)}
+                      — {lastOperation.reason}</small
+                    >{/if}
+                </article>
+              {/each}
+            </div>
+          </section>
+        {/if}
         <p class="boundary-note">
           KeyboarDeer does not inspect input devices or supervise mappings. The
           manager owns those responsibilities.

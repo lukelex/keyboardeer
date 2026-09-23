@@ -60,7 +60,7 @@ supervision code in KeyboarDeer.
   IDs; separate device availability, desired revision, active revision, and
   runtime health. Never infer active profiles from `configured_by` names.
   **Upstream gate: MGR-02.**
-- [ ] **DEV-03** Show external configurations as read-only and preserve
+- [x] **DEV-03** Show external configurations as read-only and preserve
   per-resource diagnostics and remediation.
 - [ ] **DEV-04** Integrate bounded identification, countdown, cancellation,
   timeout/hotplug/conflict handling, and operation polling; explain that only
