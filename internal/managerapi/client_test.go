@@ -207,3 +207,54 @@ func TestManagerGetDecodesPublicMetadata(t *testing.T) {
 		t.Fatalf("unexpected manager metadata: %#v", info)
 	}
 }
+
+func TestSubscribeReplaysEventsAndEndsOnResync(t *testing.T) {
+	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
+		switch request.Method {
+		case "session.hello":
+			writeResult(t, rw, request.ID, `{"selected_version":1,"server_id":"server-1","manager_version":"test"}`)
+		case "events.subscribe":
+			var params EventSubscribeParams
+			if err := json.Unmarshal(request.Params, &params); err != nil {
+				t.Error(err)
+				return
+			}
+			if params.AfterServerID != "server-1" || params.AfterEventID == nil || *params.AfterEventID != 4 {
+				t.Errorf("unexpected cursor: %#v", params)
+			}
+			writeResult(t, rw, request.ID, `{"subscription_id":2,"server_id":"server-1","state_revision":8,"latest_event_id":6}`)
+			if _, err := rw.WriteString(`{"type":"event","event_id":5,"state_revision":7,"time":"2026-09-23T00:00:00Z","event_type":"device.added","resource":{"kind":"device","id":"dev-1"},"reason_code":"device_connected","data":{}}` + "\n"); err != nil {
+				t.Error(err)
+				return
+			}
+			if _, err := rw.WriteString(`{"type":"event","event_id":6,"state_revision":8,"time":"2026-09-23T00:00:01Z","event_type":"manager.resync_required","resource":{"kind":"manager","id":"server-1"},"reason_code":"manager_resync_required","data":{}}` + "\n"); err != nil {
+				t.Error(err)
+				return
+			}
+			if err := rw.Flush(); err != nil {
+				t.Error(err)
+			}
+		default:
+			t.Errorf("unexpected method %s", request.Method)
+		}
+	})
+	client := New(Options{Endpoint: socket})
+	defer client.Close()
+	subscription, err := client.Subscribe(context.Background(), EventCursor{ServerID: "server-1", EventID: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if subscription.Info.SubscriptionID != 2 || subscription.Info.LatestEventID != 6 {
+		t.Fatalf("unexpected subscription: %#v", subscription.Info)
+	}
+	var types []string
+	for event := range subscription.Events {
+		types = append(types, event.Type)
+	}
+	if len(types) != 2 || types[0] != "device.added" || types[1] != "manager.resync_required" {
+		t.Fatalf("events = %v", types)
+	}
+	if err := subscription.Err(); err != nil {
+		t.Fatal(err)
+	}
+}

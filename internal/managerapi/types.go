@@ -91,6 +91,28 @@ type EventCursor struct {
 	StateRevision uint64 `json:"state_revision"`
 }
 
+type EventSubscribeParams struct {
+	AfterEventID  *uint64 `json:"after_event_id,omitempty"`
+	AfterServerID string  `json:"after_server_id,omitempty"`
+}
+
+type EventSubscriptionInfo struct {
+	SubscriptionID uint64 `json:"subscription_id"`
+	ServerID       string `json:"server_id"`
+	StateRevision  uint64 `json:"state_revision"`
+	LatestEventID  uint64 `json:"latest_event_id"`
+}
+
+type Event struct {
+	EventID       uint64         `json:"event_id"`
+	StateRevision uint64         `json:"state_revision"`
+	Time          string         `json:"time"`
+	Type          string         `json:"event_type"`
+	Resource      ResourceRef    `json:"resource"`
+	ReasonCode    string         `json:"reason_code"`
+	Data          map[string]any `json:"data"`
+}
+
 type Device struct {
 	ID                string   `json:"id"`
 	DisplayName       string   `json:"display_name"`

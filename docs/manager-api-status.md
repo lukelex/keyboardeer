@@ -41,7 +41,7 @@ Relevant source:
 | `configuration.create` / `configuration.update` | Implemented. Create accepts name/model; update requires configuration ID and expected revision. | Not yet implemented. | Managed lifecycle once local profiles/compiler are ready. |
 | `configuration.set_enabled` / `configuration.delete` | Implemented by `f8ea0ec`. Both require expected revision. | Not yet implemented. | Explicit runtime lifecycle; distinct from deleting a local profile. |
 | `configuration.adopt` | Implemented by `bff4dd2` for manager-validated, losslessly representable external configurations. | Not yet implemented. | Later, opt-in adoption only. Arbitrary visual import remains outside v1. |
-| `events.subscribe` | Implemented by `4551637`; resumable cursor support arrived in `9d44f1f`. Reply is followed by ordered `event` frames on the same connection; resync requires a fresh snapshot. | Not yet implemented. | Requires a persistent client reader that multiplexes responses and events, cursor storage, and snapshot/resubscribe recovery. |
+| `events.subscribe` | Implemented by `4551637`; resumable cursor support arrived in `9d44f1f`. Reply is followed by ordered `event` frames on the same connection; resync requires a fresh snapshot. | Dedicated persistent subscription transport is implemented. | Connect it to workspace state, cursor storage, snapshot/resubscribe recovery, and UI updates. |
 
 ## Interaction-to-screen cross-reference
 
