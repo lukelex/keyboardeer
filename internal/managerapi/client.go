@@ -428,3 +428,13 @@ func (c *APIClient) Preview(ctx context.Context, params PreviewParams) (PreviewR
 	var result PreviewResult
 	return result, c.call(ctx, "validation.preview", params, &result)
 }
+func (c *APIClient) ConfigurationCreate(ctx context.Context, params ConfigurationWriteParams) (Operation, error) {
+	var result ConfigurationWriteResult
+	err := c.call(ctx, "configuration.create", params, &result)
+	return result.Operation, err
+}
+func (c *APIClient) ConfigurationUpdate(ctx context.Context, params ConfigurationWriteParams) (Operation, error) {
+	var result ConfigurationWriteResult
+	err := c.call(ctx, "configuration.update", params, &result)
+	return result.Operation, err
+}

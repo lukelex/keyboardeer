@@ -164,6 +164,38 @@ func (s *Store) Upsert(profile Profile) (Profile, error) {
 	}
 	return profile, nil
 }
+
+// SetApplyState changes manager-lifecycle metadata without advancing the draft
+// revision: the editable profile model has not changed. The expected revision
+// still protects this update from attaching lifecycle state to a stale draft.
+func (s *Store) SetApplyState(id string, expectedDraftRevision uint64, configurationID string, pending *PendingApply) (Profile, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	data, err := s.load()
+	if err != nil {
+		return Profile{}, err
+	}
+	for index := range data.Profiles {
+		profile := &data.Profiles[index]
+		if profile.ID != id {
+			continue
+		}
+		if profile.DraftRevision != expectedDraftRevision {
+			return Profile{}, &StaleDraftError{ProfileID: id, Expected: expectedDraftRevision, Actual: profile.DraftRevision}
+		}
+		if configurationID != "" {
+			profile.ManagerConfigurationID = configurationID
+		}
+		profile.ApplyPending = pending
+		profile.UpdatedAt = time.Now().UTC()
+		if err := s.save(data); err != nil {
+			return Profile{}, err
+		}
+		return *profile, nil
+	}
+	return Profile{}, fmt.Errorf("profile %q does not exist", id)
+}
+
 func (s *Store) Delete(id string, expectedDraftRevision uint64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

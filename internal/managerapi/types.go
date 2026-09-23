@@ -168,14 +168,16 @@ type ResourceRef struct {
 }
 
 type Operation struct {
-	ID         string       `json:"id"`
-	Kind       string       `json:"kind"`
-	State      string       `json:"state"`
-	Resource   *ResourceRef `json:"resource,omitempty"`
-	StartedAt  string       `json:"started_at"`
-	UpdatedAt  string       `json:"updated_at"`
-	ReasonCode string       `json:"reason_code"`
-	Reason     string       `json:"reason"`
+	ID                    string            `json:"id"`
+	Kind                  string            `json:"kind"`
+	State                 string            `json:"state"`
+	Resource              *ResourceRef      `json:"resource,omitempty"`
+	StartedAt             string            `json:"started_at"`
+	UpdatedAt             string            `json:"updated_at"`
+	ReasonCode            string            `json:"reason_code"`
+	Reason                string            `json:"reason"`
+	ConfigurationRevision uint64            `json:"configuration_revision,omitempty"`
+	Validation            *ValidationResult `json:"validation,omitempty"`
 }
 
 type Diagnostic struct {
@@ -217,4 +219,17 @@ type PreviewModel struct {
 
 type PreviewResult struct {
 	Validation ValidationResult `json:"validation"`
+}
+
+// ConfigurationWriteParams intentionally contains only a platform-neutral
+// behavior model. The manager owns device-specific defcfg rendering.
+type ConfigurationWriteParams struct {
+	ConfigurationID  string       `json:"configuration_id,omitempty"`
+	Name             string       `json:"name,omitempty"`
+	Model            PreviewModel `json:"model"`
+	ExpectedRevision *uint64      `json:"expected_revision,omitempty"`
+}
+
+type ConfigurationWriteResult struct {
+	Operation Operation `json:"operation"`
 }

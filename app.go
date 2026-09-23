@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -114,6 +115,13 @@ func (a *App) SaveProfile(draft profile.Profile) (profile.Profile, error) {
 	if err != nil {
 		return profile.Profile{}, err
 	}
+	current, err := a.profileByID(draft.ID)
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	if current.ApplyPending != nil {
+		return profile.Profile{}, fmt.Errorf("this profile has an apply with an unknown outcome; refresh the manager and resolve it before editing")
+	}
 	return store.Upsert(draft)
 }
 
@@ -177,6 +185,107 @@ func (a *App) PreviewProfile(id string) (ProfilePreview, error) {
 		return ProfilePreview{}, &managerapi.Error{Code: "manager_restarted", Message: "The manager restarted while it validated this draft."}
 	}
 	return ProfilePreview{ProfileID: draft.ID, DraftRevision: draft.DraftRevision, DeviceID: draft.DeviceID, ManagerServerID: after.ServerID, StateRevision: after.StateRevision, Validation: preview.Validation, SourceMap: compiled.SourceMap}, nil
+}
+
+// ProfileApplyResult links the accepted manager operation to the local draft.
+// The operation is terminal when returned by the reviewed manager, but the UI
+// still displays its manager-owned lifecycle outcome rather than assuming that
+// a successful validation means activation.
+type ProfileApplyResult struct {
+	Profile   profile.Profile      `json:"profile"`
+	Operation managerapi.Operation `json:"operation"`
+}
+
+// ApplyProfile creates or updates the manager-owned configuration associated
+// with this local profile. It never accesses a device or writes a .kbd file.
+// In particular, a transport failure after dispatch remains recorded locally:
+// retrying a mutation without manager-side idempotency could duplicate it.
+func (a *App) ApplyProfile(id string) (ProfileApplyResult, error) {
+	store, err := a.profileStore()
+	if err != nil {
+		return ProfileApplyResult{}, err
+	}
+	draft, err := a.profileByID(id)
+	if err != nil {
+		return ProfileApplyResult{}, err
+	}
+	if draft.ApplyPending != nil {
+		return ProfileApplyResult{}, fmt.Errorf("the previous apply outcome is unknown since %s; KeyboarDeer will not retry it", draft.ApplyPending.StartedAt.Format(time.RFC3339))
+	}
+	compiled, err := compiler.Compile(draft)
+	if err != nil {
+		return ProfileApplyResult{}, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	info, err := a.manager.ManagerGet(ctx)
+	if err != nil {
+		return ProfileApplyResult{}, err
+	}
+	available, reason := managerapi.CapabilityAvailable(info.Capabilities, "managed_configurations")
+	if !available {
+		return ProfileApplyResult{}, &managerapi.Error{Code: "unsupported_capability", Message: reason}
+	}
+	snapshot, err := a.manager.SnapshotGet(ctx)
+	if err != nil {
+		return ProfileApplyResult{}, err
+	}
+	var expected *uint64
+	if draft.ManagerConfigurationID != "" {
+		var configuration *managerapi.Configuration
+		for index := range snapshot.Configurations {
+			candidate := &snapshot.Configurations[index]
+			if candidate.ID == draft.ManagerConfigurationID {
+				configuration = candidate
+				break
+			}
+		}
+		if configuration == nil {
+			return ProfileApplyResult{}, fmt.Errorf("the manager configuration linked to this profile no longer exists; KeyboarDeer will not create a replacement automatically")
+		}
+		if configuration.Ownership != "managed" {
+			return ProfileApplyResult{}, fmt.Errorf("the configuration linked to this profile is no longer manager-owned")
+		}
+		revision := configuration.DesiredRevision
+		expected = &revision
+	}
+	pending, err := store.SetApplyState(draft.ID, draft.DraftRevision, "", &profile.PendingApply{ManagerServerID: info.ServerID, StartedAt: time.Now().UTC()})
+	if err != nil {
+		return ProfileApplyResult{}, err
+	}
+	params := managerapi.ConfigurationWriteParams{
+		ConfigurationID:  pending.ManagerConfigurationID,
+		Name:             pending.Name,
+		Model:            managerapi.PreviewModel{DeviceID: pending.DeviceID, Behavior: compiled.Behavior},
+		ExpectedRevision: expected,
+	}
+	var operation managerapi.Operation
+	if pending.ManagerConfigurationID == "" {
+		operation, err = a.manager.ConfigurationCreate(ctx, params)
+	} else {
+		operation, err = a.manager.ConfigurationUpdate(ctx, params)
+	}
+	if err != nil {
+		var managerError *managerapi.Error
+		if errors.As(err, &managerError) && managerError.Code != "transport" {
+			if _, saveErr := store.SetApplyState(pending.ID, pending.DraftRevision, "", nil); saveErr != nil {
+				return ProfileApplyResult{}, fmt.Errorf("apply was rejected (%w); also could not clear the local pending state: %v", err, saveErr)
+			}
+		}
+		return ProfileApplyResult{}, err
+	}
+	// A rejected create is never persisted by the manager. Successful,
+	// rolled-back, and failed lifecycle outcomes still identify a managed
+	// resource, so retain the opaque ID for a revision-checked next update.
+	configurationID := ""
+	if operation.State != "rejected" && operation.Resource != nil && operation.Resource.Kind == "configuration" && operation.Resource.ID != "" {
+		configurationID = operation.Resource.ID
+	}
+	linked, saveErr := store.SetApplyState(pending.ID, pending.DraftRevision, configurationID, nil)
+	if saveErr != nil {
+		return ProfileApplyResult{}, fmt.Errorf("manager apply completed but KeyboarDeer could not save its configuration link: %w", saveErr)
+	}
+	return ProfileApplyResult{Profile: linked, Operation: operation}, nil
 }
 
 func (a *App) RecoverCorruptProfileStore() (string, error) {

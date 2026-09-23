@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import {
+    ApplyProfile,
     CreateProfile,
     Geometries,
     IdentifyCancel,
@@ -20,11 +21,12 @@
     type ManagerWorkspace,
     type Operation,
     type Profile,
+    type ProfileApplyResult,
     type ProfileBehavior,
     type ProfilePreview,
   } from "./desktop";
 
-  type View = "devices" | "identify" | "setup" | "editor";
+  type View = "devices" | "identify" | "setup" | "editor" | "review";
   const initialStatus: ManagerStatus = {
     state: "checking",
     message: "Checking the local manager connection…",
@@ -46,6 +48,9 @@
   let profilePreview: ProfilePreview | null = null;
   let previewTimer: ReturnType<typeof setTimeout> | undefined;
   let previewGeneration = 0;
+  let applyBusy = false;
+  let applyConfirmed = false;
+  let applyOperation: Operation | null = null;
   let operation: Operation | null = null;
   let loading = false;
   let identifyBusy = false;
@@ -72,9 +77,28 @@
     workspace.status.state === "ready" && deviceIdentification.available;
   $: devices = workspace.snapshot?.devices ?? [];
   $: configurations = workspace.snapshot?.configurations ?? [];
+  $: managedConfigurations =
+    capabilities.find((item) => item.name === "managed_configurations") ??
+    unavailableCapability("managed_configurations");
   $: activeGeometry = activeProfile
     ? geometries.find((geometry) => geometry.id === activeProfile?.geometry.id)
     : undefined;
+  $: currentPreview =
+    activeProfile &&
+    profilePreview?.profile_id === activeProfile.id &&
+    profilePreview.draft_revision === activeProfile.draft_revision &&
+    profilePreview.manager_server_id === workspace.status.server_id
+      ? profilePreview
+      : null;
+  $: canApply =
+    !!activeProfile &&
+    workspace.status.state === "ready" &&
+    managedConfigurations.available &&
+    !!selectedDevice &&
+    isConnected(selectedDevice) &&
+    !selectedDevice?.runtime_conflict &&
+    currentPreview?.validation.outcome === "valid" &&
+    !activeProfile.apply_pending;
   function humanize(value: string) {
     return value
       .replace(/_/g, " ")
@@ -260,6 +284,32 @@
       void previewDraft(draft, generation);
     }, 250);
   }
+  function openReview() {
+    if (!canApply || !activeProfile) return;
+    applyConfirmed = false;
+    applyOperation = null;
+    feedback = "";
+    view = "review";
+  }
+  async function applyDraft() {
+    if (!activeProfile || !canApply || !applyConfirmed || applyBusy) return;
+    applyBusy = true;
+    feedback = "";
+    try {
+      const result: ProfileApplyResult = await ApplyProfile(activeProfile.id);
+      activeProfile = result.profile;
+      profiles = profiles.map((profile) =>
+        profile.id === result.profile.id ? result.profile : profile,
+      );
+      applyOperation = result.operation;
+      view = "editor";
+      await refresh();
+    } catch (error) {
+      feedback = explain(error);
+    } finally {
+      applyBusy = false;
+    }
+  }
   async function previewDraft(draft: Profile, generation: number) {
     if (
       !capabilities.find(
@@ -331,6 +381,7 @@
     operation = null;
     activeProfile = null;
     profilePreview = null;
+    applyOperation = null;
   }
 
   onMount(() => {
@@ -684,7 +735,11 @@
               Base layer · saved locally · revision {activeProfile.draft_revision}
             </p>
           </div>
-          <span class="build-label">DRAFT ONLY</span>
+          <span class="build-label"
+            >{activeProfile.manager_configuration_id
+              ? "MANAGED PROFILE"
+              : "DRAFT ONLY"}</span
+          >
         </div>
         {#if activeGeometry}
           <div class="keyboard-editor" aria-label={activeGeometry.name}>
@@ -735,28 +790,60 @@
             </div>
           </section>
           <section
-            class:rejected={profilePreview?.validation.outcome === "rejected"}
+            class:rejected={currentPreview?.validation.outcome === "rejected"}
             class="preview-status"
             aria-live="polite"
           >
             <strong
               >{previewBusy
                 ? "Checking complete draft…"
-                : profilePreview
-                  ? `Manager preview: ${humanize(profilePreview.validation.outcome)}`
+                : currentPreview
+                  ? `Manager preview: ${humanize(currentPreview.validation.outcome)}`
                   : "Preview not checked"}</strong
             >
             <p>
-              {profilePreview?.validation.reason ??
+              {currentPreview?.validation.reason ??
                 "Every semantic edit is checked against the complete compiled draft."}
             </p>
-            {#if profilePreview?.validation.outcome === "rejected"}
+            {#if currentPreview?.validation.outcome === "rejected"}
               <p>
                 No keyboard mapping has been applied. The manager did not
                 provide a reliable key location for this result.
               </p>
             {/if}
+            {#if activeProfile.apply_pending}
+              <p>
+                An Apply sent at {new Date(
+                  activeProfile.apply_pending.started_at,
+                ).toLocaleString()} has an unknown outcome. To prevent a duplicate
+                configuration, KeyboarDeer will not retry it automatically.
+              </p>
+            {:else if applyOperation}
+              <p>
+                Manager Apply: {humanize(applyOperation.state)} —
+                {applyOperation.reason}
+              </p>
+            {/if}
           </section>
+          <div class="apply-actions">
+            <div>
+              <p class="eyebrow">MANAGED APPLY</p>
+              <p>
+                The manager will render, validate, persist, and supervise this
+                profile. It owns all device and KMonad lifecycle work.
+              </p>
+            </div>
+            <button
+              class="button primary"
+              type="button"
+              on:click={openReview}
+              disabled={!canApply || applyBusy}
+              title={canApply
+                ? "Review the validated draft before applying it"
+                : "Apply requires a current valid manager preview, a connected keyboard, and the managed-configurations capability."}
+              >Review & apply</button
+            >
+          </div>
         {:else}
           <section class="manager-notice" data-state="incomplete">
             <span class="notice-symbol" aria-hidden="true">!</span>
@@ -770,9 +857,72 @@
             {feedback}
           </p>{/if}
       </section>
+    {:else if view === "review" && activeProfile}
+      <section class="review-page" aria-labelledby="review-title">
+        <button class="back-link" on:click={() => (view = "editor")}
+          >← Back to editor</button
+        >
+        <div class="page-heading">
+          <div>
+            <p class="eyebrow">REVIEW & APPLY</p>
+            <h1 id="review-title">Ready to make it live?</h1>
+            <p>
+              {activeProfile.name} will be managed for
+              {selectedDevice?.display_name ?? "this keyboard"}.
+            </p>
+          </div>
+          <span class="build-label">VALIDATED DRAFT</span>
+        </div>
+        <section class="review-card">
+          <h2>What happens next</h2>
+          <ol>
+            <li>The manager recompiles and validates the complete behavior.</li>
+            <li>It writes its own managed configuration and activates it.</li>
+            <li>
+              It reports activation or rollback; closing this app does not stop
+              the mapping.
+            </li>
+          </ol>
+          <p class="boundary-note">
+            This is a {activeProfile.manager_configuration_id
+              ? "revision-checked update"
+              : "new managed configuration"}. The manager, not KeyboarDeer,
+            chooses all platform input and output details.
+          </p>
+          <label class="apply-confirmation">
+            <input
+              type="checkbox"
+              bind:checked={applyConfirmed}
+              disabled={applyBusy}
+            />
+            <span
+              >I understand this changes the live mapping for this keyboard.</span
+            >
+          </label>
+          <div class="setup-actions">
+            <button
+              class="button secondary"
+              type="button"
+              on:click={() => (view = "editor")}
+              disabled={applyBusy}>Cancel</button
+            >
+            <button
+              class="button primary"
+              type="button"
+              on:click={applyDraft}
+              disabled={!applyConfirmed || !canApply || applyBusy}
+              >{applyBusy ? "Applying…" : "Apply to keyboard"}</button
+            >
+          </div>
+        </section>
+        {#if feedback}<p class="inline-feedback" role="status">
+            {feedback}
+          </p>{/if}
+      </section>
     {/if}
   </main>
   <footer>
-    Drafts are local until a manager-backed apply workflow is implemented.
+    Drafts remain your source of truth; the manager owns generated runtime
+    configurations.
   </footer>
 </div>

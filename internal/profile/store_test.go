@@ -93,6 +93,29 @@ func TestStoreRejectsStaleDraftWrites(t *testing.T) {
 	}
 }
 
+func TestStoreRecordsApplyStateWithoutChangingDraftRevision(t *testing.T) {
+	store := NewStore(filepath.Join(t.TempDir(), "profiles.json"))
+	saved, err := store.Upsert(testProfile(t, "First"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pendingAt := time.Now().UTC().Round(0)
+	pending, err := store.SetApplyState(saved.ID, saved.DraftRevision, "", &PendingApply{ManagerServerID: "server-1", StartedAt: pendingAt})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pending.DraftRevision != saved.DraftRevision || pending.ApplyPending == nil || pending.ApplyPending.ManagerServerID != "server-1" {
+		t.Fatalf("unexpected pending apply state: %#v", pending)
+	}
+	linked, err := store.SetApplyState(saved.ID, saved.DraftRevision, "cfg-1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if linked.DraftRevision != saved.DraftRevision || linked.ApplyPending != nil || linked.ManagerConfigurationID != "cfg-1" {
+		t.Fatalf("unexpected linked state: %#v", linked)
+	}
+}
+
 func TestStoreMigratesUnversionedSchema(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "profiles.json")
 	profile := testProfile(t, "Migrated")

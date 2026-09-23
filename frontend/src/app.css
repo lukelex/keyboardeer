@@ -564,6 +564,61 @@ h1 {
   background: #fcf3e9;
   border-color: #e5cba9;
 }
+.apply-actions {
+  align-items: center;
+  border-top: 1px solid #dfe5d6;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  margin-top: 24px;
+  padding-top: 22px;
+}
+.apply-actions p:last-child {
+  color: #647669;
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0;
+  max-width: 580px;
+}
+.apply-actions .button {
+  flex: 0 0 auto;
+}
+.review-card {
+  background: #fffdf8;
+  border: 1px solid #dfe5d6;
+  border-radius: 14px;
+  margin-top: 34px;
+  max-width: 720px;
+  padding: clamp(21px, 4vw, 34px);
+}
+.review-card h2 {
+  font-size: 22px;
+  letter-spacing: -0.7px;
+  margin: 0;
+}
+.review-card ol {
+  color: #536b5e;
+  font-size: 14px;
+  line-height: 1.7;
+  margin: 17px 0;
+  padding-left: 21px;
+}
+.apply-confirmation {
+  align-items: flex-start;
+  background: #f0f5e9;
+  border-radius: 9px;
+  color: #355545;
+  display: flex;
+  font-size: 13px;
+  font-weight: 650;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 14px;
+}
+.apply-confirmation input {
+  accent-color: #2c6652;
+  margin-top: 2px;
+}
 footer {
   border-top: 1px solid #e0e5d8;
   color: #778478;
@@ -581,6 +636,10 @@ footer {
   }
   .app-header,
   .device-card {
+    flex-direction: column;
+  }
+  .apply-actions {
+    align-items: flex-start;
     flex-direction: column;
   }
   .header-actions {

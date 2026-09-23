@@ -65,8 +65,10 @@ export interface Operation {
   id: string;
   kind: string;
   state: string;
+  resource?: { kind: string; id: string } | null;
   reason_code: string;
   reason: string;
+  configuration_revision?: number;
 }
 export interface PreviewResult {
   validation: { outcome: string; reason_code: string; reason: string };
@@ -109,6 +111,7 @@ export interface Profile {
   name: string;
   device_id: string;
   manager_configuration_id?: string;
+  apply_pending?: { manager_server_id: string; started_at: string } | null;
   draft_revision: number;
   geometry: ProfileGeometry;
   layers: ProfileLayer[];
@@ -153,6 +156,10 @@ export interface ProfilePreview {
   };
   source_map: CompileResult["source_map"];
 }
+export interface ProfileApplyResult {
+  profile: Profile;
+  operation: Operation;
+}
 
 type AppBindings = {
   Info?: () => Promise<AppInfo>;
@@ -169,6 +176,7 @@ type AppBindings = {
   DeleteProfile?: (id: string, expectedDraftRevision: number) => Promise<void>;
   CompileProfile?: (id: string) => Promise<CompileResult>;
   PreviewProfile?: (id: string) => Promise<ProfilePreview>;
+  ApplyProfile?: (id: string) => Promise<ProfileApplyResult>;
   RecoverCorruptProfileStore?: () => Promise<string>;
   IdentifyStart?: (deviceID: string, timeoutMS: number) => Promise<Operation>;
   IdentifyCancel?: (operationID: string) => Promise<Operation>;
@@ -230,6 +238,8 @@ export const CompileProfile = (id: string) =>
   binding<(id: string) => Promise<CompileResult>>("CompileProfile")(id);
 export const PreviewProfile = (id: string) =>
   binding<(id: string) => Promise<ProfilePreview>>("PreviewProfile")(id);
+export const ApplyProfile = (id: string) =>
+  binding<(id: string) => Promise<ProfileApplyResult>>("ApplyProfile")(id);
 export const RecoverCorruptProfileStore = () =>
   binding<() => Promise<string>>("RecoverCorruptProfileStore")();
 export const IdentifyStart = (id: string, timeout: number) =>

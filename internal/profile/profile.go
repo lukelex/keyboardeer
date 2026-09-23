@@ -23,6 +23,7 @@ type Profile struct {
 	Name                   string                `json:"name"`
 	DeviceID               string                `json:"device_id"`
 	ManagerConfigurationID string                `json:"manager_configuration_id,omitempty"`
+	ApplyPending           *PendingApply         `json:"apply_pending,omitempty"`
 	DraftRevision          uint64                `json:"draft_revision"`
 	Geometry               Geometry              `json:"geometry"`
 	Layers                 []Layer               `json:"layers"`
@@ -32,6 +33,14 @@ type Profile struct {
 	Settings               CompilerSettings      `json:"settings"`
 	CreatedAt              time.Time             `json:"created_at"`
 	UpdatedAt              time.Time             `json:"updated_at"`
+}
+
+// PendingApply is written before a manager mutation. The manager revision
+// reviewed by KeyboarDeer does not offer durable idempotency correlation, so a
+// lost response must block another apply instead of guessing whether it ran.
+type PendingApply struct {
+	ManagerServerID string    `json:"manager_server_id"`
+	StartedAt       time.Time `json:"started_at"`
 }
 
 type Geometry struct {
@@ -103,6 +112,9 @@ func ValidateStore(data StoreData) error {
 func Validate(profile Profile) error {
 	if profile.ID == "" || profile.DeviceID == "" || strings.TrimSpace(profile.Name) == "" {
 		return fmt.Errorf("profile ID, device ID, and name are required")
+	}
+	if pending := profile.ApplyPending; pending != nil && (pending.ManagerServerID == "" || pending.StartedAt.IsZero()) {
+		return fmt.Errorf("pending apply is incomplete")
 	}
 	if profile.Settings.Version != 1 {
 		return fmt.Errorf("unsupported compiler settings version %d", profile.Settings.Version)

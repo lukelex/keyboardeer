@@ -9,7 +9,12 @@ const workspace: ManagerWorkspace = {
     message: "Manager capabilities are available.",
     endpoint: "/run/user/1000/kmonad-device-manager/api.sock",
     server_id: "server-1",
-    capabilities: ["device_discovery", "device_identification"].map((name) => ({
+    capabilities: [
+      "device_discovery",
+      "device_identification",
+      "candidate_validation",
+      "managed_configurations",
+    ].map((name) => ({
       name,
       available: true,
       reason_code: "capability_available",
@@ -41,7 +46,7 @@ const workspace: ManagerWorkspace = {
   },
 };
 
-test("real null-slice shapes render devices and allow the first draft edit", async ({
+test("null Go slices support editing, previewing, and explicitly applying a draft", async ({
   page,
 }) => {
   const errors: string[] = [];
@@ -99,6 +104,34 @@ test("real null-slice shapes render devices and allow the first draft edit", asy
             receiveWorkspace?.(workspace);
             return draft;
           },
+          PreviewProfile: async (id) => ({
+            profile_id: id,
+            draft_revision: draft!.draft_revision,
+            device_id: "device-1",
+            manager_server_id: "server-1",
+            state_revision: 1,
+            validation: {
+              outcome: "valid",
+              reason_code: "validation_succeeded",
+              reason: "Valid",
+              diagnostics: null,
+            },
+            source_map: [],
+          }),
+          ApplyProfile: async (id) => {
+            draft = { ...draft!, manager_configuration_id: "cfg-1" };
+            return {
+              profile: draft,
+              operation: {
+                id: "op-1",
+                kind: "apply",
+                state: "succeeded",
+                resource: { kind: "configuration", id: "cfg-1" },
+                reason_code: "operation_succeeded",
+                reason: "configuration persisted and activation confirmed",
+              },
+            };
+          },
         },
       },
     };
@@ -119,6 +152,22 @@ test("real null-slice shapes render devices and allow the first draft edit", asy
     page.getByText("Base layer · saved locally · revision 2"),
   ).toBeVisible();
   await expect(page.locator(".editor-key small")).toHaveText("esc");
+  await expect(
+    page.getByText("Manager preview: Valid", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Review & apply" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Ready to make it live?" }),
+  ).toBeVisible();
+  await page
+    .getByText("I understand this changes the live mapping for this keyboard.")
+    .click();
+  await page.getByRole("button", { name: "Apply to keyboard" }).click();
+  await expect(
+    page.getByText(
+      "Manager Apply: Succeeded — configuration persisted and activation confirmed",
+    ),
+  ).toBeVisible();
   await page.getByRole("button", { name: "← All keyboards" }).click();
   await expect(
     page.getByRole("heading", { name: "Unconfigured keyboard" }),

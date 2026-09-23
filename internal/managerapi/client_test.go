@@ -130,6 +130,43 @@ func TestClientHonoursResponseCorrelation(t *testing.T) {
 	}
 }
 
+func TestConfigurationWritesUseExplicitCreateAndRevisionCheckedUpdate(t *testing.T) {
+	var writes []ConfigurationWriteParams
+	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
+		switch request.Method {
+		case "session.hello":
+			writeResult(t, rw, request.ID, `{"selected_version":1,"server_id":"server","manager_version":"test"}`)
+		case "configuration.create", "configuration.update":
+			var params ConfigurationWriteParams
+			if err := json.Unmarshal(request.Params, &params); err != nil {
+				t.Error(err)
+				return
+			}
+			writes = append(writes, params)
+			writeResult(t, rw, request.ID, `{"operation":{"id":"op-1","kind":"apply","state":"succeeded","resource":{"kind":"configuration","id":"cfg-1"},"reason_code":"operation_succeeded","reason":"active"}}`)
+		default:
+			t.Errorf("unexpected method %s", request.Method)
+		}
+	})
+	client := New(Options{Endpoint: socket})
+	defer client.Close()
+	model := PreviewModel{DeviceID: "dev-1", Behavior: "(defsrc caps)\n(deflayer base esc)"}
+	created, err := client.ConfigurationCreate(context.Background(), ConfigurationWriteParams{Name: "My board", Model: model})
+	if err != nil || created.Resource == nil || created.Resource.ID != "cfg-1" {
+		t.Fatalf("create = %#v, %v", created, err)
+	}
+	revision := uint64(4)
+	if _, err := client.ConfigurationUpdate(context.Background(), ConfigurationWriteParams{ConfigurationID: "cfg-1", Model: model, ExpectedRevision: &revision}); err != nil {
+		t.Fatal(err)
+	}
+	if len(writes) != 2 || writes[0].ConfigurationID != "" || writes[0].ExpectedRevision != nil || writes[0].Name != "My board" {
+		t.Fatalf("unexpected create parameters: %#v", writes)
+	}
+	if writes[1].ConfigurationID != "cfg-1" || writes[1].ExpectedRevision == nil || *writes[1].ExpectedRevision != 4 || writes[1].Name != "" {
+		t.Fatalf("unexpected update parameters: %#v", writes[1])
+	}
+}
+
 func TestWorkspaceDoesNotFetchSnapshotWhenManagerGetIsUnsupported(t *testing.T) {
 	var methods []string
 	var methodsMu sync.Mutex
