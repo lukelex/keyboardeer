@@ -107,12 +107,19 @@ func TestStoreRecordsApplyStateWithoutChangingDraftRevision(t *testing.T) {
 	if pending.DraftRevision != saved.DraftRevision || pending.ApplyPending == nil || pending.ApplyPending.ManagerServerID != "server-1" {
 		t.Fatalf("unexpected pending apply state: %#v", pending)
 	}
-	linked, err := store.SetApplyState(saved.ID, saved.DraftRevision, "cfg-1", nil)
+	linked, err := store.SetApplyOutcome(saved.ID, saved.DraftRevision, "cfg-1", ApplyOutcome{
+		ID: "op-1", Kind: "apply", State: "succeeded", ReasonCode: "operation_succeeded",
+		Reason: "configuration persisted and activation confirmed", ConfigurationRevision: 4,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if linked.DraftRevision != saved.DraftRevision || linked.ApplyPending != nil || linked.ManagerConfigurationID != "cfg-1" {
+	if linked.DraftRevision != saved.DraftRevision || linked.ApplyPending != nil || linked.ManagerConfigurationID != "cfg-1" || linked.LastApplyOperation == nil || linked.LastApplyOperation.ID != "op-1" {
 		t.Fatalf("unexpected linked state: %#v", linked)
+	}
+	reopened, err := NewStore(store.Path()).Load()
+	if err != nil || reopened.Profiles[0].LastApplyOperation == nil || reopened.Profiles[0].LastApplyOperation.ConfigurationRevision != 4 {
+		t.Fatalf("apply outcome was not persisted: %#v, %v", reopened, err)
 	}
 }
 

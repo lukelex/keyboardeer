@@ -135,7 +135,7 @@ Implementation handover for the remaining recovery work:
 - [x] **APPLY-02** Integrate managed create/update with configuration association,
   idempotency keys, expected revisions, uncertain-response recovery, and
   refresh-and-review for `stale_revision`. **Upstream gate: MGR-03.**
-- [ ] **APPLY-03** Track accepted operations through reconnect/GUI restart;
+- [x] **APPLY-03** Track accepted operations through reconnect/GUI restart;
   show rejection, rollback succeeded/failed, and the actual active revision.
   Closing the GUI must not cancel accepted apply.
 - [x] **LIFE-01** Add enable/disable/delete for managed configurations with clear

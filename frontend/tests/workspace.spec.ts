@@ -655,6 +655,7 @@ test("re-reviews a stale apply and safely rechecks an unconfirmed one", async ({
       updated_at: "2026-09-24T08:00:00Z",
     };
     let applyCalls = 0;
+    let resumeCalls = 0;
     window.go = {
       main: {
         App: {
@@ -714,6 +715,7 @@ test("re-reviews a stale apply and safely rechecks an unconfirmed one", async ({
                 manager_server_id: "server-1",
                 started_at: "2026-09-24T09:00:00Z",
                 idempotency_key: "keyboardeer-abc",
+                idempotency_supported: true,
                 method: "configuration.update",
               },
             };
@@ -730,6 +732,22 @@ test("re-reviews a stale apply and safely rechecks an unconfirmed one", async ({
             };
           },
           ResumeApply: async () => {
+            resumeCalls += 1;
+            if (resumeCalls === 1) {
+              // Reconnect recovery can find the request still unresolved;
+              // leave it available for the explicit manual check.
+              return {
+                profile: draft,
+                operation: {
+                  id: "",
+                  kind: "",
+                  state: "",
+                  reason_code: "",
+                  reason: "",
+                },
+                uncertain: true,
+              };
+            }
             draft = {
               ...draft,
               apply_pending: null,
@@ -765,9 +783,9 @@ test("re-reviews a stale apply and safely rechecks an unconfirmed one", async ({
     dialog.getByRole("button", { name: "Apply to keyboard" }),
   ).toBeEnabled();
   await dialog.getByRole("button", { name: "Apply to keyboard" }).click();
-  await expect(
-    page.getByText(/KeyboarDeer kept the exact request/),
-  ).toBeVisible();
+  await expect(page.locator(".apply-pending")).toContainText(
+    "KeyboarDeer kept the exact request",
+  );
   await expect(apply).toBeDisabled();
   await page.getByRole("button", { name: "Check apply outcome" }).click();
   await expect(
@@ -776,6 +794,172 @@ test("re-reviews a stale apply and safely rechecks an unconfirmed one", async ({
     ),
   ).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test("restores apply outcome and manager-reported active revision after restart", async ({
+  page,
+}) => {
+  await page.addInitScript((fixture) => {
+    const state = JSON.parse(JSON.stringify(fixture)) as ManagerWorkspace;
+    state.snapshot!.configurations![0].desired_revision = 8;
+    state.snapshot!.configurations![0].active_revision = 7;
+    const draft: Profile = {
+      id: "profile-rolled-back",
+      name: "Typing",
+      device_id: "device-1",
+      manager_configuration_id: "cfg-1",
+      draft_revision: 4,
+      geometry: { id: "fixture", source_keys: ["caps"] },
+      layers: [{ id: "base", name: "Base" }],
+      assignments: null,
+      settings: { version: 1 },
+      created_at: "2026-09-24T08:00:00Z",
+      updated_at: "2026-09-24T08:00:00Z",
+      last_apply_operation: {
+        id: "op-rolled-back",
+        kind: "apply",
+        state: "rolled_back",
+        resource: { kind: "configuration", id: "cfg-1" },
+        reason_code: "runtime_rollback_succeeded",
+        reason: "activation failed; the previous revision was restored",
+        configuration_revision: 8,
+      },
+    };
+    window.go = {
+      main: {
+        App: {
+          Info: async () => ({ name: "KeyboarDeer", version: "test" }),
+          Workspace: async () => JSON.parse(JSON.stringify(state)),
+          Geometries: async () => [
+            {
+              id: "fixture",
+              name: "Fixture layout",
+              description: "Explicit test geometry",
+              keys: [
+                {
+                  id: "caps",
+                  label: "Caps",
+                  source_key: "caps",
+                  row: 0,
+                  width: 1,
+                },
+              ],
+            },
+          ],
+          Profiles: async () => [draft],
+          PreviewProfile: async (id) => ({
+            profile_id: id,
+            draft_revision: draft.draft_revision,
+            device_id: draft.device_id,
+            manager_server_id: state.status.server_id!,
+            state_revision: state.snapshot!.state_revision,
+            validation: {
+              outcome: "valid",
+              reason_code: "validation_succeeded",
+              reason: "Valid",
+              diagnostics: null,
+            },
+            source_map: [],
+          }),
+        },
+      },
+    };
+  }, workspace);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Edit draft", exact: true }).click();
+  await expect(page.locator(".apply-outcome")).toContainText(
+    "Manager Apply: Rolled Back",
+  );
+  await expect(page.locator(".apply-outcome")).toContainText(
+    "manager restored the previous mapping",
+  );
+  await expect(page.locator(".active-revision")).toContainText(
+    "Manager-reported active revision: 7 · desired revision 8 · runtime: healthy.",
+  );
+});
+
+test("requires manual resolution when manager idempotency is unknown", async ({
+  page,
+}) => {
+  await page.addInitScript((fixture) => {
+    const state = JSON.parse(JSON.stringify(fixture)) as ManagerWorkspace;
+    let draft: Profile = {
+      id: "profile-uncertain-legacy",
+      name: "Typing",
+      device_id: "device-1",
+      draft_revision: 2,
+      geometry: { id: "fixture", source_keys: ["caps"] },
+      layers: [{ id: "base", name: "Base" }],
+      assignments: null,
+      settings: { version: 1 },
+      created_at: "2026-09-24T08:00:00Z",
+      updated_at: "2026-09-24T08:00:00Z",
+      apply_pending: {
+        manager_server_id: "server-1",
+        started_at: "2026-09-24T09:00:00Z",
+        idempotency_key: "keyboardeer-legacy",
+        idempotency_supported: false,
+        method: "configuration.create",
+      },
+    };
+    window.go = {
+      main: {
+        App: {
+          Info: async () => ({ name: "KeyboarDeer", version: "test" }),
+          Workspace: async () => JSON.parse(JSON.stringify(state)),
+          Geometries: async () => [
+            {
+              id: "fixture",
+              name: "Fixture layout",
+              description: "Explicit test geometry",
+              keys: [
+                {
+                  id: "caps",
+                  label: "Caps",
+                  source_key: "caps",
+                  row: 0,
+                  width: 1,
+                },
+              ],
+            },
+          ],
+          Profiles: async () => [draft],
+          DiscardPendingApply: async () => {
+            draft = {
+              ...draft,
+              apply_pending: null,
+              last_apply_operation: {
+                id: "",
+                kind: "apply",
+                state: "unknown",
+                reason_code: "apply_outcome_unknown",
+                reason:
+                  "The outcome was not confirmed; the pending request was cleared without replay.",
+              },
+            };
+            return draft;
+          },
+        },
+      },
+    };
+  }, workspace);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Edit draft", exact: true }).click();
+  await expect(page.locator(".apply-status")).toContainText(
+    "does not guarantee durable idempotency",
+  );
+  await expect(
+    page.getByRole("button", { name: "Check apply outcome" }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "I checked the keyboard — continue editing" })
+    .click();
+  await expect(page.locator(".apply-outcome")).toContainText(
+    "Manager Apply: Unknown",
+  );
+  await expect(page.locator(".apply-outcome")).toContainText(
+    "cleared without replay",
+  );
 });
 
 test("removes a managed mapping from the keyboard with confirmation", async ({

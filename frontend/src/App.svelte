@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from "svelte";
   import {
     ApplyProfile,
+    DiscardPendingApply,
     ResumeApply,
     CreateProfile,
     DeleteConfiguration,
@@ -165,7 +166,10 @@
   let applyBusy = false;
   let applyReviewOpen = false;
   let applyReviewNotice = "";
+  const resumingApplyIDs = new Set<string>();
+  const applyFollowTimers = new Map<string, ReturnType<typeof setTimeout>>();
   let applyOperation: Operation | null = null;
+  let applyOperationProfileID = "";
   let lifecycleBusyID = "";
   let confirmConfigurationDeleteID = "";
   let operation: Operation | null = null;
@@ -280,6 +284,17 @@
     workspaceLive
       ? profilePreview
       : null;
+  $: linkedConfiguration = activeProfile?.manager_configuration_id
+    ? configurations.find(
+        (configuration) =>
+          configuration.id === activeProfile?.manager_configuration_id,
+      )
+    : undefined;
+  $: shownApplyOperation =
+    (applyOperationProfileID === activeProfile?.id ? applyOperation : null) ??
+    activeProfile?.last_apply_operation ??
+    linkedConfiguration?.last_operation ??
+    null;
   // The validation dot is always shown; only its color and label change.
   $: validationState = previewBusy
     ? "checking"
@@ -718,6 +733,7 @@
         ? await SelectedProfiles()
         : {};
       profileStoreProblem = null;
+      resumePendingApplies();
     } catch {
       // Explain a damaged or newer draft file instead of silently showing
       // every keyboard as "not set up".
@@ -1202,11 +1218,94 @@
     void previewDraft(draft, generation);
   }
   function acceptApplyResult(result: ProfileApplyResult) {
-    activeProfile = result.profile;
     profiles = profiles.map((profile) =>
       profile.id === result.profile.id ? result.profile : profile,
     );
-    applyOperation = result.uncertain || result.stale ? null : result.operation;
+    if (activeProfile?.id === result.profile.id) {
+      activeProfile = result.profile;
+      applyOperationProfileID = result.profile.id;
+      applyOperation =
+        result.uncertain || result.stale || !result.operation.id
+          ? null
+          : result.operation;
+    }
+    if (result.profile.apply_pending?.operation_id) {
+      followPendingApply(result.profile.id, 1000);
+    }
+  }
+  function followPendingApply(id: string, delayMS: number) {
+    if (applyFollowTimers.has(id)) return;
+    applyFollowTimers.set(
+      id,
+      setTimeout(() => {
+        applyFollowTimers.delete(id);
+        void resumePendingApply(id);
+      }, delayMS),
+    );
+  }
+  async function resumePendingApply(id: string) {
+    if (resumingApplyIDs.has(id) || !hasDesktopBinding("ResumeApply")) return;
+    resumingApplyIDs.add(id);
+    try {
+      const result = await ResumeApply(id);
+      acceptApplyResult(result);
+      if (!result.profile.apply_pending) await refresh();
+    } catch {
+      // Keep the stored request; the next reconnect or manual check retries it.
+    } finally {
+      resumingApplyIDs.delete(id);
+    }
+  }
+  function resumePendingApplies() {
+    if (!workspaceLive) return;
+    for (const profile of profiles) {
+      if (
+        profile.apply_pending?.operation_id ||
+        profile.apply_pending?.idempotency_supported
+      ) {
+        void resumePendingApply(profile.id);
+      }
+    }
+  }
+  async function discardLegacyPendingApply() {
+    if (!activeProfile?.apply_pending || applyBusy) return;
+    try {
+      const cleared = await DiscardPendingApply(activeProfile.id);
+      acceptApplyResult({ profile: cleared, operation: emptyOperation });
+    } catch (error) {
+      feedback = explain(error);
+    }
+  }
+  const emptyOperation: Operation = {
+    id: "",
+    kind: "",
+    state: "",
+    reason_code: "",
+    reason: "",
+  };
+  function applyOutcomeDetail(operation: Operation) {
+    const revision = operation.configuration_revision
+      ? ` for configuration revision ${operation.configuration_revision}`
+      : "";
+    switch (operation.state) {
+      case "succeeded":
+        return `The manager confirmed activation${revision}.`;
+      case "rejected":
+        return "The manager rejected this apply. Nothing on the keyboard changed.";
+      case "rolled_back":
+        return "The new mapping could not start, so the manager restored the previous mapping. See the active revision below.";
+      case "failed":
+        return operation.reason_code === "runtime_rollback_failed"
+          ? "The new mapping could not start and the previous one could not be restored. Check the keyboard card for its current state."
+          : "The apply failed. Check the keyboard card for the mapping's current state.";
+      case "running":
+      case "queued":
+        return "The manager is applying this profile. It keeps going even if you close KeyboarDeer.";
+      case "cancelled":
+        return "The manager cancelled this apply. Check the active revision below for the mapping that remains.";
+      default:
+        return "";
+    }
   }
   async function applyDraft() {
     if (!activeProfile || !canApply || applyBusy) return;
@@ -1344,12 +1443,22 @@
   }
 
   function acceptWorkspaceUpdate(next: ManagerWorkspace) {
+    const wasLive = workspaceLive;
+    const previousServerID = workspace.status.server_id;
     const environmentChanged =
       workspace.status.server_id !== next.status.server_id ||
       workspace.snapshot?.state_revision !== next.snapshot?.state_revision ||
       JSON.stringify(workspace.status.capabilities ?? []) !==
         JSON.stringify(next.status.capabilities ?? []);
     workspace = { ...next, stale: next.stale ?? false };
+    if (
+      next.status.state === "ready" &&
+      !next.stale &&
+      (!wasLive || previousServerID !== next.status.server_id)
+    ) {
+      // Recover accepted work on startup/reconnect, not on every snapshot.
+      queueMicrotask(resumePendingApplies);
+    }
     if (environmentChanged && activeProfile) {
       profilePreview = null;
       schedulePreview(activeProfile);
@@ -1393,6 +1502,8 @@
   onDestroy(() => {
     clearPolling();
     if (previewTimer) clearTimeout(previewTimer);
+    for (const timer of applyFollowTimers.values()) clearTimeout(timer);
+    applyFollowTimers.clear();
     stopWorkspaceEvents?.();
   });
 </script>
@@ -2037,14 +2148,22 @@
                 {/each}
               </section>
             {/if}
-            {#if activeProfile.apply_pending?.idempotency_key}
+            {#if activeProfile.apply_pending?.idempotency_supported || activeProfile.apply_pending?.operation_id}
               <div class="apply-status apply-pending" role="status">
-                <p>
-                  The manager has not confirmed the Apply sent at {new Date(
-                    activeProfile.apply_pending.started_at,
-                  ).toLocaleString()}. KeyboarDeer kept the exact request, so
-                  checking again cannot apply it twice.
-                </p>
+                {#if activeProfile.apply_pending.operation_id}
+                  <p>
+                    The manager accepted this apply. KeyboarDeer is tracking its
+                    final outcome; closing the app will not cancel the manager's
+                    work.
+                  </p>
+                {:else}
+                  <p>
+                    The manager has not confirmed the Apply sent at {new Date(
+                      activeProfile.apply_pending.started_at,
+                    ).toLocaleString()}. KeyboarDeer kept the exact request and
+                    can safely check again without applying it twice.
+                  </p>
+                {/if}
                 <button
                   class="button secondary"
                   type="button"
@@ -2052,19 +2171,52 @@
                   disabled={applyBusy}
                   >{applyBusy ? "Checking…" : "Check apply outcome"}</button
                 >
+                {#if activeProfile.apply_pending.operation_id}
+                  <button
+                    class="button secondary legacy-discard"
+                    type="button"
+                    on:click={discardLegacyPendingApply}
+                    disabled={applyBusy}
+                    >I checked the keyboard — clear unresolved apply</button
+                  >
+                {/if}
               </div>
             {:else if activeProfile.apply_pending}
               <p class="apply-status">
                 An Apply sent at {new Date(
                   activeProfile.apply_pending.started_at,
-                ).toLocaleString()} by an older KeyboarDeer has an unknown outcome.
-                To prevent a duplicate configuration, KeyboarDeer will not retry it
-                automatically.
+                ).toLocaleString()} has an unknown outcome. The manager version
+                that received it does not guarantee durable idempotency, so
+                KeyboarDeer will not replay it. Check the keyboard card before
+                continuing.
               </p>
-            {:else if applyOperation}
-              <p class="apply-status">
-                Manager Apply: {humanize(applyOperation.state)} —
-                {applyOperation.reason}
+              <button
+                class="button secondary legacy-discard"
+                type="button"
+                on:click={discardLegacyPendingApply}
+                >I checked the keyboard — continue editing</button
+              >
+            {:else if shownApplyOperation}
+              <div
+                class="apply-status apply-outcome"
+                data-state={shownApplyOperation.state}
+                role="status"
+              >
+                <p>
+                  Manager Apply: {humanize(shownApplyOperation.state)} —
+                  {shownApplyOperation.reason}
+                </p>
+                {#if applyOutcomeDetail(shownApplyOperation)}<p>
+                    {applyOutcomeDetail(shownApplyOperation)}
+                  </p>{/if}
+              </div>
+            {/if}
+            {#if linkedConfiguration}
+              <p class="apply-status active-revision">
+                Manager-reported active revision:
+                {linkedConfiguration.active_revision || "none"} · desired revision
+                {linkedConfiguration.desired_revision} · runtime:
+                {runtimeHealthLabel(linkedConfiguration).toLowerCase()}.
               </p>
             {/if}
             {#if feedback}<p class="inline-feedback" role="status">

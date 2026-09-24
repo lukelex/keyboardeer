@@ -301,6 +301,43 @@ func (s *Store) SetApplyState(id string, expectedDraftRevision uint64, configura
 	return Profile{}, fmt.Errorf("profile %q does not exist", id)
 }
 
+// SetApplyOutcome atomically clears the pending request, records the manager's
+// terminal operation, and updates the profile's configuration association.
+// Lifecycle metadata does not advance the editable draft revision.
+func (s *Store) SetApplyOutcome(id string, expectedDraftRevision uint64, configurationID string, outcome ApplyOutcome) (Profile, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	data, err := s.load()
+	if err != nil {
+		return Profile{}, err
+	}
+	for index := range data.Profiles {
+		profile := &data.Profiles[index]
+		if profile.ID != id {
+			continue
+		}
+		if profile.DraftRevision != expectedDraftRevision {
+			return Profile{}, &StaleDraftError{ProfileID: id, Expected: expectedDraftRevision, Actual: profile.DraftRevision}
+		}
+		if configurationID != "" {
+			for other := range data.Profiles {
+				if data.Profiles[other].ID != id && data.Profiles[other].ManagerConfigurationID == configurationID {
+					data.Profiles[other].ManagerConfigurationID = ""
+				}
+			}
+			profile.ManagerConfigurationID = configurationID
+		}
+		profile.ApplyPending = nil
+		profile.LastApplyOperation = &outcome
+		profile.UpdatedAt = time.Now().UTC()
+		if err := s.save(data); err != nil {
+			return Profile{}, err
+		}
+		return *profile, nil
+	}
+	return Profile{}, fmt.Errorf("profile %q does not exist", id)
+}
+
 // ClearConfigurationLink forgets a manager configuration that no longer
 // exists. Like SetApplyState it changes lifecycle metadata only, so no draft
 // revision advances and no draft content changes.

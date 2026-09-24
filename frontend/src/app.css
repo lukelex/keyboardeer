@@ -1622,3 +1622,22 @@ footer {
   margin: 10px 0 0;
   padding: 9px 11px;
 }
+.apply-outcome p {
+  margin: 0;
+}
+.apply-outcome p + p {
+  margin-top: 4px;
+}
+.apply-outcome[data-state="rejected"],
+.apply-outcome[data-state="failed"] {
+  border-color: #e3b9a8;
+  color: #8a3b24;
+}
+.apply-outcome[data-state="rolled_back"] {
+  border-color: #dfcea4;
+  color: #796239;
+}
+.legacy-discard {
+  color: #35604c !important;
+  margin-top: 6px;
+}

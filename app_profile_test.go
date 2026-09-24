@@ -310,7 +310,7 @@ func TestAppDeletesManagedConfigurationButKeepsProfiles(t *testing.T) {
 	}
 }
 
-const managedCapabilityReply = `{"server_id":"server-1","capabilities":[{"name":"managed_configurations","available":true,"reason_code":"capability_available","reason":"ready"}]}`
+const managedCapabilityReply = `{"server_id":"server-1","manager_version":"v1.1.0","capabilities":[{"name":"managed_configurations","available":true,"reason_code":"capability_available","reason":"ready"}]}`
 const emptySnapshotReply = `{"state_revision":4,"event_cursor":{"server_id":"server-1","event_id":2,"state_revision":4},"devices":[],"configurations":[],"operations":[],"health":{"healthy":true,"reason_code":"manager_healthy","reason":"ok"}}`
 const linkedSnapshotReply = `{"state_revision":4,"event_cursor":{"server_id":"server-1","event_id":2,"state_revision":4},"devices":[],"configurations":[{"id":"cfg-1","name":"Typing","ownership":"managed","enabled":true,"device_id":"device-1","desired_revision":3,"active_revision":3,"runtime":{"phase":"running","reason_code":"runtime_running","reason":"running","connected":true,"healthy":true,"failure_count":0}}],"operations":[],"health":{"healthy":true,"reason_code":"manager_healthy","reason":"ok"}}`
 const createdOperationReply = `{"operation":{"id":"op-1","kind":"apply","state":"succeeded","resource":{"kind":"configuration","id":"cfg-1"},"reason_code":"operation_succeeded","reason":"configuration persisted and activation confirmed","configuration_revision":1}}`
@@ -392,7 +392,12 @@ func TestAppKeepsUnconfirmedApplyAndResumesItLater(t *testing.T) {
 		t.Fatalf("unconfirmed apply = %#v, %v", result, err)
 	}
 	// Simulate a GUI restart: a new App reads the persisted pending request.
-	restarted := &App{manager: app.manager, profiles: profile.NewStore(store.Path())}
+	restartedManager := managerapi.New(managerapi.Options{
+		Endpoint: endpoint, ClientName: "keyboardeer-test", ClientVersion: "test",
+		ReconnectInitial: time.Millisecond, ReconnectMaximum: time.Millisecond,
+	})
+	t.Cleanup(func() { _ = restartedManager.Close() })
+	restarted := &App{manager: restartedManager, profiles: profile.NewStore(store.Path())}
 	pending, err := restarted.profileByID(draft.ID)
 	if err != nil || pending.ApplyPending == nil || !pending.ApplyPending.Replayable() {
 		t.Fatalf("pending apply was not persisted: %#v, %v", pending.ApplyPending, err)
@@ -409,6 +414,196 @@ func TestAppKeepsUnconfirmedApplyAndResumesItLater(t *testing.T) {
 		if key != keys[0] {
 			t.Fatalf("resume used a different idempotency key: %v", keys)
 		}
+	}
+}
+
+func TestAppDoesNotRetryUncertainApplyOnUnknownManagerVersion(t *testing.T) {
+	createCalls := 0
+	endpoint := testManagerWithKeys(t, func(method string, _ json.RawMessage, _ string) string {
+		switch method {
+		case "session.hello":
+			return `{"selected_version":1,"server_id":"server-1","manager_version":"test"}`
+		case "manager.get":
+			return `{"server_id":"server-1","manager_version":"dev","capabilities":[{"name":"managed_configurations","available":true,"reason_code":"capability_available","reason":"ready"}]}`
+		case "snapshot.get":
+			return emptySnapshotReply
+		case "configuration.create":
+			createCalls++
+			return "ERROR temporary_unavailable"
+		}
+		t.Errorf("unexpected manager method %q", method)
+		return `{}`
+	})
+	app, _, draft := newApplyTestApp(t, endpoint)
+	result, err := app.ApplyProfile(draft.ID)
+	if err != nil || !result.Uncertain || result.Profile.ApplyPending == nil || result.Profile.ApplyPending.IdempotencySupported {
+		t.Fatalf("uncertain apply = %#v, %v", result, err)
+	}
+	if _, err := app.ResumeApply(draft.ID); err == nil {
+		t.Fatal("unknown manager version was assumed to support idempotent replay")
+	}
+	if createCalls != 1 {
+		t.Fatalf("uncertain mutation was sent %d times", createCalls)
+	}
+	resolved, err := app.DiscardPendingApply(draft.ID)
+	if err != nil || resolved.ApplyPending != nil || resolved.LastApplyOperation == nil || resolved.LastApplyOperation.State != "unknown" {
+		t.Fatalf("manual unknown-outcome resolution = %#v, %v", resolved, err)
+	}
+}
+
+func TestAppFollowsRunningApplyUntilItFinishes(t *testing.T) {
+	applyCalls := 0
+	operationQueries := 0
+	endpoint := testManagerWithKeys(t, func(method string, rawParams json.RawMessage, _ string) string {
+		switch method {
+		case "session.hello":
+			return `{"selected_version":1,"server_id":"server-1","manager_version":"test"}`
+		case "manager.get":
+			return managedCapabilityReply
+		case "snapshot.get":
+			return emptySnapshotReply
+		case "configuration.create":
+			applyCalls++
+			return `{"operation":{"id":"op-1","kind":"apply","state":"running","resource":{"kind":"configuration","id":"cfg-1"},"reason_code":"operation_running","reason":"mutation accepted by manager"}}`
+		case "operation.get":
+			operationQueries++
+			var operationParams managerapi.OperationParams
+			if err := json.Unmarshal(rawParams, &operationParams); err != nil {
+				t.Error(err)
+			} else if operationParams.OperationID != "op-1" {
+				t.Errorf("queried unexpected operation %q", operationParams.OperationID)
+			}
+			return `{"operation":{"id":"op-1","kind":"apply","state":"rolled_back","resource":{"kind":"configuration","id":"cfg-1"},"reason_code":"runtime_rollback_succeeded","reason":"activation failed; the previous revision was restored","configuration_revision":2}}`
+		}
+		t.Errorf("unexpected manager method %q", method)
+		return `{}`
+	})
+	app, store, draft := newApplyTestApp(t, endpoint)
+	running, err := app.ApplyProfile(draft.ID)
+	if err != nil || running.Operation.State != "running" || running.Profile.ApplyPending == nil || running.Profile.ApplyPending.OperationID != "op-1" {
+		t.Fatalf("running apply = %#v, %v", running, err)
+	}
+	// Reopen the profile store and follow the accepted operation after a GUI
+	// restart. The operation ID is queried; the mutation is not replayed.
+	restartedManager := managerapi.New(managerapi.Options{
+		Endpoint: endpoint, ClientName: "keyboardeer-test", ClientVersion: "test",
+		ReconnectInitial: time.Millisecond, ReconnectMaximum: time.Millisecond,
+	})
+	t.Cleanup(func() { _ = restartedManager.Close() })
+	restarted := &App{manager: restartedManager, profiles: profile.NewStore(store.Path())}
+	finished, err := restarted.ResumeApply(draft.ID)
+	if err != nil || finished.Operation.State != "rolled_back" || finished.Profile.ApplyPending != nil || finished.Profile.ManagerConfigurationID != "cfg-1" {
+		t.Fatalf("finished apply = %#v, %v", finished, err)
+	}
+	if applyCalls != 1 || operationQueries != 1 {
+		t.Fatalf("apply calls = %d, operation queries = %d", applyCalls, operationQueries)
+	}
+	if outcome := finished.Profile.LastApplyOperation; outcome == nil || outcome.State != "rolled_back" || outcome.ConfigurationRevision != 2 {
+		t.Fatalf("rolled-back outcome was not persisted: %#v", finished.Profile.LastApplyOperation)
+	}
+	loaded, err := restarted.profileByID(draft.ID)
+	if err != nil || loaded.LastApplyOperation == nil || loaded.LastApplyOperation.State != "rolled_back" {
+		t.Fatalf("persisted outcome after reload = %#v, %v", loaded.LastApplyOperation, err)
+	}
+}
+
+func TestAppPersistsRejectedCreateOutcomeWithoutAConfigurationLink(t *testing.T) {
+	endpoint := testManagerWithKeys(t, func(method string, _ json.RawMessage, _ string) string {
+		switch method {
+		case "session.hello":
+			return `{"selected_version":1,"server_id":"server-1","manager_version":"test"}`
+		case "manager.get":
+			return managedCapabilityReply
+		case "snapshot.get":
+			return emptySnapshotReply
+		case "configuration.create":
+			return `{"operation":{"id":"op-rejected","kind":"apply","state":"rejected","reason_code":"validation_rejected","reason":"the manager rejected this candidate"}}`
+		}
+		t.Errorf("unexpected manager method %q", method)
+		return `{}`
+	})
+	app, store, draft := newApplyTestApp(t, endpoint)
+	result, err := app.ApplyProfile(draft.ID)
+	if err != nil || result.Operation.State != "rejected" || result.Profile.ManagerConfigurationID != "" {
+		t.Fatalf("rejected apply = %#v, %v", result, err)
+	}
+	loaded, err := profile.NewStore(store.Path()).Load()
+	if err != nil || len(loaded.Profiles) != 1 || loaded.Profiles[0].LastApplyOperation == nil || loaded.Profiles[0].LastApplyOperation.State != "rejected" {
+		t.Fatalf("rejected outcome was not persisted: %#v, %v", loaded, err)
+	}
+}
+
+func TestAppDoesNotReplayWhenAnAcceptedOperationIsNoLongerRetained(t *testing.T) {
+	createCalls := 0
+	endpoint := testManagerWithKeys(t, func(method string, _ json.RawMessage, _ string) string {
+		switch method {
+		case "session.hello":
+			return `{"selected_version":1,"server_id":"server-1","manager_version":"test"}`
+		case "manager.get":
+			return managedCapabilityReply
+		case "operation.get":
+			return "ERROR not_found"
+		case "configuration.create":
+			createCalls++
+			return createdOperationReply
+		}
+		t.Errorf("unexpected manager method %q", method)
+		return `{}`
+	})
+	app, store, draft := newApplyTestApp(t, endpoint)
+	request, err := json.Marshal(managerapi.ConfigurationWriteParams{
+		Name:  "Typing",
+		Model: managerapi.PreviewModel{DeviceID: draft.DeviceID, Behavior: "(defsrc caps)\n(deflayer base caps)"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pending, err := store.SetApplyState(draft.ID, draft.DraftRevision, "", &profile.PendingApply{
+		ManagerServerID:      "server-1",
+		StartedAt:            time.Now().UTC(),
+		IdempotencyKey:       "keyboardeer-accepted",
+		IdempotencySupported: true,
+		Method:               "configuration.create",
+		Request:              request,
+		OperationID:          "op-expired",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.ResumeApply(draft.ID); err == nil {
+		t.Fatal("missing accepted operation was treated as safely replayable")
+	}
+	if createCalls != 0 {
+		t.Fatalf("an accepted apply was replayed %d times", createCalls)
+	}
+	retained, err := app.profileByID(draft.ID)
+	if err != nil || retained.ApplyPending == nil || retained.ApplyPending.OperationID != pending.ApplyPending.OperationID {
+		t.Fatalf("unresolved operation was not preserved: %#v, %v", retained.ApplyPending, err)
+	}
+}
+
+func TestAppDiscardsOnlyUnreplayablePendingApply(t *testing.T) {
+	store := profile.NewStore(filepath.Join(t.TempDir(), "profiles.json"))
+	app := newAppWithProfileStore(store)
+	defer app.manager.Close()
+	draft, err := app.CreateProfile("device-1", "Typing", geometry.ANSI60USID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := &profile.PendingApply{ManagerServerID: "server-1", StartedAt: time.Now().UTC()}
+	if _, err := store.SetApplyState(draft.ID, draft.DraftRevision, "", legacy); err != nil {
+		t.Fatal(err)
+	}
+	cleared, err := app.DiscardPendingApply(draft.ID)
+	if err != nil || cleared.ApplyPending != nil || cleared.LastApplyOperation == nil || cleared.LastApplyOperation.State != "unknown" {
+		t.Fatalf("discard legacy = %#v, %v", cleared, err)
+	}
+	replayable := &profile.PendingApply{ManagerServerID: "server-1", StartedAt: time.Now().UTC(), IdempotencyKey: "key", IdempotencySupported: true, Method: "configuration.create", Request: json.RawMessage(`{}`)}
+	if _, err := store.SetApplyState(draft.ID, draft.DraftRevision, "", replayable); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.DiscardPendingApply(draft.ID); err == nil {
+		t.Fatal("a replayable pending apply was discarded")
 	}
 }
 

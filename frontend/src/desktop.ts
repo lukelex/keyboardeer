@@ -75,6 +75,8 @@ export interface Operation {
   reason_code: string;
   reason: string;
   configuration_revision?: number;
+  started_at?: string;
+  updated_at?: string;
 }
 export interface PreviewResult {
   validation: { outcome: string; reason_code: string; reason: string };
@@ -123,9 +125,13 @@ export interface Profile {
     started_at: string;
     /** Present when the exact request can be replayed safely. */
     idempotency_key?: string;
+    /** True only for manager versions with durable mutation idempotency. */
+    idempotency_supported?: boolean;
     method?: string;
     operation_id?: string;
   } | null;
+  /** Last terminal Apply outcome, persisted locally across GUI restarts. */
+  last_apply_operation?: Operation | null;
   draft_revision: number;
   geometry: ProfileGeometry;
   layers: ProfileLayer[];
@@ -205,6 +211,7 @@ type AppBindings = {
   PreviewProfile?: (id: string) => Promise<ProfilePreview>;
   ApplyProfile?: (id: string) => Promise<ProfileApplyResult>;
   ResumeApply?: (id: string) => Promise<ProfileApplyResult>;
+  DiscardPendingApply?: (id: string) => Promise<Profile>;
   SetConfigurationEnabled?: (
     configurationID: string,
     enabled: boolean,
@@ -285,6 +292,8 @@ export const PreviewProfile = (id: string) =>
   binding<(id: string) => Promise<ProfilePreview>>("PreviewProfile")(id);
 export const ApplyProfile = (id: string) =>
   binding<(id: string) => Promise<ProfileApplyResult>>("ApplyProfile")(id);
+export const DiscardPendingApply = (id: string) =>
+  binding<(id: string) => Promise<Profile>>("DiscardPendingApply")(id);
 export const ResumeApply = (id: string) =>
   binding<(id: string) => Promise<ProfileApplyResult>>("ResumeApply")(id);
 export const SetConfigurationEnabled = (

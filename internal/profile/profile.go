@@ -37,6 +37,7 @@ type Profile struct {
 	DeviceID               string                `json:"device_id"`
 	ManagerConfigurationID string                `json:"manager_configuration_id,omitempty"`
 	ApplyPending           *PendingApply         `json:"apply_pending,omitempty"`
+	LastApplyOperation     *ApplyOutcome         `json:"last_apply_operation,omitempty"`
 	DraftRevision          uint64                `json:"draft_revision"`
 	Geometry               Geometry              `json:"geometry"`
 	Layers                 []Layer               `json:"layers"`
@@ -49,21 +50,47 @@ type Profile struct {
 }
 
 // PendingApply is written before a manager mutation is sent. It records the
-// exact request and its idempotency key, so a lost response (or a GUI restart)
-// is recovered by replaying the identical request: the manager then returns
-// the original operation instead of applying twice. Records written before
-// idempotency support have no key and cannot be replayed.
+// exact request and its idempotency key. A lost response is safe to replay only
+// when the manager version guarantees durable idempotency.
+// Accepted operations with a known ID are followed directly on every version.
 type PendingApply struct {
-	ManagerServerID string          `json:"manager_server_id"`
-	StartedAt       time.Time       `json:"started_at"`
-	IdempotencyKey  string          `json:"idempotency_key,omitempty"`
-	Method          string          `json:"method,omitempty"`
-	Request         json.RawMessage `json:"request,omitempty"`
-	OperationID     string          `json:"operation_id,omitempty"`
+	ManagerServerID      string          `json:"manager_server_id"`
+	StartedAt            time.Time       `json:"started_at"`
+	IdempotencyKey       string          `json:"idempotency_key,omitempty"`
+	IdempotencySupported bool            `json:"idempotency_supported,omitempty"`
+	Method               string          `json:"method,omitempty"`
+	Request              json.RawMessage `json:"request,omitempty"`
+	OperationID          string          `json:"operation_id,omitempty"`
+}
+
+// ApplyOutcome is the durable, manager-reported result of the latest apply
+// initiated from this profile. Runtime state and the actually active revision
+// remain authoritative in the manager workspace snapshot.
+type ApplyOutcome struct {
+	ID                    string         `json:"id"`
+	Kind                  string         `json:"kind"`
+	State                 string         `json:"state"`
+	Resource              *ApplyResource `json:"resource,omitempty"`
+	StartedAt             string         `json:"started_at,omitempty"`
+	UpdatedAt             string         `json:"updated_at,omitempty"`
+	ReasonCode            string         `json:"reason_code"`
+	Reason                string         `json:"reason"`
+	ConfigurationRevision uint64         `json:"configuration_revision,omitempty"`
+}
+
+type ApplyResource struct {
+	Kind string `json:"kind"`
+	ID   string `json:"id"`
 }
 
 // Replayable reports whether the pending apply can be recovered safely.
 func (p PendingApply) Replayable() bool {
+	return p.IdempotencySupported && p.HasReplayableRequest()
+}
+
+// HasReplayableRequest reports whether the exact mutation is retained, even
+// when its original manager version did not guarantee idempotency.
+func (p PendingApply) HasReplayableRequest() bool {
 	return p.IdempotencyKey != "" && len(p.Request) != 0 &&
 		(p.Method == "configuration.create" || p.Method == "configuration.update")
 }
@@ -171,9 +198,12 @@ func Validate(profile Profile) error {
 		if pending.ManagerServerID == "" || pending.StartedAt.IsZero() {
 			return fmt.Errorf("pending apply is incomplete")
 		}
-		if pending.IdempotencyKey != "" && !pending.Replayable() {
-			return fmt.Errorf("pending apply has an idempotency key but no replayable request")
+		if (pending.IdempotencyKey != "" || pending.IdempotencySupported) && !pending.HasReplayableRequest() {
+			return fmt.Errorf("pending apply has an idempotency key but no complete request")
 		}
+	}
+	if outcome := profile.LastApplyOperation; outcome != nil && (outcome.State == "" || (outcome.ID == "" && outcome.State != "unknown")) {
+		return fmt.Errorf("last apply operation is incomplete")
 	}
 	if profile.Settings.Version != 1 {
 		return fmt.Errorf("unsupported compiler settings version %d", profile.Settings.Version)

@@ -419,11 +419,12 @@ func (a *App) ApplyProfile(id string) (ProfileApplyResult, error) {
 		return ProfileApplyResult{}, err
 	}
 	pending, err := store.SetApplyState(draft.ID, draft.DraftRevision, "", &profile.PendingApply{
-		ManagerServerID: info.ServerID,
-		StartedAt:       time.Now().UTC(),
-		IdempotencyKey:  managerapi.NewIdempotencyKey(),
-		Method:          method,
-		Request:         request,
+		ManagerServerID:      info.ServerID,
+		StartedAt:            time.Now().UTC(),
+		IdempotencyKey:       managerapi.NewIdempotencyKey(),
+		IdempotencySupported: managerapi.SupportsDurableMutationIdempotency(info.ManagerVersion),
+		Method:               method,
+		Request:              request,
 	})
 	if err != nil {
 		return ProfileApplyResult{}, err
@@ -431,9 +432,9 @@ func (a *App) ApplyProfile(id string) (ProfileApplyResult, error) {
 	return a.sendPendingApply(ctx, store, pending)
 }
 
-// ResumeApply replays a profile's unconfirmed apply with its original request
-// and idempotency key. The manager returns the original operation (running or
-// finished) instead of performing the mutation again.
+// ResumeApply recovers a profile's unconfirmed apply. Once accepted, it follows
+// the saved operation ID; before acceptance is known, it replays the exact
+// request only when the original manager version guarantees durable idempotency.
 func (a *App) ResumeApply(id string) (ProfileApplyResult, error) {
 	store, err := a.profileStore()
 	if err != nil {
@@ -446,29 +447,100 @@ func (a *App) ResumeApply(id string) (ProfileApplyResult, error) {
 	if draft.ApplyPending == nil {
 		return ProfileApplyResult{Profile: draft}, nil
 	}
-	if !draft.ApplyPending.Replayable() {
-		return ProfileApplyResult{}, fmt.Errorf("this apply was sent by an older KeyboarDeer without a recovery key and cannot be replayed")
+	if !draft.ApplyPending.HasReplayableRequest() {
+		return ProfileApplyResult{}, fmt.Errorf("this apply was sent by an older KeyboarDeer without a recovery request and cannot be replayed")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	info, err := a.manager.ManagerGet(ctx)
+	if err != nil {
+		return ProfileApplyResult{}, err
+	}
+	if info.ServerID != draft.ApplyPending.ManagerServerID {
+		return ProfileApplyResult{}, fmt.Errorf("this apply belongs to manager %q, but the connected manager is %q; KeyboarDeer kept it pending and did not replay it", draft.ApplyPending.ManagerServerID, info.ServerID)
+	}
+	// Once an operation ID is known, query that accepted operation directly.
+	// In particular, this works after a manager restart, when the manager marks
+	// interrupted work failed and restores the durable operation journal.
+	if draft.ApplyPending.OperationID != "" {
+		operation, err := a.manager.OperationGet(ctx, draft.ApplyPending.OperationID)
+		if err == nil {
+			return a.recordApplyOperation(store, draft, operation)
+		}
+		var managerError *managerapi.Error
+		if errors.As(err, &managerError) && managerError.Code == "not_found" {
+			// Do not replay: a retained idempotency record could have expired, in
+			// which case replaying could create a second operation.
+			return ProfileApplyResult{}, fmt.Errorf("manager no longer retains accepted operation %q; the apply remains pending and was not replayed: %w", draft.ApplyPending.OperationID, err)
+		}
+		return ProfileApplyResult{}, err
+	}
+	if !draft.ApplyPending.IdempotencySupported {
+		return ProfileApplyResult{}, fmt.Errorf("the manager version that received this apply does not guarantee durable idempotency; KeyboarDeer kept it pending and will not replay it")
+	}
 	return a.sendPendingApply(ctx, store, draft)
+}
+
+// DiscardPendingApply clears an unconfirmed request only after the user
+// acknowledges checking the keyboard. A safely replayable request without an
+// accepted operation ID must be recovered with ResumeApply instead.
+func (a *App) DiscardPendingApply(id string) (profile.Profile, error) {
+	store, err := a.profileStore()
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	draft, err := a.profileByID(id)
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	if draft.ApplyPending == nil {
+		return draft, nil
+	}
+	if draft.ApplyPending.Replayable() && draft.ApplyPending.OperationID == "" {
+		return profile.Profile{}, fmt.Errorf("this apply can be checked safely; use Check apply outcome instead of clearing it")
+	}
+	configurationID := ""
+	if len(draft.ApplyPending.Request) != 0 {
+		var params managerapi.ConfigurationWriteParams
+		if json.Unmarshal(draft.ApplyPending.Request, &params) == nil {
+			configurationID = params.ConfigurationID
+		}
+	}
+	reason := "The apply outcome was not confirmed. After checking the keyboard, you cleared this unresolved request; KeyboarDeer did not replay it."
+	if draft.ApplyPending.OperationID != "" {
+		reason = "The outcome of this accepted operation was not recovered. After checking the keyboard, you cleared its tracking record; this did not cancel manager work."
+	}
+	return store.SetApplyOutcome(draft.ID, draft.DraftRevision, configurationID, profile.ApplyOutcome{
+		ID:         draft.ApplyPending.OperationID,
+		Kind:       "apply",
+		State:      "unknown",
+		ReasonCode: "apply_outcome_unknown",
+		Reason:     reason,
+	})
 }
 
 func (a *App) sendPendingApply(ctx context.Context, store *profile.Store, pending profile.Profile) (ProfileApplyResult, error) {
 	record := pending.ApplyPending
+	info, err := a.manager.ManagerGet(ctx)
+	if err != nil {
+		return ProfileApplyResult{Profile: pending, Uncertain: true}, nil
+	}
+	if info.ServerID != record.ManagerServerID {
+		return ProfileApplyResult{}, fmt.Errorf("this apply belongs to manager %q, but the connected manager is %q; KeyboarDeer kept it pending and did not send it", record.ManagerServerID, info.ServerID)
+	}
 	var params managerapi.ConfigurationWriteParams
 	if err := json.Unmarshal(record.Request, &params); err != nil {
 		return ProfileApplyResult{}, fmt.Errorf("decode pending apply request: %w", err)
 	}
 	var operation managerapi.Operation
-	var err error
+	err = nil
 	for attempt := 0; ; attempt++ {
 		if record.Method == "configuration.create" {
 			operation, err = a.manager.ConfigurationCreate(ctx, params, record.IdempotencyKey)
 		} else {
 			operation, err = a.manager.ConfigurationUpdate(ctx, params, record.IdempotencyKey)
 		}
-		if err == nil || !uncertainMutationError(err) || attempt >= len(applyRetryDelays) {
+		if err == nil || !uncertainMutationError(err) || !record.IdempotencySupported || attempt >= len(applyRetryDelays) {
 			break
 		}
 		select {
@@ -477,6 +549,10 @@ func (a *App) sendPendingApply(ctx context.Context, store *profile.Store, pendin
 		}
 		if ctx.Err() != nil {
 			break
+		}
+		info, checkErr := a.manager.ManagerGet(ctx)
+		if checkErr != nil || info.ServerID != record.ManagerServerID {
+			return ProfileApplyResult{Profile: pending, Uncertain: true}, nil
 		}
 	}
 	if err != nil {
@@ -509,14 +585,30 @@ func (a *App) recordApplyOperation(store *profile.Store, pending profile.Profile
 		}
 		return ProfileApplyResult{Profile: updated, Operation: operation}, nil
 	}
-	// A rejected create is never persisted by the manager. Successful,
-	// rolled-back, and failed lifecycle outcomes still identify a managed
-	// resource, so retain the opaque ID for a revision-checked next update.
-	linkedID := ""
-	if operation.State != "rejected" && operation.Resource != nil && operation.Resource.Kind == "configuration" && operation.Resource.ID != "" {
+	// Preserve the existing configuration association for update outcomes,
+	// including rejection. A rejected create has no configuration to link.
+	var params managerapi.ConfigurationWriteParams
+	if err := json.Unmarshal(pending.ApplyPending.Request, &params); err != nil {
+		return ProfileApplyResult{}, fmt.Errorf("decode completed apply request: %w", err)
+	}
+	linkedID := params.ConfigurationID
+	if linkedID == "" && operation.State != "rejected" && operation.Resource != nil && operation.Resource.Kind == "configuration" {
 		linkedID = operation.Resource.ID
 	}
-	linked, err := store.SetApplyState(pending.ID, pending.DraftRevision, linkedID, nil)
+	outcome := profile.ApplyOutcome{
+		ID:                    operation.ID,
+		Kind:                  operation.Kind,
+		State:                 operation.State,
+		StartedAt:             operation.StartedAt,
+		UpdatedAt:             operation.UpdatedAt,
+		ReasonCode:            operation.ReasonCode,
+		Reason:                operation.Reason,
+		ConfigurationRevision: operation.ConfigurationRevision,
+	}
+	if operation.Resource != nil {
+		outcome.Resource = &profile.ApplyResource{Kind: operation.Resource.Kind, ID: operation.Resource.ID}
+	}
+	linked, err := store.SetApplyOutcome(pending.ID, pending.DraftRevision, linkedID, outcome)
 	if err != nil {
 		return ProfileApplyResult{}, fmt.Errorf("manager apply finished but KeyboarDeer could not save its configuration link: %w", err)
 	}
@@ -544,7 +636,14 @@ func terminalOperation(state string) bool {
 // mutationWithRetry sends a single-shot lifecycle mutation with one key,
 // replaying it if the response is lost.
 func (a *App) mutationWithRetry(ctx context.Context, send func(key string) (managerapi.Operation, error)) (managerapi.Operation, error) {
+	info, err := a.manager.ManagerGet(ctx)
+	if err != nil {
+		return managerapi.Operation{}, err
+	}
 	key := managerapi.NewIdempotencyKey()
+	if !managerapi.SupportsDurableMutationIdempotency(info.ManagerVersion) {
+		return send(key)
+	}
 	for attempt := 0; ; attempt++ {
 		operation, err := send(key)
 		if err == nil || !uncertainMutationError(err) || attempt >= len(applyRetryDelays) {
@@ -554,6 +653,10 @@ func (a *App) mutationWithRetry(ctx context.Context, send func(key string) (mana
 		case <-ctx.Done():
 			return operation, err
 		case <-time.After(applyRetryDelays[attempt]):
+		}
+		current, checkErr := a.manager.ManagerGet(ctx)
+		if checkErr != nil || current.ServerID != info.ServerID {
+			return operation, err
 		}
 	}
 }
