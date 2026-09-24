@@ -110,6 +110,72 @@ cut del caps a s d f g h j k l ; ' ret pgup
 copy KeyPaste lsft z x c v b n m , . / rsft up pgdn
 home KeyMenu lctl lmet lalt spc spc ralt rctl left down rght`,
 		},
+		{
+			name:     "ISO 60%",
+			template: ISO60US,
+			want: `grv 1 2 3 4 5 6 7 8 9 0 - = bspc
+tab q w e r t y u i o p [ ] ret
+caps a s d f g h j k l ; ' \
+lsft lsgt z x c v b n m , . / rsft
+lctl lmet lalt spc ralt rmet cmp rctl`,
+		},
+		{
+			name:     "ISO TKL",
+			template: ISOTKLUS,
+			want: `esc f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 ssrq slck pause
+grv 1 2 3 4 5 6 7 8 9 0 - = bspc ins home pgup
+tab q w e r t y u i o p [ ] ret del end pgdn
+caps a s d f g h j k l ; ' \
+lsft 102d z x c v b n m , . / rsft up
+lctl lmet lalt spc ralt rmet cmp rctl left down rght`,
+		},
+		{
+			name:     "US ANSI 100%",
+			template: ANSI100US,
+			want: `esc f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 ssrq slck pause
+grv 1 2 3 4 5 6 7 8 9 0 - = bspc ins home pgup nlck kp/ kp* kp-
+tab q w e r t y u i o p [ ] \ del end pgdn kp7 kp8 kp9 kp+
+caps a s d f g h j k l ; ' ret kp4 kp5 kp6
+lsft z x c v b n m , . / rsft up kp1 kp2 kp3 kprt
+lctl lmet lalt spc ralt rmet cmp rctl left down rght kp0 kp.`,
+		},
+		{
+			name:     "ISO 100%",
+			template: ISO100US,
+			want: `esc f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 ssrq slck pause
+grv 1 2 3 4 5 6 7 8 9 0 - = bspc ins home pgup nlck kp/ kp* kp-
+tab q w e r t y u i o p [ ] ret del end pgdn kp7 kp8 kp9 kp+
+caps a s d f g h j k l ; ' \ kp4 kp5 kp6
+lsft 102d z x c v b n m , . / rsft up kp1 kp2 kp3 kprt
+lctl lmet lalt spc ralt rmet cmp rctl left down rght kp0 kp.`,
+		},
+		{
+			// thinkpad_x220_iso.kbd, US defsrc at the pinned commit.
+			name:     "ISO Laptop 93",
+			template: LaptopISO93,
+			want: `esc mute vold volu prnt slck pause ins del home pgup
+f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 end pgdn
+grv 1 2 3 4 5 6 7 8 9 0 - = bspc
+tab q w e r t y u i o p [ ] ret
+caps a s d f g h j k l ; ' \
+lsft 102d z x c v b n m , . / rsft
+wkup lctl lmet lalt spc ralt cmps rctl back up fwd
+left down rght`,
+		},
+		{
+			// thinkpad_T430_iso.kbd, US defsrc at the pinned commit: no 102nd
+			// key despite the ISO filename, and no dedicated system-key row.
+			name:     "ISO Laptop 87",
+			template: LaptopISO87,
+			want: `mute vold volu
+esc f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 home end ins del
+grv 1 2 3 4 5 6 7 8 9 0 - = bspc
+tab q w e r t y u i o p [ ] \
+caps a s d f g h j k l ; ' ret
+lsft z x c v b n m , . / rsft
+wkup lctl lmet lalt spc ralt sys rctl pgdn up pgup
+left down rght`,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

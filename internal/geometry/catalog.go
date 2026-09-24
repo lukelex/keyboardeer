@@ -14,6 +14,14 @@ const (
 	LegacyANSI60USID = "us-ansi-60-v1"
 	ANSITKLUSID      = "us-ansi-tkl-v1"
 	KinesisFreestyle = "kinesis-freestyle2-v1"
+
+	ISO60USID   = "iso-60-v1"
+	ISOTKLUSID  = "iso-tkl-v1"
+	ANSI100USID = "us-ansi-100-v1"
+	ISO100USID  = "iso-100-v1"
+
+	LaptopISO93ID = "laptop-iso-93-v1"
+	LaptopISO87ID = "laptop-iso-87-v1"
 )
 
 // Key is one visible key in a layout. SourceKey is the KMonad defsrc token;
@@ -107,6 +115,183 @@ var KinesisFreestyle2 = templateFromRows(
 	},
 )
 
+// ISO60US follows KMonad's documented iso_60 template at
+// 30b9705fb56059483969624d58cad077d5c62300. The ISO enter and split shifts are
+// drawn as single wider keys: the row-based Key model cannot express the true
+// L-shaped enter or stepped capslock, and the parametric position builder in
+// the catalog plan is the intended replacement for that fidelity.
+var ISO60US = templateFromRows(
+	ISO60USID,
+	"ISO 60%",
+	"Standard 61-key ISO layout from KMonad's documented source template. Left shift is split by the extra 102nd key and the enter is the taller ISO shape.",
+	[]layoutKey{
+		layout("grv"), layout("1"), layout("2"), layout("3"), layout("4"), layout("5"), layout("6"), layout("7"), layout("8"), layout("9"), layout("0"), layout("-"), layout("="), layout("bspc"),
+	},
+	[]layoutKey{
+		layout("tab"), layout("q"), layout("w"), layout("e"), layout("r"), layout("t"), layout("y"), layout("u"), layout("i"), layout("o"), layout("p"), layout("["), layout("]"), layoutWidth("ret", 1.5),
+	},
+	[]layoutKey{
+		layout("caps"), layout("a"), layout("s"), layout("d"), layout("f"), layout("g"), layout("h"), layout("j"), layout("k"), layout("l"), layout(";"), layout("'"), layout("\\"),
+	},
+	[]layoutKey{
+		layoutWidth("lsft", 1.25), layoutWidth("lsgt", 1.25), layout("z"), layout("x"), layout("c"), layout("v"), layout("b"), layout("n"), layout("m"), layout(","), layout("."), layout("/"), layoutWidth("rsft", 1.75),
+	},
+	[]layoutKey{
+		layout("lctl"), layout("lmet"), layout("lalt"), layoutWidth("spc", 6.25), layoutWidth("ralt", 1.5), layout("rmet"), layout("cmp"), layout("rctl"),
+	},
+)
+
+// ISOTKLUS follows KMonad's documented iso_tkl template at
+// 30b9705fb56059483969624d58cad077d5c62300. Unlike the ANSI TKL, that template
+// keeps the SysRq/ScrollLock/Pause cluster in the function row.
+var ISOTKLUS = templateFromRows(
+	ISOTKLUSID,
+	"ISO TKL",
+	"Tenkeyless ISO layout from KMonad's documented source template, retaining the SysRq/ScrollLock/Pause function-row cluster.",
+	[]layoutKey{
+		layout("esc"), gap(2, "f1"), layout("f2"), layout("f3"), layout("f4"), gap(1, "f5"), layout("f6"), layout("f7"), layout("f8"), gap(1, "f9"), layout("f10"), layout("f11"), layout("f12"), gap(1, "ssrq"), layout("slck"), layout("pause"),
+	},
+	[]layoutKey{
+		layout("grv"), layout("1"), layout("2"), layout("3"), layout("4"), layout("5"), layout("6"), layout("7"), layout("8"), layout("9"), layout("0"), layout("-"), layout("="), layout("bspc"), gap(1, "ins"), layout("home"), layout("pgup"),
+	},
+	[]layoutKey{
+		layout("tab"), layout("q"), layout("w"), layout("e"), layout("r"), layout("t"), layout("y"), layout("u"), layout("i"), layout("o"), layout("p"), layout("["), layout("]"), layoutWidth("ret", 1.5), gap(1, "del"), layout("end"), layout("pgdn"),
+	},
+	[]layoutKey{
+		layout("caps"), layout("a"), layout("s"), layout("d"), layout("f"), layout("g"), layout("h"), layout("j"), layout("k"), layout("l"), layout(";"), layout("'"), layout("\\"),
+	},
+	[]layoutKey{
+		layoutWidth("lsft", 1.25), layoutWidth("102d", 1.25), layout("z"), layout("x"), layout("c"), layout("v"), layout("b"), layout("n"), layout("m"), layout(","), layout("."), layout("/"), layoutWidth("rsft", 1.75), gap(1, "up"),
+	},
+	[]layoutKey{
+		layout("lctl"), layout("lmet"), layout("lalt"), layoutWidth("spc", 6.25), layoutWidth("ralt", 1.5), layout("rmet"), layout("cmp"), layout("rctl"), gap(1, "left"), layout("down"), layout("rght"),
+	},
+)
+
+// ANSI100US follows KMonad's documented us_ansi_100 template at
+// 30b9705fb56059483969624d58cad077d5c62300, including the navigation and
+// numpad clusters and the SysRq/ScrollLock/Pause cluster.
+var ANSI100US = templateFromRows(
+	ANSI100USID,
+	"US ANSI 100%",
+	"Full-size ANSI layout from KMonad's documented source template, including navigation and numpad clusters.",
+	[]layoutKey{
+		layout("esc"), gap(2, "f1"), layout("f2"), layout("f3"), layout("f4"), gap(1, "f5"), layout("f6"), layout("f7"), layout("f8"), gap(1, "f9"), layout("f10"), layout("f11"), layout("f12"), gap(1, "ssrq"), layout("slck"), layout("pause"),
+	},
+	[]layoutKey{
+		layout("grv"), layout("1"), layout("2"), layout("3"), layout("4"), layout("5"), layout("6"), layout("7"), layout("8"), layout("9"), layout("0"), layout("-"), layout("="), layout("bspc"), gap(1, "ins"), layout("home"), layout("pgup"), gap(1, "nlck"), layout("kp/"), layout("kp*"), layout("kp-"),
+	},
+	[]layoutKey{
+		layout("tab"), layout("q"), layout("w"), layout("e"), layout("r"), layout("t"), layout("y"), layout("u"), layout("i"), layout("o"), layout("p"), layout("["), layout("]"), layout("\\"), gap(1, "del"), layout("end"), layout("pgdn"), gap(1, "kp7"), layout("kp8"), layout("kp9"), layout("kp+"),
+	},
+	[]layoutKey{
+		layout("caps"), layout("a"), layout("s"), layout("d"), layout("f"), layout("g"), layout("h"), layout("j"), layout("k"), layout("l"), layout(";"), layout("'"), layout("ret"), gap(1, "kp4"), layout("kp5"), layout("kp6"),
+	},
+	[]layoutKey{
+		layout("lsft"), layout("z"), layout("x"), layout("c"), layout("v"), layout("b"), layout("n"), layout("m"), layout(","), layout("."), layout("/"), layout("rsft"), gap(1, "up"), gap(1, "kp1"), layout("kp2"), layout("kp3"), layout("kprt"),
+	},
+	[]layoutKey{
+		layout("lctl"), layout("lmet"), layout("lalt"), layout("spc"), layout("ralt"), layout("rmet"), layout("cmp"), layout("rctl"), gap(1, "left"), layout("down"), layout("rght"), gap(1, "kp0"), layout("kp."),
+	},
+)
+
+// ISO100US follows KMonad's documented iso_100 template at
+// 30b9705fb56059483969624d58cad077d5c62300: full-size ISO with the split
+// left shift carrying the 102nd key.
+var ISO100US = templateFromRows(
+	ISO100USID,
+	"ISO 100%",
+	"Full-size ISO layout from KMonad's documented source template, including navigation, numpad, the 102nd key, and the taller ISO enter.",
+	[]layoutKey{
+		layout("esc"), gap(2, "f1"), layout("f2"), layout("f3"), layout("f4"), gap(1, "f5"), layout("f6"), layout("f7"), layout("f8"), gap(1, "f9"), layout("f10"), layout("f11"), layout("f12"), gap(1, "ssrq"), layout("slck"), layout("pause"),
+	},
+	[]layoutKey{
+		layout("grv"), layout("1"), layout("2"), layout("3"), layout("4"), layout("5"), layout("6"), layout("7"), layout("8"), layout("9"), layout("0"), layout("-"), layout("="), layout("bspc"), gap(1, "ins"), layout("home"), layout("pgup"), gap(1, "nlck"), layout("kp/"), layout("kp*"), layout("kp-"),
+	},
+	[]layoutKey{
+		layout("tab"), layout("q"), layout("w"), layout("e"), layout("r"), layout("t"), layout("y"), layout("u"), layout("i"), layout("o"), layout("p"), layout("["), layout("]"), layoutWidth("ret", 1.5), gap(1, "del"), layout("end"), layout("pgdn"), gap(1, "kp7"), layout("kp8"), layout("kp9"), layout("kp+"),
+	},
+	[]layoutKey{
+		layout("caps"), layout("a"), layout("s"), layout("d"), layout("f"), layout("g"), layout("h"), layout("j"), layout("k"), layout("l"), layout(";"), layout("'"), layout("\\"), gap(1, "kp4"), layout("kp5"), layout("kp6"),
+	},
+	[]layoutKey{
+		layoutWidth("lsft", 1.25), layoutWidth("102d", 1.25), layout("z"), layout("x"), layout("c"), layout("v"), layout("b"), layout("n"), layout("m"), layout(","), layout("."), layout("/"), layoutWidth("rsft", 1.75), gap(1, "up"), gap(1, "kp1"), layout("kp2"), layout("kp3"), layout("kprt"),
+	},
+	[]layoutKey{
+		layout("lctl"), layout("lmet"), layout("lalt"), layoutWidth("spc", 6.25), layoutWidth("ralt", 1.5), layout("rmet"), layout("cmp"), layout("rctl"), gap(1, "left"), layout("down"), layout("rght"), gap(1, "kp0"), layout("kp."),
+	},
+)
+
+// LaptopISO93 follows KMonad's documented thinkpad_x220_iso template at
+// 30b9705fb56059483969624d58cad077d5c62300. The layout ID is the honest key
+// count of the US defsrc (93): X220-style ISO laptops carry the 102nd key and
+// the full system-key cluster in the top row. The layout is a convention, not
+// a binding to any ThinkPad model: detection never infers a layout from a
+// device name.
+var LaptopISO93 = templateFromRows(
+	LaptopISO93ID,
+	"ISO Laptop 93",
+	"ISO laptop convention from KMonad's documented X220 template: media and system-key cluster, 102nd key, no numpad. Layout-first; not bound to a device model.",
+	[]layoutKey{
+		layout("esc"), layout("mute"), layout("vold"), layout("volu"), gap(2, "prnt"), layout("slck"), layout("pause"), gap(1, "ins"), layout("del"), layout("home"), layout("pgup"),
+	},
+	[]layoutKey{
+		layout("f1"), layout("f2"), layout("f3"), layout("f4"), layout("f5"), layout("f6"), layout("f7"), layout("f8"), layout("f9"), layout("f10"), layout("f11"), layout("f12"), gap(1, "end"), layout("pgdn"),
+	},
+	[]layoutKey{
+		layout("grv"), layout("1"), layout("2"), layout("3"), layout("4"), layout("5"), layout("6"), layout("7"), layout("8"), layout("9"), layout("0"), layout("-"), layout("="), layout("bspc"),
+	},
+	[]layoutKey{
+		layout("tab"), layout("q"), layout("w"), layout("e"), layout("r"), layout("t"), layout("y"), layout("u"), layout("i"), layout("o"), layout("p"), layout("["), layout("]"), layoutWidth("ret", 1.5),
+	},
+	[]layoutKey{
+		layout("caps"), layout("a"), layout("s"), layout("d"), layout("f"), layout("g"), layout("h"), layout("j"), layout("k"), layout("l"), layout(";"), layout("'"), layout("\\"),
+	},
+	[]layoutKey{
+		layoutWidth("lsft", 1.25), layoutWidth("102d", 1.25), layout("z"), layout("x"), layout("c"), layout("v"), layout("b"), layout("n"), layout("m"), layout(","), layout("."), layout("/"), layoutWidth("rsft", 1.75),
+	},
+	[]layoutKey{
+		layout("wkup"), layout("lctl"), layout("lmet"), layout("lalt"), layoutWidth("spc", 6.25), layoutWidth("ralt", 1.5), layout("cmps"), layout("rctl"), gap(1, "back"), layout("up"), layout("fwd"),
+	},
+	[]layoutKey{
+		gap(1, "left"), layout("down"), layout("rght"),
+	},
+)
+
+// LaptopISO87 follows KMonad's documented thinkpad_T430_iso template at
+// 30b9705fb56059483969624d58cad077d5c62300. That template is labelled ISO but
+// its US defsrc carries no 102nd key, so the layout is 87 keys. The ISO enter
+// shape and home-row backslash are preserved as the source order documents.
+var LaptopISO87 = templateFromRows(
+	LaptopISO87ID,
+	"ISO Laptop 87",
+	"ISO laptop convention from KMonad's documented T430 template: media row, 102nd key absent, no numpad. Layout-first; not bound to a device model.",
+	[]layoutKey{
+		gap(2, "mute"), layout("vold"), layout("volu"),
+	},
+	[]layoutKey{
+		layout("esc"), gap(2, "f1"), layout("f2"), layout("f3"), layout("f4"), gap(1, "f5"), layout("f6"), layout("f7"), layout("f8"), gap(1, "f9"), layout("f10"), layout("f11"), layout("f12"), gap(1, "home"), layout("end"), layout("ins"), layout("del"),
+	},
+	[]layoutKey{
+		layout("grv"), layout("1"), layout("2"), layout("3"), layout("4"), layout("5"), layout("6"), layout("7"), layout("8"), layout("9"), layout("0"), layout("-"), layout("="), layout("bspc"),
+	},
+	[]layoutKey{
+		layout("tab"), layout("q"), layout("w"), layout("e"), layout("r"), layout("t"), layout("y"), layout("u"), layout("i"), layout("o"), layout("p"), layout("["), layout("]"), layout("\\"),
+	},
+	[]layoutKey{
+		layout("caps"), layout("a"), layout("s"), layout("d"), layout("f"), layout("g"), layout("h"), layout("j"), layout("k"), layout("l"), layout(";"), layout("'"), layoutWidth("ret", 1.5),
+	},
+	[]layoutKey{
+		layout("lsft"), layout("z"), layout("x"), layout("c"), layout("v"), layout("b"), layout("n"), layout("m"), layout(","), layout("."), layout("/"), layout("rsft"),
+	},
+	[]layoutKey{
+		layout("wkup"), layout("lctl"), layout("lmet"), layout("lalt"), layoutWidth("spc", 6.25), layoutWidth("ralt", 1.5), layout("sys"), layout("rctl"), gap(1, "pgdn"), layout("up"), layout("pgup"),
+	},
+	[]layoutKey{
+		gap(1, "left"), layout("down"), layout("rght"),
+	},
+)
+
 func key(id, label, source string, row int, width float64) Key {
 	return Key{ID: id, Label: label, SourceKey: source, Row: row, Width: width}
 }
@@ -173,6 +358,8 @@ func standardWidth(source string) float64 {
 func keyLabel(source string) string {
 	labels := map[string]string{
 		"grv": "`", "bspc": "Backspace", "ret": "Enter", "lctl": "Ctrl", "rctl": "Ctrl", "lmet": "Super", "rmet": "Super", "lalt": "Alt", "ralt": "Alt", "lsft": "Shift", "rsft": "Shift", "spc": "Space", "cmp": "Menu", "prnt": "Print", "pgup": "PgUp", "pgdn": "PgDn", "rght": "Right", "back": "Back", "fwd": "Forward", "undo": "Undo", "cut": "Cut", "copy": "Copy", "KeyPaste": "Paste", "KeyMenu": "Menu",
+		"lsgt": "< >", "102d": "102nd", "ssrq": "SysRq", "slck": "ScrLk", "pause": "Pause", "nlck": "NumLk", "ins": "Ins", "del": "Del", "home": "Home", "end": "End", "up": "Up", "down": "Down", "left": "Left", "kprt": "KP Enter", "kp/": "KP /", "kp*": "KP *", "kp-": "KP -", "kp+": "KP +", "kp.": "KP .", "kp0": "KP 0", "kp1": "KP 1", "kp2": "KP 2", "kp3": "KP 3", "kp4": "KP 4", "kp5": "KP 5", "kp6": "KP 6", "kp7": "KP 7", "kp8": "KP 8", "kp9": "KP 9",
+		"mute": "Mute", "vold": "Vol−", "volu": "Vol+", "wkup": "Wake", "sys": "SysRq", "cmps": "Compose",
 	}
 	if label, found := labels[source]; found {
 		return label
@@ -184,12 +371,12 @@ func keyLabel(source string) string {
 }
 
 func List() []Template {
-	return []Template{clone(ANSI60US), clone(ANSIUSTKL), clone(KinesisFreestyle2)}
+	return []Template{clone(ANSI60US), clone(ANSIUSTKL), clone(KinesisFreestyle2), clone(ISO60US), clone(ISOTKLUS), clone(ANSI100US), clone(ISO100US), clone(LaptopISO93), clone(LaptopISO87)}
 }
 
 // KnownSourceKeys is the union of KMonad key names used by verified layouts.
-// The compiler accepts only these names, so the editor never emits an
-// unverified keycode that KMonad would reject at preview time.
+// The compiler's key gate is the fuller KnownKMonadKeys vocabulary; this set
+// documents which of those spellings the bundled layouts actually use.
 func KnownSourceKeys() map[string]bool {
 	known := map[string]bool{}
 	for _, template := range List() {
@@ -226,6 +413,18 @@ func Lookup(id string) (Template, bool) {
 		return clone(ANSIUSTKL), true
 	case KinesisFreestyle:
 		return clone(KinesisFreestyle2), true
+	case ISO60USID:
+		return clone(ISO60US), true
+	case ISOTKLUSID:
+		return clone(ISOTKLUS), true
+	case ANSI100USID:
+		return clone(ANSI100US), true
+	case ISO100USID:
+		return clone(ISO100US), true
+	case LaptopISO93ID:
+		return clone(LaptopISO93), true
+	case LaptopISO87ID:
+		return clone(LaptopISO87), true
 	}
 	return Template{}, false
 }

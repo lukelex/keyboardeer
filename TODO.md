@@ -201,11 +201,35 @@ Manager implementation handover:
 - [x] **MGR-05** Define and implement revision-checked external content reads and
   manager-rendered managed `.kbd` export with explicit ownership/rendering
   boundaries. GUI use of these methods remains tracked under IO-01/EXTERNAL-01.
+- [ ] **MGR-06** Offer a read-only, capability-gated device input-capability scan
+  that attests a versioned key-token set for a connected device, with optional
+  bounded single-key probe. Facts only: no layout/product inference, no mapping
+  change. Handover:
+  [`layout-detection-plan.md`](docs/layout-detection-plan.md).
 
 ## After Linux v1 — full product expansion
 
 - [ ] Additional verified ANSI/ISO/JIS, split, full-size, and laptop geometries;
   custom geometry editing and source-key mapping.
+- [ ] **GEOMETRY-02** Narrow the verified geometry from the manager-attested key
+  set with explicit confirmation, never a silent guess; keep evidence
+  machine-local. Handover:
+  [`layout-detection-plan.md`](docs/layout-detection-plan.md).
+- [x] **GEOMETRY-03 (seed additions)** Expand the verified catalog layout-first —
+  ISO 60%, ISO TKL, US ANSI 100%, and ISO 100% are verified against KMonad's
+  published templates at `30b9705`, their extra tokens are gated in the
+  compiler, and every layout passes the real KMonad dry-run conformance.
+- [x] **GEOMETRY-03 (laptop conventions + vocabulary)** Add layout-first laptop
+  conventions `laptop-iso-93-v1` (X220: 102nd key) and `laptop-iso-87-v1`
+  (T430: no 102nd key) at their published US `defsrc` orders, both passing the
+  real dry-run. Build the verified KMonad token vocabulary
+  (`internal/geometry/kmonad_vocabulary.go`, generated from `Keycode.hs` at
+  `30b9705`) and make it the compiler's key gate, with pinned-count and
+  containment tests.
+- [ ] **GEOMETRY-03 (continuation)** Authored 65/75/96, ortholinear, and
+  split-ergo conventions, a parametric position builder; rename `split-94`
+  with a legacy alias. Handover:
+  [`geometry-catalog.md`](docs/geometry-catalog.md).
 - [ ] Advanced aliases/macros, behavior composition, timing controls, and visual
   explanations with compiler and KMonad conformance coverage.
 - [ ] Explicit representable external adoption when `configuration.adopt` is

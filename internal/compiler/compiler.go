@@ -298,13 +298,11 @@ func uniqueSourceKeys(sourceKeys []string) []string {
 	return result
 }
 
-var knownKeys = geometry.KnownSourceKeys()
-
-func init() {
-	for key := range geometry.KnownOutputKeys() {
-		knownKeys[key] = true
-	}
-}
+// knownKeys is the accepted KMonad keyboard-token vocabulary at the pinned
+// KMonad commit (see geometry.KnownKMonadKeys). It is the completeness
+// reference for both defsrc tokens and emitted single-key behaviors, so the
+// editor never produces a spelling KMonad would reject.
+var knownKeys = geometry.KnownKMonadKeys()
 
 // renderKey is the single place a key name becomes KMonad text, so defsrc
 // and deflayer spell every key identically. A bare backslash would escape

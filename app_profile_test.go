@@ -118,7 +118,7 @@ func TestAppExposesOnlyVerifiedGeometries(t *testing.T) {
 	app := newAppWithProfileStore(profile.NewStore(filepath.Join(t.TempDir(), "profiles.json")))
 	defer app.manager.Close()
 	geometries := app.Geometries()
-	want := []string{geometry.ANSI60USID, geometry.ANSITKLUSID, geometry.KinesisFreestyle}
+	want := []string{geometry.ANSI60USID, geometry.ANSITKLUSID, geometry.KinesisFreestyle, geometry.ISO60USID, geometry.ISOTKLUSID, geometry.ANSI100USID, geometry.ISO100USID, geometry.LaptopISO93ID, geometry.LaptopISO87ID}
 	if len(geometries) != len(want) {
 		t.Fatalf("geometries = %#v", geometries)
 	}
