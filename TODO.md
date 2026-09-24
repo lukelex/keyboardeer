@@ -85,7 +85,7 @@ terminal, and reconnect restores an authoritative view.
   multiple profiles and keyboards, preserving pending edits per profile.
 - [ ] **GEOMETRY-01** Provide a verified first layout and explicit selection;
   map every drawn key to a source key without guessing from a product name.
-- [ ] **EDIT-01** Implement keyboard rendering, selection, bottom action palette, key search,
+- [x] **EDIT-01** Implement keyboard rendering, selection, bottom action palette, key search,
   single-key remapping, restore-original, undo/redo, and persistent draft status.
 - [x] **EDIT-02** Implement layer create/rename/delete/reorder, transparency,
   reachability, and layer-switch behaviors; previews must not change live state.

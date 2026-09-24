@@ -30,6 +30,13 @@
   type View = "devices" | "setup" | "editor";
   type KeyOption = GeometryTemplate["keys"][number];
   type ComplexAction = "tap_hold" | "layer" | "alias" | "macro" | "layers";
+  type EditableState = Pick<
+    Profile,
+    "layers" | "assignments" | "aliases" | "macros"
+  >;
+  type DraftHistory = { past: EditableState[]; future: EditableState[] };
+  type DraftSaveState = "saved" | "saving" | "failed";
+  const draftHistoryLimit = 100;
   const defaultTapHoldTimeoutMS = 200;
   const modifierSourceKeys = new Set([
     "caps",
@@ -128,6 +135,11 @@
   let flashingSourceKey = "";
   let keyFlashTimer: ReturnType<typeof setTimeout> | undefined;
   let profileBusy = false;
+  // Undo/redo is session-local and kept per profile, so switching keyboards
+  // never applies one draft's history to another.
+  let draftHistory: Record<string, DraftHistory> = {};
+  let draftSaveState: DraftSaveState = "saved";
+  let keySearch = "";
   let previewBusy = false;
   let previewInFlight = false;
   let profilePreview: ProfilePreview | null = null;
@@ -209,6 +221,29 @@
   $: paletteKeyOptions = [
     ...new Map(basicKeyOptions.map((key) => [key.source_key, key])).values(),
   ].sort(comparePaletteKeys);
+  $: normalizedKeySearch = keySearch.trim().toLowerCase();
+  $: visiblePaletteKeys = normalizedKeySearch
+    ? paletteKeyOptions.filter((key) =>
+        [key.label, key.source_key, paletteLabel(key)].some((value) =>
+          value.toLowerCase().includes(normalizedKeySearch),
+        ),
+      )
+    : paletteKeyOptions;
+  $: activeHistory = activeProfile ? draftHistory[activeProfile.id] : undefined;
+  $: canUndo =
+    !!activeHistory?.past.length && !profileBusy && !activeProfile?.apply_pending;
+  $: canRedo =
+    !!activeHistory?.future.length &&
+    !profileBusy &&
+    !activeProfile?.apply_pending;
+  $: draftStatusText =
+    draftSaveState === "saving"
+      ? "Saving draft…"
+      : draftSaveState === "failed"
+        ? "Draft not saved"
+        : activeProfile
+          ? `Draft saved ${new Date(activeProfile.updated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+          : "";
   $: activeRows = activeGeometry
     ? [...new Set(activeGeometry.keys.map((key) => key.row))].sort(
         (left, right) => left - right,
@@ -532,6 +567,9 @@
       !editorOpen ||
       selectedSourceKey ||
       event.repeat ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey ||
       event.target instanceof HTMLInputElement ||
       event.target instanceof HTMLSelectElement ||
       event.target instanceof HTMLTextAreaElement
@@ -550,8 +588,32 @@
       keyFlashTimer = undefined;
     }, 240);
   }
+  function handleHistoryKeydown(event: KeyboardEvent) {
+    if (
+      !editorOpen ||
+      behaviorDialog ||
+      applyReviewOpen ||
+      externalOpen ||
+      identifyOpen ||
+      !(event.ctrlKey || event.metaKey) ||
+      event.altKey ||
+      event.target instanceof HTMLInputElement ||
+      event.target instanceof HTMLSelectElement ||
+      event.target instanceof HTMLTextAreaElement
+    )
+      return;
+    const key = event.key.toLowerCase();
+    if (key === "z" && !event.shiftKey) {
+      event.preventDefault();
+      void undoEdit();
+    } else if ((key === "z" && event.shiftKey) || key === "y") {
+      event.preventDefault();
+      void redoEdit();
+    }
+  }
   function handleGlobalKeydown(event: KeyboardEvent) {
     handleIdentifyKeydown(event);
+    handleHistoryKeydown(event);
     handleEditorKeydown(event);
   }
   function openDraft(device: Device) {
@@ -560,6 +622,8 @@
     feedback = "";
     profilePreview = null;
     const draft = profileForDevice(device);
+    draftSaveState = "saved";
+    keySearch = "";
     if (draft) {
       activeProfile = draft;
       selectedSourceKey = "";
@@ -617,9 +681,24 @@
     });
     return { ...draft, assignments };
   }
-  async function saveDraft(draft: Profile): Promise<Profile | undefined> {
+  function editableState(draft: Profile): EditableState {
+    return JSON.parse(
+      JSON.stringify({
+        layers: draft.layers,
+        assignments: draft.assignments,
+        aliases: draft.aliases,
+        macros: draft.macros,
+      }),
+    ) as EditableState;
+  }
+  async function saveDraft(
+    draft: Profile,
+    recordHistory = true,
+  ): Promise<Profile | undefined> {
     if (profileBusy) return undefined;
+    const before = activeProfile?.id === draft.id ? editableState(activeProfile) : null;
     profileBusy = true;
+    draftSaveState = "saving";
     feedback = "";
     profilePreview = null;
     try {
@@ -628,14 +707,65 @@
       profiles = profiles.map((profile) =>
         profile.id === saved.id ? saved : profile,
       );
+      if (recordHistory && before) {
+        const history = draftHistory[saved.id] ?? { past: [], future: [] };
+        draftHistory = {
+          ...draftHistory,
+          [saved.id]: {
+            past: [...history.past, before].slice(-draftHistoryLimit),
+            future: [],
+          },
+        };
+      }
+      draftSaveState = "saved";
       schedulePreview(saved);
       return saved;
     } catch (error) {
+      draftSaveState = "failed";
       feedback = explain(error);
       return undefined;
     } finally {
       profileBusy = false;
     }
+  }
+  function reconcileEditorSelection(draft: Profile) {
+    if (!draft.layers.some((layer) => layer.id === selectedLayerID)) {
+      selectedLayerID = "base";
+    }
+  }
+  // Undo and redo are ordinary revision-guarded draft saves, so they refresh
+  // the whole-draft preview exactly like any other semantic edit.
+  async function undoEdit() {
+    if (!activeProfile || !canUndo) return;
+    const history = draftHistory[activeProfile.id];
+    const previous = history.past[history.past.length - 1];
+    const current = editableState(activeProfile);
+    const saved = await saveDraft({ ...activeProfile, ...previous }, false);
+    if (!saved) return;
+    draftHistory = {
+      ...draftHistory,
+      [saved.id]: {
+        past: history.past.slice(0, -1),
+        future: [...history.future, current].slice(-draftHistoryLimit),
+      },
+    };
+    reconcileEditorSelection(saved);
+  }
+  async function redoEdit() {
+    if (!activeProfile || !canRedo) return;
+    const history = draftHistory[activeProfile.id];
+    const next = history.future[history.future.length - 1];
+    const current = editableState(activeProfile);
+    const saved = await saveDraft({ ...activeProfile, ...next }, false);
+    if (!saved) return;
+    draftHistory = {
+      ...draftHistory,
+      [saved.id]: {
+        past: [...history.past, current].slice(-draftHistoryLimit),
+        future: history.future.slice(0, -1),
+      },
+    };
+    reconcileEditorSelection(saved);
   }
   async function assignBehavior(behavior: ProfileBehavior) {
     if (!activeProfile || !selectedSourceKey || profileBusy) return false;
@@ -1461,6 +1591,27 @@
               ? "MANAGED PROFILE"
               : "DRAFT ONLY"}</span
           >
+          <span class="draft-status" data-state={draftSaveState} role="status"
+            >{draftStatusText}</span
+          >
+          <div class="history-actions">
+            <button
+              class="button secondary history-button"
+              type="button"
+              on:click={undoEdit}
+              disabled={!canUndo}
+              aria-label="Undo"
+              title="Undo (Ctrl+Z)">↶</button
+            >
+            <button
+              class="button secondary history-button"
+              type="button"
+              on:click={redoEdit}
+              disabled={!canRedo}
+              aria-label="Redo"
+              title="Redo (Ctrl+Shift+Z)">↷</button
+            >
+          </div>
           {#if previewBusy}
             <span
               class="configuration-indicator checking"
@@ -1653,8 +1804,21 @@
                 {/each}
               </div>
             </div>
+            <div class="palette-search">
+              <label for="palette-search">Search keys</label>
+              <input
+                id="palette-search"
+                type="search"
+                bind:value={keySearch}
+                placeholder="Name or KMonad code"
+                autocomplete="off"
+              />
+              {#if normalizedKeySearch}<span
+                  >{visiblePaletteKeys.length} of {paletteKeyOptions.length}</span
+                >{/if}
+            </div>
             <div class="palette-buttons">
-              {#each paletteKeyOptions as key (key.source_key)}
+              {#each visiblePaletteKeys as key (key.source_key)}
                 <button
                   class="button secondary palette-key"
                   on:click={() =>
@@ -1668,6 +1832,8 @@
                     >{key.source_key}</small
                   ></button
                 >
+              {:else}
+                <p class="palette-empty">No keys match “{keySearch.trim()}”.</p>
               {/each}
               <div class="palette-utility">
                 <button

@@ -368,9 +368,32 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
     "Disabled",
   );
   await page.getByRole("button", { name: "Restore original" }).click();
-  await expect(page.locator(".editor-key").first().locator("small")).toHaveText(
-    "caps",
+  const capsBehavior = page.locator(".editor-key").first().locator("small");
+  await expect(capsBehavior).toHaveText("caps");
+  await expect(page.locator(".draft-status")).toContainText("Draft saved");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(capsBehavior).toHaveText("Disabled");
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(capsBehavior).toHaveText("caps");
+  await expect(
+    page.getByRole("button", { name: "Redo", exact: true }),
+  ).toBeDisabled();
+  await page.keyboard.press("Control+z");
+  await expect(capsBehavior).toHaveText("Disabled");
+  await page.keyboard.press("Control+Shift+Z");
+  await expect(capsBehavior).toHaveText("caps");
+  const keySearch = page.getByLabel("Search keys");
+  await keySearch.fill("ctr");
+  await expect(paletteKeys).toHaveCount(1);
+  await expect(paletteKeys.first()).toHaveAttribute(
+    "title",
+    "Assign Ctrl (lctl)",
   );
+  await keySearch.fill("zzz");
+  await expect(paletteKeys).toHaveCount(0);
+  await expect(page.getByText("No keys match “zzz”.")).toBeVisible();
+  await keySearch.fill("");
+  await expect(paletteKeys).toHaveCount(5);
   await expect(page.locator(".configuration-indicator.valid")).toBeVisible();
   await expect(
     page.getByText("Manager preview: Valid", { exact: true }),
