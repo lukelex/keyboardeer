@@ -1,7 +1,7 @@
 # KeyboarDeer ↔ Manager API compatibility matrix
 
-**Source review:** 2026-09-23 at upstream `main` commit
-[`aa3e88c8d371906030969f32b51c4ed376710d88`](https://github.com/lukelex/kmonad-device-manager/commit/aa3e88c8d371906030969f32b51c4ed376710d88).
+**Source review:** 2026-09-24 at manager `origin/main` / v1.1.0 commit
+[`712f4aa7a146d14c3e967502ed661ec039664b7d`](https://github.com/lukelex/kmonad-device-manager/commit/712f4aa7a146d14c3e967502ed661ec039664b7d).
 
 **Development smoke test:** On 2026-09-23, KeyboarDeer built that exact source
 in an isolated worktree and exercised `session.hello`, `manager.get`,
@@ -12,7 +12,7 @@ rejected because the manager-rendered `defcfg` lacked an output form (see the
 source-contract gap below); no configuration was applied or device mapping
 changed.
 
-**Deployed-manager recheck:** The running user service first reached
+**Historical smoke-test record:** The running user service first reached
 `ab37fad81b7aa1615ce3fd26d7810e957757a696` (a descendant of `aa3e88c`), where
 the missing-output preview failure remained. It was then updated to
 `41b32c733a2fc3081713cf8791610fa5cd833dfa`: the exact renderer now owns both
@@ -28,40 +28,43 @@ bindings enabled/disabled by KeyboarDeer. KeyboarDeer treats a missing role as
 `input` for compatibility with older managers, and uses no device-name
 heuristic.
 
-This is KeyboarDeer's maintained list of manager interactions. It is a source
-compatibility audit, **not** a statement about released manager binaries or a
-substitute for an integration smoke test. Re-audit this matrix whenever the
-pinned manager commit changes.
+This is KeyboarDeer's maintained list of manager interactions. Source
+availability is verified against the reviewed commit; it does not by itself
+prove that a particular installed manager service has been upgraded. Re-audit
+this matrix whenever the pinned manager commit changes.
 
-**Evidence priority:** the pinned source dispatcher and domain types win over
-wiki prose. The [current wiki](https://github.com/lukelex/kmonad-device-manager/blob/aa3e88c8d371906030969f32b51c4ed376710d88/wiki/Manager-API-v1.md)
-contains both an obsolete opening status sentence and forward-looking API prose;
-it is valuable contract context but does not prove a handler exists.
+**Evidence priority:** the pinned source dispatcher, domain types, tests, and
+the v1.1.0 API contract are reviewed together. The manager's current contract
+documents `configuration.content.get` and `configuration.export`; the installed
+service must still be checked separately through `manager.get` capabilities.
 
 Relevant source:
 
-- [`api_transport.go`](https://github.com/lukelex/kmonad-device-manager/blob/aa3e88c8d371906030969f32b51c4ed376710d88/internal/manager/api_transport.go)
+- [`api_transport.go`](https://github.com/lukelex/kmonad-device-manager/blob/712f4aa7a146d14c3e967502ed661ec039664b7d/internal/manager/api_transport.go)
   — request dispatcher and event framing;
-- [`domain.go`](https://github.com/lukelex/kmonad-device-manager/blob/aa3e88c8d371906030969f32b51c4ed376710d88/internal/manager/domain.go)
+- [`domain.go`](https://github.com/lukelex/kmonad-device-manager/blob/712f4aa7a146d14c3e967502ed661ec039664b7d/internal/manager/domain.go)
   — public objects, operations, snapshot, and events;
-- [`snapshot.go`](https://github.com/lukelex/kmonad-device-manager/blob/aa3e88c8d371906030969f32b51c4ed376710d88/internal/manager/snapshot.go),
-  [`apply.go`](https://github.com/lukelex/kmonad-device-manager/blob/aa3e88c8d371906030969f32b51c4ed376710d88/internal/manager/apply.go), and
-  [`events.go`](https://github.com/lukelex/kmonad-device-manager/blob/aa3e88c8d371906030969f32b51c4ed376710d88/internal/manager/events.go)
+- [`snapshot.go`](https://github.com/lukelex/kmonad-device-manager/blob/712f4aa7a146d14c3e967502ed661ec039664b7d/internal/manager/snapshot.go),
+  [`apply.go`](https://github.com/lukelex/kmonad-device-manager/blob/712f4aa7a146d14c3e967502ed661ec039664b7d/internal/manager/apply.go),
+  [`events.go`](https://github.com/lukelex/kmonad-device-manager/blob/712f4aa7a146d14c3e967502ed661ec039664b7d/internal/manager/events.go), and
+  [`content.go`](https://github.com/lukelex/kmonad-device-manager/blob/712f4aa7a146d14c3e967502ed661ec039664b7d/internal/manager/content.go)
   — source evidence for the newer functionality.
 
 ## Method inventory
 
-| Manager interaction | Source status at `aa3e88c` | KeyboarDeer client status | Product use / limitation |
+| Manager interaction | Source status at `712f4aa` | KeyboarDeer client status | Product use / limitation |
 | --- | --- | --- | --- |
 | `session.hello` | Implemented. Required first request; returns server ID, manager version, and initial state revision. | Implemented. | Start every connection; a changed server ID invalidates cached snapshot/event state. |
 | `manager.get` | Implemented by `aa3e88c`; returns public manager metadata, limits, health, event cursor, and the complete capability list. | Implemented; current bridge consumes capabilities and safely ignores newly added fields. | Normal capability-aware startup is source-ready and was smoke-tested against a manager built from this commit. |
 | `snapshot.get` | Implemented by `bf34fa0`; returns coherent devices, configurations, retained operations, manager health, state revision, and event cursor. Desired/active configuration state arrived in `60f49a5`. | Implemented for the normal workspace bridge. | The Devices view now uses the authoritative snapshot, proven against the isolated source build. Snapshot currently has health, not a separate diagnostics collection. |
 | `device.list` | Implemented. Refreshes and returns known keyboard-capable devices. | Implemented. | Normal device inventory is now enabled only when the runtime capability advertises `device_discovery`; smoke-test it against a source build. |
-| `configuration.list` | Implemented by `a0adbd7`; returns managed and external configuration resources without paths/content. | Not yet implemented. | Read-only external and managed configuration inventory. It cannot display raw `.kbd` text. |
+| `configuration.list` | Implemented; returns managed and external configuration resources without paths/content. | Partially used through authoritative snapshots. | Inventory includes ownership and revisions; raw external text uses the separate content method. |
+| `configuration.content.get` | Implemented in v1.1.0; bounded external UTF-8 read requires the current content revision and returns a digest. | Not yet integrated. | Read-only external source display; manager paths are not exposed. |
+| `configuration.export` | Implemented in v1.1.0 for immutable manager-rendered managed revisions using `manager_rendered_kbd`. | Implemented for the editor's read-only View .kbd action. | Device-bound runnable artifact, never a portable GUI profile. |
 | `device.identify.start` | Implemented. One bounded 1–30-second session for a connected device. | Implemented. | Normal UI is capability-gated; harness can exercise it. |
 | `device.identify.cancel` | Implemented. | Implemented. | Only while the matching identification operation is live. |
 | `operation.get` | Implemented over the retained operation store, despite the historical helper name. | Implemented. | Can read identify and retained apply/lifecycle operations. Polling is useful before events are integrated. |
-| `validation.preview` | Implemented. Model preview is side-effect-free; returns valid, rejected, or blocked. | Implemented and smoke-tested successfully against deployed `41b32c7`. | Use `{model:{device_id,behavior}}`; GUI profiles never supply `defcfg` or `device-file`. |
+| `validation.preview` | Implemented. Model preview is side-effect-free; returns valid, rejected, or blocked, includes a digest of the submitted behavior, and only maps unambiguous KMonad error ranges to one submitted `deflayer` assignment. | Implemented; the client preserves optional locations and refuses to map absent/unknown scopes, digest mismatches, blocked results, or ambiguous source-map matches. | Use `{model:{device_id,behavior}}`; GUI profiles never supply `defcfg` or `device-file`. |
 | `configuration.apply` | Implemented by `2516765`; transactional render, validation, persistence, activation confirmation, and rollback pipeline. | Not used directly. | KeyboarDeer uses the explicit create/update routes so a local profile retains one opaque managed-configuration ID. |
 | `configuration.create` / `configuration.update` | Implemented. Create accepts name/model; update requires configuration ID and expected revision. | Implemented. | The Apply control sends a current validated draft directly; updates read the current authoritative desired revision and submit it as `expected_revision`. |
 | `configuration.set_enabled` / `configuration.delete` | Implemented by `f8ea0ec`. Both require expected revision. | Implemented, using the snapshot's desired revision. | Keyboard cards expose a checked/unchecked binding state and a confirmed "Remove from keyboard" action that keeps local profiles. External configurations remain read-only. |
@@ -81,15 +84,17 @@ model, or a required runtime capability is unavailable.
 | Runtime health, desired/active revisions, conflicts | `snapshot.get` | Yes | Partial | Devices show associated configuration phase and desired/active revisions; add dedicated diagnostics and event-driven refresh. Do not derive health from names or CLI output. |
 | Identify a keyboard | `device.identify.start`, `operation.get`, `device.identify.cancel` | Yes | Partial | Current UI is capability-gated; smoke test it against a source build. |
 | Create and reopen an editor draft | None; application-owned persistence | N/A | Partial | The UI explicitly selects a verified US ANSI 60%, US ANSI TKL, or split Kinesis Freestyle 2 geometry, creates/reopens a local draft, and persists Base-layer key assignments. Repeated physical source codes in the Freestyle layout share a binding. Multiple-profile management, layers, undo/redo, and more behaviors remain. |
-| Compile behavior and live preview | `validation.preview` | Yes | Partial | The editor compiles and previews its complete saved draft after a Base-layer edit, coalescing rapid edits for 250 ms and discarding mismatched draft revisions. Successful behavior-only preview is proven on deployed `41b32c7`; add bounded preview concurrency, diagnostics adapter, and broader editor UI. |
+| Compile behavior and live preview | `validation.preview` | Yes | Partial | The editor compiles and previews its complete saved draft after edits, coalesces rapid input, and discards stale responses. Exact manager locations map through the local compiler source map; targeted single-assignment recovery restores a validated or pre-edit value, preserves unrelated edits, records undo, and revalidates. Missing, unknown, mismatched, or ambiguous locations and blocked results remain keymap-wide. |
 | Receive device/runtime changes | `snapshot.get`, `events.subscribe` | Yes | Partial | The app performs a snapshot-to-subscription handoff, persists replay cursors, and resyncs after stream loss, gaps, or manager restart. An end-to-end desktop smoke test against the deployed manager remains useful. |
 | Apply a managed profile | `configuration.create` / `update`, `operation.get`, then snapshot/events | Mostly | Partial | The editor requires a current valid preview, connected device, and manager capability. Exact requests and keys are persisted before dispatch; only known-idempotent manager versions are replayed. Accepted operation IDs are followed across reconnect/restart, terminal outcomes are saved with the profile, and active revision comes from the authoritative snapshot. `stale_revision` triggers refresh-and-review. |
+| Import/export a portable GUI profile | Application-owned versioned profile document | N/A | Yes | `.kbdprofile.json` v1 validates behavior and verified geometry, imports only as a new draft for a compatible keyboard, and excludes all manager/runtime identity. It is not runnable KMonad output. |
+| Export generated device-specific `.kbd` | Implemented in v1.1.0 as `configuration.export` with `manager_rendered_kbd`. | **No** | No | GUI integration remains; manager returns a device-bound runnable artifact and owns `defcfg` rendering. |
 | Enable or disable managed runtime config | `configuration.set_enabled` / `configuration.delete` | Yes | Partial | Keyboard cards use a fresh snapshot revision and direct checkbox state. Removal is a separate, confirmed action; it clears only the removed configuration's profile link. |
 | Show external runtime configuration | `snapshot.get` / `configuration.list` | Yes | Partial | Snapshot-backed device cards expose associated configuration state; a dedicated read-only external screen remains. |
-| Show external raw `.kbd` source | No supported API | **No** | No | A manager-owned, access-controlled content-read/export API. Do not read manager files directly. |
+| Show external raw `.kbd` source | Implemented in v1.1.0 as bounded, revision-checked `configuration.content.get`. | **No** | No | GUI integration remains. Do not read manager files directly; arbitrary visual import remains out of scope. |
 | Adopt an external config | `configuration.adopt` | Yes | No | External inventory UI, clear lossless-representability explanation, and managed-profile hand-off UX. |
 
-## Source-contract gaps that still matter
+## Remaining GUI integration gaps
 
 ### 1. Capability negotiation is now source-ready
 
@@ -115,19 +120,26 @@ request a bounded number of times only when the original manager reports
 is known, KeyboarDeer follows it with `operation.get` across reconnects and GUI
 restarts. Older managers ignore the key and are never assumed to be idempotent.
 
-### 3. External content/export remains unavailable
+### 3. External content/export are manager-supported but not GUI-integrated
 
-`configuration.list` provides opaque resource/runtime metadata and
-`configuration.adopt` can perform a safe manager-side hand-off. Neither exposes
-raw external content or a generated-config export. The External screen may show
-runtime inventory; its raw-source panel must stay disabled.
+Manager v1.1.0 implements revision/digest-checked `configuration.content.get`
+for external UTF-8 source and `configuration.export` for manager-rendered
+managed revisions. KeyboarDeer does not yet invoke either API. Integrate them
+without parsing generated output back into profile state; keep portable profile
+transfer separate from device-bound `.kbd` export.
 
-### 4. Diagnostics are resource-oriented, not editor locations
+### 4. Validation locations and targeted recovery
 
-Validation diagnostics include severity, reason, remediation, and an optional
-resource. They do not promise a physical source key or behavior span. The
-per-key recovery design still needs KeyboarDeer's local compiler/source map and
-must leave unmappable manager errors at keymap level.
+Manager v1.1.0 includes a SHA-256 digest of the exact submitted behavior and may
+attach an optional `submitted_behavior` location to a rejected diagnostic only
+when the complete validator range belongs to one submitted `deflayer`
+assignment. Wrapper, environmental, malformed, and ambiguous diagnostics stay
+unmapped. KeyboarDeer now checks the digest and exact local compiler source-map
+match before marking a key or offering recovery. It persists validated draft
+checkpoints and per-assignment pre-edit fallbacks; recovery is a single guarded
+draft edit, keeps unrelated edits, records undo, and triggers whole-draft
+validation. The manager JSON Lines fixture is in
+`kmonad-device-manager/tests/fixtures/validation-preview-locations.jsonl`.
 
 ### 5. Model rendering gap fixed in deployed `41b32c7`
 
@@ -162,7 +174,7 @@ separate idempotency and managed-lifecycle gates for Apply.
 ## Commit-history progression
 
 The following source commits materially changed KeyboarDeer's integration
-ceiling after the earlier `533a7d7` audit:
+ceiling after the earlier `533a7d7` audit (retained as historical progression):
 
 1. `2516765` transactional managed apply;
 2. `c9c63d2` activation rollback;
@@ -171,7 +183,8 @@ ceiling after the earlier `533a7d7` audit:
 5. `60f49a5` desired/active configuration state;
 6. `bf34fa0` authoritative snapshots;
 7. `4551637` ordered events and `9d44f1f` resumable event cursors;
-8. `aa3e88c` public `manager.get` metadata/capability endpoint.
+8. `aa3e88c` public `manager.get` metadata/capability endpoint;
+9. `712f4aa` v1.1.0 content reads, managed artifact export, and durable mutation replay.
 
 Track KeyboarDeer's executable work in [TODO.md](../TODO.md) and the delivery
 sequence in [gui-integration-roadmap.md](gui-integration-roadmap.md).

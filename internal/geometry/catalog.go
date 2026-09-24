@@ -10,7 +10,8 @@ import (
 )
 
 const (
-	ANSI60USID       = "us-ansi-60-v1"
+	ANSI60USID       = "us-ansi-60-v2"
+	LegacyANSI60USID = "us-ansi-60-v1"
 	ANSITKLUSID      = "us-ansi-tkl-v1"
 	KinesisFreestyle = "kinesis-freestyle2-v1"
 )
@@ -34,15 +35,15 @@ type Template struct {
 	Keys        []Key  `json:"keys"`
 }
 
-// ANSI60US is copied from KMonad's documented us_ansi_60 defsrc template.
-// It deliberately has no device-specific defcfg data. See
-// https://github.com/kmonad/kmonad/blob/master/keymap/tutorial.kbd
+// ANSI60US follows KMonad's documented us_ansi_60 defsrc template at
+// 30b9705fb56059483969624d58cad077d5c62300. It deliberately has no
+// device-specific defcfg data. That template has a grave key and no Escape key.
 var ANSI60US = Template{
 	ID:          ANSI60USID,
 	Name:        "US ANSI 60%",
-	Description: "Standard 61-key ANSI layout with the documented KMonad US ANSI 60% source order.",
+	Description: "Standard 61-key ANSI layout with the documented KMonad source order. The template includes grave and has no Escape position.",
 	Keys: []Key{
-		key("escape", "Esc", "esc", 0, 1),
+		key("grave", "` ~", "grv", 0, 1),
 		key("digit-1", "1", "1", 0, 1), key("digit-2", "2", "2", 0, 1), key("digit-3", "3", "3", 0, 1), key("digit-4", "4", "4", 0, 1), key("digit-5", "5", "5", 0, 1), key("digit-6", "6", "6", 0, 1), key("digit-7", "7", "7", 0, 1), key("digit-8", "8", "8", 0, 1), key("digit-9", "9", "9", 0, 1), key("digit-0", "0", "0", 0, 1), key("minus", "−", "-", 0, 1), key("equals", "=", "=", 0, 1), key("backspace", "Backspace", "bspc", 0, 2),
 		key("tab", "Tab", "tab", 1, 1.5), key("q", "Q", "q", 1, 1), key("w", "W", "w", 1, 1), key("e", "E", "e", 1, 1), key("r", "R", "r", 1, 1), key("t", "T", "t", 1, 1), key("y", "Y", "y", 1, 1), key("u", "U", "u", 1, 1), key("i", "I", "i", 1, 1), key("o", "O", "o", 1, 1), key("p", "P", "p", 1, 1), key("left-bracket", "[", "[", 1, 1), key("right-bracket", "]", "]", 1, 1), key("backslash", "\\", "\\", 1, 1.5),
 		key("caps-lock", "Caps", "caps", 2, 1.8), key("a", "A", "a", 2, 1), key("s", "S", "s", 2, 1), key("d", "D", "d", 2, 1), key("f", "F", "f", 2, 1), key("g", "G", "g", 2, 1), key("h", "H", "h", 2, 1), key("j", "J", "j", 2, 1), key("k", "K", "k", 2, 1), key("l", "L", "l", 2, 1), key("semicolon", ";", ";", 2, 1), key("apostrophe", "'", "'", 2, 1), key("enter", "Enter", "ret", 2, 2.2),
@@ -51,8 +52,8 @@ var ANSI60US = Template{
 	},
 }
 
-// ANSIUS TKL is copied from KMonad's documented us_ansi_tkl template.
-// https://github.com/kmonad/kmonad/blob/master/keymap/template/us_ansi_tkl.kbd
+// ANSIUSTKL follows KMonad's documented us_ansi_tkl template at
+// 30b9705fb56059483969624d58cad077d5c62300.
 var ANSIUSTKL = templateFromRows(
 	ANSITKLUSID,
 	"US ANSI TKL",
@@ -80,7 +81,8 @@ var ANSIUSTKL = templateFromRows(
 // KinesisFreestyle2 is copied from KMonad's documented freestyle2 template.
 // Repeated source codes are intentionally preserved: KMonad sees each pair as
 // the same input code, so those physical positions share one editor binding.
-// https://github.com/kmonad/kmonad/blob/master/keymap/template/freestyle2.kbd
+// KMonad's documented freestyle2 template at
+// 30b9705fb56059483969624d58cad077d5c62300 is the source order reference.
 var KinesisFreestyle2 = templateFromRows(
 	KinesisFreestyle,
 	"Kinesis Freestyle 2",
@@ -198,6 +200,24 @@ func KnownSourceKeys() map[string]bool {
 	return known
 }
 
+// KnownOutputKeys lists additional KMonad key names supported as assignments
+// but absent from the bundled physical layouts. Names are from KMonad's
+// Keycode aliases and constructor names.
+func KnownOutputKeys() map[string]bool {
+	known := map[string]bool{}
+	for number := 13; number <= 24; number++ {
+		known[fmt.Sprintf("f%d", number)] = true
+	}
+	for _, key := range []string{
+		"nlck", "scrlck", "ssrq", "break",
+		"mute", "volu", "voldwn", "pp", "next", "prev", "stopcd",
+		"brup", "brdown", "kbdillumtoggle", "bldn", "blup", "eject",
+	} {
+		known[key] = true
+	}
+	return known
+}
+
 func Lookup(id string) (Template, bool) {
 	switch id {
 	case ANSI60USID:
@@ -208,6 +228,29 @@ func Lookup(id string) (Template, bool) {
 		return clone(KinesisFreestyle2), true
 	}
 	return Template{}, false
+}
+
+// MigrateLegacyProfile upgrades the original ANSI 60% draft mapping, which
+// incorrectly called the grave-position source key Escape. The correction is
+// explicit and only applies to profiles carrying the legacy geometry ID.
+func MigrateLegacyProfile(draft profile.Profile) profile.Profile {
+	if draft.Geometry.ID != LegacyANSI60USID {
+		return draft
+	}
+	draft.Geometry.SourceKeys = append([]string(nil), draft.Geometry.SourceKeys...)
+	draft.Assignments = append([]profile.Assignment(nil), draft.Assignments...)
+	draft.Geometry.ID = ANSI60USID
+	for index, source := range draft.Geometry.SourceKeys {
+		if source == "esc" {
+			draft.Geometry.SourceKeys[index] = "grv"
+		}
+	}
+	for index := range draft.Assignments {
+		if draft.Assignments[index].SourceKey == "esc" {
+			draft.Assignments[index].SourceKey = "grv"
+		}
+	}
+	return draft
 }
 
 func (template Template) ProfileGeometry() (profile.Geometry, error) {

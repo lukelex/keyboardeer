@@ -92,6 +92,22 @@ func TestCompileEmitsSharedSourceKeysOnce(t *testing.T) {
 	}
 }
 
+func TestCompileSupportsAdditionalOutputKeys(t *testing.T) {
+	for _, key := range []string{"f24", "scrlck", "ssrq", "break", "mute", "volu", "voldwn", "pp", "next", "prev", "stopcd", "brup", "brdown", "kbdillumtoggle", "bldn", "blup", "eject"} {
+		t.Run(key, func(t *testing.T) {
+			input := fixture(t)
+			input.Assignments[0].Behavior = profile.Behavior{Kind: "key", Key: key}
+			result, err := Compile(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(result.Behavior, "  "+key+"\n") {
+				t.Fatalf("key was not emitted: %s", result.Behavior)
+			}
+		})
+	}
+}
+
 func TestCompileRejectsUnsupportedProfiles(t *testing.T) {
 	tests := []struct {
 		name   string

@@ -7,10 +7,15 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/linux"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
 )
 
 //go:embed all:frontend/dist
 var assets embed.FS
+
+//go:embed assets/icon.png
+var appIcon []byte
 
 func main() {
 	app := NewApp()
@@ -30,8 +35,11 @@ func main() {
 			Assets: assets,
 		},
 		BackgroundColour: &options.RGBA{R: 248, G: 246, B: 238, A: 255},
+		Linux:            &linux.Options{Icon: appIcon, ProgramName: "keyboardeer"},
+		Mac:              &mac.Options{About: &mac.AboutInfo{Title: "KeyboarDeer", Icon: appIcon}},
 		OnStartup:        app.startup,
 		OnShutdown:       app.shutdown,
+		OnBeforeClose:    app.beforeClose,
 		Bind: []interface{}{
 			app,
 		},

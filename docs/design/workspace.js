@@ -22,6 +22,7 @@ physicalRows[5] = [['Ctrl',1.3],['Super',1.3],['Alt',1.3],['Space',6],'RAlt','Fn
 const navigation = ['Ins','Home','PgUp','Del','End','PgDn','Print Screen','Scroll Lock','Pause'];
 const arrows = ['↑','←','↓','→'];
 const numpad = ['Num Lock','KP /','KP *','KP −','KP 7','KP 8','KP 9','KP +','KP 4','KP 5','KP 6','KP Enter','KP 1','KP 2','KP 3','KP .','KP 0'];
+const extendedKeys = ['F13','F14','F15','F16','F17','F18','F19','F20','F21','F22','F23','F24','SysRq','Break','Menu','Compose','International backslash','International Ro','International Yen','Kana','Convert','Non-convert','Hangul','Hanja'];
 const modifiers = ['Ctrl','Shift','Alt','Super','RCtrl','RShift','RAlt','RSuper'];
 const entry = (key) => Array.isArray(key) ? key : [key,1];
 const physicalKeys = physicalRows.flatMap((row) => row.map((key) => entry(key)[0]));
@@ -35,10 +36,10 @@ const savedState = loadSavedState();
 const drafts = new Map(Object.entries(savedState.drafts || {}));
 let device = 'q1';
 let currentPage = '';
-let selected = 'Caps';
-let layer = 0;
-let layerDetail = 1;
-let category = 'Basic';
+let selected = savedState.selected || 'Caps';
+let layer = savedState.layer || 0;
+let layerDetail = savedState.layerDetail || 1;
+let category = savedState.category || 'Basic';
 let managerOnline = true;
 let identifyActive = false;
 let identifyTimer;
@@ -49,12 +50,12 @@ function state() {
   if (!drafts.has(device)) drafts.set(device, { assignments: {}, layers: [{id:0,name:'Base'},{id:1,name:'Navigation'}], history: [], ...newDraftValidation() });
   return drafts.get(device);
 }
-function runtimeKnown() { return managerOnline && $('#diagnostic-scenario').value!=='incomplete'; }
 function persistState() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ page: currentPage, drafts: Object.fromEntries(drafts), selected, layer, layerDetail, category }));
   } catch { /* Storage may be unavailable in restricted preview contexts. */ }
 }
+function runtimeKnown() { return managerOnline && $('#diagnostic-scenario').value!=='incomplete'; }
 function remember() { const s=state(); s.history.push(structuredClone({ assignments:s.assignments, layers:s.layers, recovery:s.recovery })); }
 function layerName(id) { return state().layers.find((item) => item.id === id)?.name || 'Unknown layer'; }
 function address(key=selected, id=layer) { return `${id}|${key}`; }
@@ -90,7 +91,7 @@ function miniBoards() {
 function register(id,label,group,description,short=label) { actions.set(id,{id,label,group,description,short}); }
 function buildActions() {
   actions=new Map();
-  const allBasic=[...basicRows.flatMap((row)=>row.map((key)=>entry(key)[0])),...navigation,...arrows,...numpad];
+  const allBasic=[...basicRows.flatMap((row)=>row.map((key)=>entry(key)[0])),...navigation,...arrows,...numpad,...extendedKeys];
   for(const key of new Set(allBasic)) register(key,keyName(key),'Basic',`Send ${keyName(key)} when pressed.`,key);
   state().layers.filter((item)=>item.id!==0).forEach((item)=>{
     register(`hold:${item.id}`,`Hold for ${item.name}`,'Layers',`Use ${item.name} while held. Release to return.`,`Hold L${item.id}`);
@@ -161,11 +162,20 @@ function group(label) { const node=document.createElement('div'); node.className
 function renderBasic() {
   const layout=document.createElement('div'); layout.className='basic-palette';
   const main=group('LETTERS, NUMBERS & EVERYDAY KEYS');
-  basicRows.forEach((row)=>{ const line=document.createElement('div'); line.className='action-row'; row.forEach((item)=>{ const [id,width]=entry(item); const button=actionButton(id); button.style.setProperty('--width',width); line.append(button); }); main.append(line); });
+  const functionKeys=group('FUNCTION KEYS');
+  const functionRow=document.createElement('div'); functionRow.className='action-row function-key-row';
+  for(let number=1;number<=24;number++) functionRow.append(actionButton(`F${number}`));
+  functionKeys.append(functionRow);
+  basicRows.slice(0,1).forEach((row)=>{ const line=document.createElement('div'); line.className='action-row'; row.filter((item)=>entry(item)[0]==='Esc').forEach((item)=>{ const [id,width]=entry(item); const button=actionButton(id); button.style.setProperty('--width',width); line.append(button); }); main.append(line); });
+  basicRows.slice(1).forEach((row)=>{ const line=document.createElement('div'); line.className='action-row'; row.forEach((item)=>{ const [id,width]=entry(item); const button=actionButton(id); button.style.setProperty('--width',width); line.append(button); }); main.append(line); });
   const nav=group('NAVIGATION'); const navGrid=document.createElement('div'); navGrid.className='nav-keys'; navigation.forEach((id)=>navGrid.append(actionButton(id))); nav.append(navGrid);
   const arrowGrid=document.createElement('div'); arrowGrid.className='arrow-keys'; arrows.forEach((id,index)=>{ const button=actionButton(id); if(!index){button.style.gridRow='1';button.style.gridColumn='2';}else button.style.gridRow='2';arrowGrid.append(button); }); nav.append(arrowGrid);
   const pad=group('NUMPAD'); const padGrid=document.createElement('div'); padGrid.className='numpad-keys'; numpad.forEach((id)=>{ const button=actionButton(id); button.textContent=id.replace('KP ','');padGrid.append(button); });pad.append(padGrid);
-  layout.append(main,nav,pad); $('#action-palette').append(layout);
+  const extra=group('LESS COMMON & INTERNATIONAL KEYS');
+  const extraGrid=document.createElement('div'); extraGrid.className='nav-keys';
+  extendedKeys.slice(12).forEach((id)=>extraGrid.append(actionButton(id)));
+  extra.append(extraGrid);
+  layout.append(functionKeys,main,nav,pad,extra); $('#action-palette').append(layout);
 }
 function renderPalette() {
   $('#action-palette').replaceChildren(); const query=$('#action-search').value.trim().toLowerCase();
@@ -326,10 +336,11 @@ $('#diagnostic-scenario').addEventListener('change',()=>{managerOnline=$('#diagn
 $('#refresh-checks').addEventListener('click',()=>{renderDiagnostics();toast('Example checks refreshed. Select a preview state to explore another result.');});
 $('#technical-details').addEventListener('click',()=>detail('The details, if you need them.',`Finding: ${$('#finding-code').textContent}\n\nProtocol: API v1\nSource: simulated manager state\n\nThe application will display structured resource IDs, reason codes, and remediation. This prototype does not read system information.`));
 function route(){
-  const requested=location.hash.slice(1)||'keyboards';
+  const requested=location.hash.slice(1)||savedState.page||'keyboards';
   const allowed=['keyboards','setup','identify','keymap','layers','diagnostics','external'];const next=allowed.includes(requested)?requested:'keyboards';
   if(currentPage==='identify'&&next!=='identify'&&identifyActive)finishIdentify('cancelled');
   currentPage=next;
+  persistState();
   $$('.page').forEach((page)=>page.hidden=page.id!==next);$('#preview-page').value=next;
   $$('[data-nav]').forEach((link)=>{const active=link.dataset.nav===(next==='diagnostics'?'diagnostics':'keyboards');link.classList.toggle('active',active);if(active)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');});
   syncConnection();
@@ -340,8 +351,26 @@ function route(){
   const title=$(`#${next}-title`);title.focus({preventScroll:true});document.title=`KeyboarDeer · ${title.textContent}`;
   window.scrollTo({top:0,behavior:'instant'});
 }
-  persistState();
 $('#preview-page').addEventListener('change',()=>location.hash=$('#preview-page').value);
+const preferencesDialog=$('#preferences-dialog');
+const savedPreferences=(()=>{try{return JSON.parse(localStorage.getItem('keyboardeer-preferences')||'{}')}catch{return {}}})();
+$('#sync-enabled').checked=Boolean(savedPreferences.syncEnabled);
+$('#sync-folder').value=savedPreferences.syncFolder||'~/Documents/KeyboarDeer';
+$('#folder-picker').hidden=!$('#sync-enabled').checked;
+$('#open-preferences').addEventListener('click',()=>preferencesDialog.showModal());
+$('#sync-enabled').addEventListener('change',()=>$('#folder-picker').hidden=!$('#sync-enabled').checked);
+$('#choose-folder').addEventListener('click',async()=>{
+  if(!window.showDirectoryPicker){toast('In the desktop app, this opens your folder chooser.');return;}
+  try{const folder=await window.showDirectoryPicker({mode:'readwrite'});$('#sync-folder').value=folder.name;}
+  catch(error){if(error.name!=='AbortError')toast('Could not choose that folder.');}
+});
+$('#save-preferences').addEventListener('click',(event)=>{
+  event.preventDefault();
+  const preferences={syncEnabled:$('#sync-enabled').checked,syncFolder:$('#sync-folder').value.trim()};
+  try{localStorage.setItem('keyboardeer-preferences',JSON.stringify(preferences));}catch{}
+  preferencesDialog.close('save');
+  toast(preferences.syncEnabled?'Profile folder preference saved.':'Profile folder sync is off.');
+});
 window.addEventListener('hashchange',route);
-miniBoards();buildActions();initializeValidation();route();
 window.addEventListener('beforeunload',persistState);
+miniBoards();buildActions();initializeValidation();route();

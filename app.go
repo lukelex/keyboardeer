@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"sync"
@@ -71,6 +74,14 @@ func newAppWithProfileStore(store *profile.Store) *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.restoreWindowState()
+}
+
+// beforeClose persists the desktop shell's placement and allows Wails to quit.
+// The manager is an independent service and continues supervising mappings.
+func (a *App) beforeClose(context.Context) bool {
+	a.saveWindowState()
+	return false
 }
 
 func (a *App) shutdown(context.Context) {
@@ -248,6 +259,93 @@ func (a *App) DuplicateProfile(id, name string) (profile.Profile, error) {
 	return store.Upsert(copied)
 }
 
+// ExportProfile writes a portable behavior-only profile file. It never emits
+// generated KMonad text, which requires manager-owned device rendering.
+func (a *App) ExportProfile(id string) error {
+	if a.ctx == nil {
+		return fmt.Errorf("desktop file dialogs are unavailable")
+	}
+	draft, err := a.profileByID(id)
+	if err != nil {
+		return err
+	}
+	defaultName := filepath.Base(draft.Name)
+	if defaultName == "." || defaultName == string(filepath.Separator) {
+		defaultName = "keyboard-profile"
+	}
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "Export KeyboarDeer profile",
+		DefaultFilename: defaultName + ".kbdprofile.json",
+		Filters:         []runtime.FileFilter{{DisplayName: "KeyboarDeer profile", Pattern: "*.kbdprofile.json"}},
+	})
+	if err != nil || path == "" {
+		return err
+	}
+	data, err := profile.Export(draft)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o600)
+}
+
+// ImportProfile imports behavior into a new draft for the chosen keyboard.
+// Manager links and apply state are never imported from portable files.
+func (a *App) ImportProfile(deviceID string) (profile.Profile, error) {
+	if a.ctx == nil {
+		return profile.Profile{}, fmt.Errorf("desktop file dialogs are unavailable")
+	}
+	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title:   "Import KeyboarDeer profile",
+		Filters: []runtime.FileFilter{{DisplayName: "KeyboarDeer profile", Pattern: "*.kbdprofile.json"}},
+	})
+	if err != nil || path == "" {
+		return profile.Profile{}, err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	if info.Size() > 4<<20 {
+		return profile.Profile{}, fmt.Errorf("profile file exceeds 4 MiB")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	draft, err := profile.Import(data, deviceID)
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	draft = geometry.MigrateLegacyProfile(draft)
+	template, ok := geometry.Lookup(draft.Geometry.ID)
+	if !ok {
+		return profile.Profile{}, fmt.Errorf("profile uses an unsupported verified geometry %q", draft.Geometry.ID)
+	}
+	verified, err := template.ProfileGeometry()
+	if err != nil || !slices.Equal(verified.SourceKeys, draft.Geometry.SourceKeys) {
+		return profile.Profile{}, fmt.Errorf("profile geometry does not match a verified keyboard layout")
+	}
+	store, err := a.profileStore()
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	storeData, err := store.Load()
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	compatible := false
+	for _, existing := range storeData.ProfilesForDevice(deviceID) {
+		if existing.Geometry.ID == draft.Geometry.ID && slices.Equal(existing.Geometry.SourceKeys, draft.Geometry.SourceKeys) {
+			compatible = true
+			break
+		}
+	}
+	if !compatible {
+		return profile.Profile{}, fmt.Errorf("imported layout does not match a profile already associated with this keyboard")
+	}
+	return store.Upsert(draft)
+}
+
 func (a *App) DeleteProfile(id string, expectedDraftRevision uint64) error {
 	store, err := a.profileStore()
 	if err != nil {
@@ -268,13 +366,15 @@ func (a *App) CompileProfile(id string) (compiler.Result, error) {
 // used for the check. The UI must discard it after any local edit, device
 // change, or manager server-ID change; validity never implies activation.
 type ProfilePreview struct {
-	ProfileID       string                      `json:"profile_id"`
-	DraftRevision   uint64                      `json:"draft_revision"`
-	DeviceID        string                      `json:"device_id"`
-	ManagerServerID string                      `json:"manager_server_id"`
-	StateRevision   uint64                      `json:"state_revision"`
-	Validation      managerapi.ValidationResult `json:"validation"`
-	SourceMap       []compiler.SourceMapEntry   `json:"source_map"`
+	ProfileID          string                      `json:"profile_id"`
+	DraftRevision      uint64                      `json:"draft_revision"`
+	DeviceID           string                      `json:"device_id"`
+	ManagerServerID    string                      `json:"manager_server_id"`
+	StateRevision      uint64                      `json:"state_revision"`
+	CandidateDigest    string                      `json:"candidate_digest"`
+	ValidationRecovery *profile.ValidationRecovery `json:"validation_recovery,omitempty"`
+	Validation         managerapi.ValidationResult `json:"validation"`
+	SourceMap          []compiler.SourceMapEntry   `json:"source_map"`
 }
 
 func (a *App) PreviewProfile(id string) (ProfilePreview, error) {
@@ -307,7 +407,36 @@ func (a *App) PreviewProfile(id string) (ProfilePreview, error) {
 	if before.ServerID != after.ServerID {
 		return ProfilePreview{}, &managerapi.Error{Code: "manager_restarted", Message: "The manager restarted while it validated this draft."}
 	}
-	return ProfilePreview{ProfileID: draft.ID, DraftRevision: draft.DraftRevision, DeviceID: draft.DeviceID, ManagerServerID: after.ServerID, StateRevision: after.StateRevision, Validation: preview.Validation, SourceMap: compiled.SourceMap}, nil
+	if before.StateRevision != after.StateRevision || !slices.Equal(before.Capabilities, after.Capabilities) {
+		return ProfilePreview{}, &managerapi.Error{Code: "manager_state_changed", Message: "The manager state or capabilities changed while it validated this draft."}
+	}
+	digest := sha256.Sum256([]byte(compiled.Behavior))
+	candidateDigest := "sha256:" + hex.EncodeToString(digest[:])
+	if preview.Validation.CandidateDigest != "" && preview.Validation.CandidateDigest != candidateDigest {
+		return ProfilePreview{}, &managerapi.Error{Code: "candidate_digest_mismatch", Message: "The manager validation result does not match the submitted draft."}
+	}
+	recovery := draft.ValidationRecovery
+	if preview.Validation.Outcome == "valid" {
+		checkpoint := profile.ValidationCheckpoint{
+			DraftRevision: draft.DraftRevision, ManagerServerID: after.ServerID,
+			CandidateDigest: candidateDigest, Geometry: draft.Geometry,
+			Layers: draft.Layers, Assignments: draft.Assignments,
+			Aliases: draft.Aliases, Macros: draft.Macros,
+		}
+		// Recovery persistence is additive: an I/O failure must not turn a
+		// manager-approved preview into a validation failure. The existing
+		// recovery metadata remains in the response, but no new checkpoint is
+		// advertised unless the exact draft revision was saved.
+		if saved, saveErr := a.profiles.SetValidationCheckpoint(draft.ID, draft.DraftRevision, checkpoint); saveErr == nil {
+			recovery = saved.ValidationRecovery
+		}
+	}
+	return ProfilePreview{
+		ProfileID: draft.ID, DraftRevision: draft.DraftRevision, DeviceID: draft.DeviceID,
+		ManagerServerID: after.ServerID, StateRevision: after.StateRevision,
+		CandidateDigest: candidateDigest, ValidationRecovery: recovery,
+		Validation: preview.Validation, SourceMap: compiled.SourceMap,
+	}, nil
 }
 
 // ProfileApplyResult links a manager operation to the local draft. The UI
@@ -691,6 +820,33 @@ func (a *App) SetConfigurationEnabled(configurationID string, enabled bool) (man
 		})
 	}
 	return managerapi.Operation{}, fmt.Errorf("manager configuration %q does not exist", configurationID)
+}
+
+// ExportConfiguration returns a manager-rendered, device-bound .kbd artifact
+// for a managed configuration. The GUI never constructs device-specific defcfg.
+func (a *App) ExportConfiguration(configurationID string) (managerapi.ConfigurationExportResult, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := a.canUse(ctx, "configuration_export"); err != nil {
+		return managerapi.ConfigurationExportResult{}, err
+	}
+	snapshot, err := a.manager.SnapshotGet(ctx)
+	if err != nil {
+		return managerapi.ConfigurationExportResult{}, err
+	}
+	for _, configuration := range snapshot.Configurations {
+		if configuration.ID != configurationID {
+			continue
+		}
+		if configuration.Ownership != "managed" {
+			return managerapi.ConfigurationExportResult{}, fmt.Errorf("raw source is available only for manager-rendered managed configurations")
+		}
+		return a.manager.ConfigurationExport(ctx, managerapi.ConfigurationExportParams{
+			ConfigurationID: configuration.ID,
+			Format:          "manager_rendered_kbd",
+		})
+	}
+	return managerapi.ConfigurationExportResult{}, fmt.Errorf("manager configuration %q does not exist", configurationID)
 }
 
 // DeleteConfiguration stops a manager-owned mapping and removes it from the

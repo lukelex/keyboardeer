@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const StoreVersion = 2
+const StoreVersion = 3
 
 // maxNameLength bounds user-visible names. Longer names cannot be displayed
 // usefully and are rejected rather than silently truncated.
@@ -45,8 +45,38 @@ type Profile struct {
 	Aliases                map[string]Behavior   `json:"aliases,omitempty"`
 	Macros                 map[string][]Behavior `json:"macros,omitempty"`
 	Settings               CompilerSettings      `json:"settings"`
+	ValidationRecovery     *ValidationRecovery   `json:"validation_recovery,omitempty"`
 	CreatedAt              time.Time             `json:"created_at"`
 	UpdatedAt              time.Time             `json:"updated_at"`
+}
+
+// ValidationRecovery is local draft provenance. It never changes manager
+// configuration state and is intentionally separate from apply/runtime
+// rollback metadata.
+type ValidationRecovery struct {
+	Checkpoint *ValidationCheckpoint `json:"checkpoint,omitempty"`
+	PreEdit    []AssignmentFallback  `json:"pre_edit,omitempty"`
+}
+
+type ValidationCheckpoint struct {
+	DraftRevision   uint64                `json:"draft_revision"`
+	ManagerServerID string                `json:"manager_server_id"`
+	CandidateDigest string                `json:"candidate_digest"`
+	Geometry        Geometry              `json:"geometry"`
+	Layers          []Layer               `json:"layers"`
+	Assignments     []Assignment          `json:"assignments"`
+	Aliases         map[string]Behavior   `json:"aliases,omitempty"`
+	Macros          map[string][]Behavior `json:"macros,omitempty"`
+}
+
+// AssignmentFallback records only the pre-edit value for one assignment. A
+// false HadAssignment means the safe inverse is to remove the current override.
+type AssignmentFallback struct {
+	GeometryID    string   `json:"geometry_id"`
+	LayerID       string   `json:"layer_id"`
+	SourceKey     string   `json:"source_key"`
+	HadAssignment bool     `json:"had_assignment"`
+	Behavior      Behavior `json:"behavior,omitempty"`
 }
 
 // PendingApply is written before a manager mutation is sent. It records the

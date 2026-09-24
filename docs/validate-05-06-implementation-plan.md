@@ -153,11 +153,22 @@ Those remain KeyboarDeer responsibilities after it receives a reliable location.
 
 ## Acceptance gate for KeyboarDeer
 
-KeyboarDeer can begin per-key recovery only after a supported manager revision
-returns the location/digest contract above and its integration fixture proves:
+Manager v1.1.0 (`712f4aa`) implements the location/digest contract and includes
+`tests/fixtures/validation-preview-locations.jsonl` for mapped, unmapped, and
+blocked responses. KeyboarDeer now enables per-assignment recovery only when the
+manager digest matches the exact local candidate and a submitted-behavior range
+maps to exactly one compiler source-map entry.
 
-- a location maps to exactly one GUI compiler source-map entry;
-- an unmapped range never produces a key marker or targeted revert; and
+The KeyboarDeer VALIDATE-05 regression coverage verifies:
+
+- a mapped rejection marks and focuses only its mapped assignment;
+- **Revert [key]** restores the last validated value, keeps unrelated edits,
+  records undo/redo, and triggers full-draft validation;
+- pre-edit fallback is available without a checkpoint and refuses to recreate
+  a removed layer dependency;
+- unmapped, unknown-scope, ambiguous, or digest-mismatched rejections never
+  produce a key marker or targeted revert; and
 - blocked results never produce a key marker or targeted revert.
 
-Until then, the correct behavior is the existing keymap-wide diagnostic UI.
+Broader scheduling, reconnect, profile/device-switching, and multi-issue race
+coverage remains tracked under VALIDATE-06.

@@ -75,14 +75,14 @@ affected keys, including those on other layers; selecting an issue opens that
 layer and focuses its key.
 
 Maintain a compiler source map from stable editor nodes (layer/key/behavior)
-to generated behavior spans. The current API's general `Diagnostic` contract
-does **not** promise key addresses or compiler locations. Use precise local
-compiler diagnostics and only manager locations that can be mapped reliably
-to the exact submitted candidate. Coordinate structured source locations with
-the manager if needed; never infer a key from the last click or display text.
-An unmappable manager rejection remains a keymap-level issue, with no invented
-per-key revert. Cross-key errors must name all known dependencies rather than
-blaming whichever key was edited most recently.
+to generated behavior spans. Manager v1.1.0 may return a SHA-256 digest and a
+`submitted_behavior` location only when a rejected validator range belongs to
+one submitted assignment. KeyboarDeer requires the digest to match the exact
+locally compiled bytes and the full range to fit exactly one local source-map
+entry. Missing, unknown-scope, mismatched, or ambiguous locations remain
+keymap-level issues, with no invented per-key revert. Never infer a key from
+the last click or display text. Cross-key errors must name all known
+dependencies rather than blaming whichever key was edited most recently.
 
 ## Revert one invalid assignment
 

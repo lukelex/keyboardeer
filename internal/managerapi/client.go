@@ -476,6 +476,12 @@ func (c *APIClient) ConfigurationDelete(ctx context.Context, params Configuratio
 	return result.Operation, err
 }
 
+func (c *APIClient) ConfigurationExport(ctx context.Context, params ConfigurationExportParams) (ConfigurationExportResult, error) {
+	var result ConfigurationExportResult
+	err := c.call(ctx, "configuration.export", params, &result)
+	return result, err
+}
+
 // NewIdempotencyKey returns an opaque key within the manager's 128-byte limit.
 func NewIdempotencyKey() string {
 	return "keyboardeer-" + requestID()

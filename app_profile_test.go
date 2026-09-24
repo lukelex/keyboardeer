@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -167,6 +169,61 @@ func TestAppPreviewsThePersistedCompiledDraft(t *testing.T) {
 	}
 	if preview.ProfileID != draft.ID || preview.DraftRevision != draft.DraftRevision || preview.ManagerServerID != "server-1" || preview.Validation.Outcome != "valid" || len(preview.SourceMap) != 61 {
 		t.Fatalf("unexpected preview: %#v", preview)
+	}
+	if !strings.HasPrefix(preview.CandidateDigest, "sha256:") || preview.Validation.CandidateDigest != preview.CandidateDigest || preview.ValidationRecovery == nil ||
+		preview.ValidationRecovery.Checkpoint == nil || preview.ValidationRecovery.Checkpoint.CandidateDigest != preview.CandidateDigest {
+		t.Fatalf("valid preview did not persist exact recovery provenance: %#v", preview)
+	}
+	profiles, err := app.Profiles()
+	if err != nil || len(profiles) != 1 || profiles[0].DraftRevision != draft.DraftRevision || profiles[0].ValidationRecovery == nil || profiles[0].ValidationRecovery.Checkpoint == nil {
+		t.Fatalf("validation checkpoint changed/did not persist with the draft: %#v, %v", profiles, err)
+	}
+}
+
+func TestAppRejectsPreviewWithMismatchedCandidateDigest(t *testing.T) {
+	endpoint := testPreviewManagerWithDigest(t, true)
+	client := managerapi.New(managerapi.Options{Endpoint: endpoint, ClientName: "keyboardeer-test", ClientVersion: "test"})
+	app := &App{manager: client, profiles: profile.NewStore(filepath.Join(t.TempDir(), "profiles.json"))}
+	defer app.manager.Close()
+	draft, err := app.CreateProfile("device-1", "Everyday", geometry.ANSI60USID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.PreviewProfile(draft.ID); err == nil || !strings.Contains(err.Error(), "candidate_digest_mismatch") {
+		t.Fatalf("mismatched manager digest error = %v", err)
+	}
+	profiles, err := app.Profiles()
+	if err != nil || len(profiles) != 1 || profiles[0].ValidationRecovery != nil {
+		t.Fatalf("mismatched preview persisted recovery metadata: %#v, %v", profiles, err)
+	}
+}
+
+func TestAppRejectsPreviewWhenManagerEnvironmentChanges(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		revisions    []uint64
+		capabilities []bool
+	}{
+		{name: "state revision", revisions: []uint64{9, 10}},
+		{name: "capabilities", revisions: []uint64{9, 9}, capabilities: []bool{true, false}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			endpoint := testPreviewManagerWithOptions(t, false, test.revisions, test.capabilities)
+			client := managerapi.New(managerapi.Options{Endpoint: endpoint, ClientName: "keyboardeer-test", ClientVersion: "test"})
+			app := &App{manager: client, profiles: profile.NewStore(filepath.Join(t.TempDir(), "profiles.json"))}
+			defer app.manager.Close()
+			draft, err := app.CreateProfile("device-1", "Everyday", geometry.ANSI60USID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := app.PreviewProfile(draft.ID); err == nil || !strings.Contains(err.Error(), "manager_state_changed") {
+				t.Fatalf("manager environment change error = %v", err)
+			}
+			profiles, err := app.Profiles()
+			if err != nil || len(profiles) != 1 || profiles[0].ValidationRecovery != nil {
+				t.Fatalf("environment race persisted a validation checkpoint: %#v, %v", profiles, err)
+			}
+		})
 	}
 }
 
@@ -700,6 +757,14 @@ func testManagerWithKeys(t *testing.T, respond func(method string, params json.R
 }
 
 func testPreviewManager(t *testing.T) string {
+	return testPreviewManagerWithOptions(t, false, nil, nil)
+}
+
+func testPreviewManagerWithDigest(t *testing.T, mismatchDigest bool) string {
+	return testPreviewManagerWithOptions(t, mismatchDigest, nil, nil)
+}
+
+func testPreviewManagerWithOptions(t *testing.T, mismatchDigest bool, revisions []uint64, capabilityAvailability []bool) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "api.sock")
 	listener, err := net.Listen("unix", path)
@@ -720,10 +785,16 @@ func testPreviewManager(t *testing.T) string {
 		}
 		defer connection.Close()
 		scanner := bufio.NewScanner(connection)
+		managerGetCount := 0
 		for scanner.Scan() {
 			var request struct {
 				ID     string `json:"id"`
 				Method string `json:"method"`
+				Params struct {
+					Model struct {
+						Behavior string `json:"behavior"`
+					} `json:"model"`
+				} `json:"params"`
 			}
 			if err := json.Unmarshal(scanner.Bytes(), &request); err != nil {
 				t.Error(err)
@@ -734,9 +805,26 @@ func testPreviewManager(t *testing.T) string {
 			case "session.hello":
 				result = `{"selected_version":1,"server_id":"server-1","manager_version":"test"}`
 			case "manager.get":
-				result = `{"server_id":"server-1","state_revision":9,"capabilities":[{"name":"candidate_validation","available":true,"reason_code":"capability_available","reason":"ready"}]}`
+				managerGetCount++
+				stateRevision, capabilityAvailable := uint64(9), true
+				if len(revisions) >= managerGetCount {
+					stateRevision = revisions[managerGetCount-1]
+				}
+				if len(capabilityAvailability) >= managerGetCount {
+					capabilityAvailable = capabilityAvailability[managerGetCount-1]
+				}
+				reasonCode, reason := "capability_available", "ready"
+				if !capabilityAvailable {
+					reasonCode, reason = "capability_unavailable", "not ready"
+				}
+				result = fmt.Sprintf(`{"server_id":"server-1","state_revision":%d,"capabilities":[{"name":"candidate_validation","available":%t,"reason_code":%q,"reason":%q}]}`, stateRevision, capabilityAvailable, reasonCode, reason)
 			case "validation.preview":
-				result = `{"validation":{"outcome":"valid","reason_code":"validation_succeeded","reason":"accepted","diagnostics":[]}}`
+				digest := sha256.Sum256([]byte(request.Params.Model.Behavior))
+				candidateDigest := "sha256:" + hex.EncodeToString(digest[:])
+				if mismatchDigest {
+					candidateDigest = "sha256:" + strings.Repeat("f", 64)
+				}
+				result = fmt.Sprintf(`{"validation":{"outcome":"valid","reason_code":"validation_succeeded","reason":"accepted","candidate_digest":%q,"diagnostics":[]}}`, candidateDigest)
 			default:
 				t.Errorf("unexpected manager method %q", request.Method)
 				return

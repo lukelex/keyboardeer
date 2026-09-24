@@ -5,6 +5,12 @@ audited against `origin/main` at
 `ab8ba4365b5aa7b8024a1ff6c9c721cab0abdea9` (`v1.0.0`), not against uncommitted
 work in a developer checkout.
 
+This handover is historical. Manager v1.1.0 (`712f4aa`) has since implemented
+the validation digest/location contract, durable idempotency, external content
+reads, and managed artifact export. See
+[`manager-api-status.md`](manager-api-status.md) for the current compatibility
+audit and [`TODO.md`](../TODO.md) for remaining GUI work.
+
 ## Goal and ownership boundary
 
 Unblock the remaining KeyboarDeer workflows without giving the GUI device-file

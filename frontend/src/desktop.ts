@@ -59,6 +59,13 @@ export interface Configuration {
   runtime: RuntimeState;
   last_operation?: Operation | null;
 }
+export interface ConfigurationExport {
+  configuration_id: string;
+  revision: number;
+  digest: string;
+  format: string;
+  content: string;
+}
 export interface Snapshot {
   state_revision: number;
   event_cursor: { server_id: string; event_id: number; state_revision: number };
@@ -139,8 +146,30 @@ export interface Profile {
   aliases?: Record<string, ProfileBehavior>;
   macros?: Record<string, ProfileBehavior[]>;
   settings: { version: number };
+  validation_recovery?: ValidationRecovery;
   created_at: string;
   updated_at: string;
+}
+export interface ValidationRecovery {
+  checkpoint?: ValidationCheckpoint;
+  pre_edit?: AssignmentFallback[] | null;
+}
+export interface ValidationCheckpoint {
+  draft_revision: number;
+  manager_server_id: string;
+  candidate_digest: string;
+  geometry: ProfileGeometry;
+  layers: ProfileLayer[];
+  assignments: ProfileAssignment[] | null;
+  aliases?: Record<string, ProfileBehavior>;
+  macros?: Record<string, ProfileBehavior[]>;
+}
+export interface AssignmentFallback {
+  geometry_id: string;
+  layer_id: string;
+  source_key: string;
+  had_assignment: boolean;
+  behavior?: ProfileBehavior;
 }
 export interface CompileResult {
   behavior: string;
@@ -162,10 +191,14 @@ export interface ProfilePreview {
   device_id: string;
   manager_server_id: string;
   state_revision: number;
+  /** Digest of the exact behavior submitted by KeyboarDeer. */
+  candidate_digest: string;
+  validation_recovery?: ValidationRecovery;
   validation: {
     outcome: string;
     reason_code: string;
     reason: string;
+    candidate_digest?: string;
     diagnostics: Array<{
       id: string;
       severity: string;
@@ -173,6 +206,13 @@ export interface ProfilePreview {
       summary: string;
       remediation: string;
       resource?: { kind: string; id: string } | null;
+      location?: {
+        scope: string;
+        start_line: number;
+        start_column: number;
+        end_line: number;
+        end_column: number;
+      } | null;
     }> | null;
   };
   source_map: CompileResult["source_map"];
@@ -205,6 +245,8 @@ type AppBindings = {
   SaveProfile?: (profile: Profile) => Promise<Profile>;
   DeleteProfile?: (id: string, expectedDraftRevision: number) => Promise<void>;
   DuplicateProfile?: (id: string, name: string) => Promise<Profile>;
+  ExportProfile?: (id: string) => Promise<void>;
+  ImportProfile?: (deviceID: string) => Promise<Profile>;
   SelectedProfiles?: () => Promise<Record<string, string>>;
   SelectProfile?: (deviceID: string, profileID: string) => Promise<void>;
   CompileProfile?: (id: string) => Promise<CompileResult>;
@@ -217,6 +259,9 @@ type AppBindings = {
     enabled: boolean,
   ) => Promise<Operation>;
   DeleteConfiguration?: (configurationID: string) => Promise<Operation>;
+  ExportConfiguration?: (
+    configurationID: string,
+  ) => Promise<ConfigurationExport>;
   RecoverCorruptProfileStore?: () => Promise<string>;
   ProfileStoreStatus?: () => Promise<ProfileStoreStatus>;
   IdentifyStart?: (deviceID: string, timeoutMS: number) => Promise<Operation>;
@@ -280,6 +325,10 @@ export const DuplicateProfile = (id: string, name: string) =>
     id,
     name,
   );
+export const ExportProfile = (id: string) =>
+  binding<(id: string) => Promise<void>>("ExportProfile")(id);
+export const ImportProfile = (deviceID: string) =>
+  binding<(deviceID: string) => Promise<Profile>>("ImportProfile")(deviceID);
 export const SelectedProfiles = () =>
   binding<() => Promise<Record<string, string>>>("SelectedProfiles")();
 export const SelectProfile = (deviceID: string, profileID: string) =>
@@ -306,6 +355,10 @@ export const SetConfigurationEnabled = (
 export const DeleteConfiguration = (configurationID: string) =>
   binding<(configurationID: string) => Promise<Operation>>(
     "DeleteConfiguration",
+  )(configurationID);
+export const ExportConfiguration = (configurationID: string) =>
+  binding<(configurationID: string) => Promise<ConfigurationExport>>(
+    "ExportConfiguration",
   )(configurationID);
 export const RecoverCorruptProfileStore = () =>
   binding<() => Promise<string>>("RecoverCorruptProfileStore")();

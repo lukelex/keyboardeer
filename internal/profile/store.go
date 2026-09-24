@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"time"
 )
@@ -126,6 +127,28 @@ var migrations = map[int]func(*StoreData){
 			selected := store.find(current)
 			if selected.ManagerConfigurationID == "" && (candidate.ManagerConfigurationID != "" || candidate.CreatedAt.Before(selected.CreatedAt)) {
 				store.Selected[candidate.DeviceID] = candidate.ID
+			}
+		}
+	},
+	// Version 3 corrects the original ANSI 60% source map: KMonad's documented
+	// layout has `grv` at the first position, not `esc`. Update source references
+	// together so saved assignments continue to address that same visual key.
+	2: func(store *StoreData) {
+		for profileIndex := range store.Profiles {
+			candidate := &store.Profiles[profileIndex]
+			if candidate.Geometry.ID != "us-ansi-60-v1" {
+				continue
+			}
+			candidate.Geometry.ID = "us-ansi-60-v2"
+			for keyIndex, source := range candidate.Geometry.SourceKeys {
+				if source == "esc" {
+					candidate.Geometry.SourceKeys[keyIndex] = "grv"
+				}
+			}
+			for assignmentIndex := range candidate.Assignments {
+				if candidate.Assignments[assignmentIndex].SourceKey == "esc" {
+					candidate.Assignments[assignmentIndex].SourceKey = "grv"
+				}
 			}
 		}
 	},
@@ -334,6 +357,45 @@ func (s *Store) SetApplyOutcome(id string, expectedDraftRevision uint64, configu
 			return Profile{}, err
 		}
 		return *profile, nil
+	}
+	return Profile{}, fmt.Errorf("profile %q does not exist", id)
+}
+
+// SetValidationCheckpoint persists a successfully validated draft state without
+// advancing its editable revision. A checkpoint is accepted only for the exact
+// current revision and manager generation supplied by the preview request.
+func (s *Store) SetValidationCheckpoint(id string, expectedDraftRevision uint64, checkpoint ValidationCheckpoint) (Profile, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	data, err := s.load()
+	if err != nil {
+		return Profile{}, err
+	}
+	for index := range data.Profiles {
+		candidate := &data.Profiles[index]
+		if candidate.ID != id {
+			continue
+		}
+		if candidate.DraftRevision != expectedDraftRevision || checkpoint.DraftRevision != expectedDraftRevision {
+			return Profile{}, &StaleDraftError{ProfileID: id, Expected: expectedDraftRevision, Actual: candidate.DraftRevision}
+		}
+		if checkpoint.ManagerServerID == "" || checkpoint.CandidateDigest == "" ||
+			!reflect.DeepEqual(checkpoint.Geometry, candidate.Geometry) ||
+			!reflect.DeepEqual(checkpoint.Layers, candidate.Layers) ||
+			!reflect.DeepEqual(checkpoint.Assignments, candidate.Assignments) ||
+			!reflect.DeepEqual(checkpoint.Aliases, candidate.Aliases) ||
+			!reflect.DeepEqual(checkpoint.Macros, candidate.Macros) {
+			return Profile{}, fmt.Errorf("validation checkpoint does not match the current profile")
+		}
+		if candidate.ValidationRecovery == nil {
+			candidate.ValidationRecovery = &ValidationRecovery{}
+		}
+		candidate.ValidationRecovery.Checkpoint = &checkpoint
+		candidate.ValidationRecovery.PreEdit = nil
+		if err := s.save(data); err != nil {
+			return Profile{}, err
+		}
+		return *candidate, nil
 	}
 	return Profile{}, fmt.Errorf("profile %q does not exist", id)
 }

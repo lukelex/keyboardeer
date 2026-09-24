@@ -1,5 +1,14 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
+  import Button from "./components/Button.svelte";
+  import {
+    applyAssignmentRecovery,
+    assignmentMatchesIssue,
+    assignmentRecovery,
+    mapDiagnosticToAssignment,
+    withPreEditFallback,
+    type MappedAssignmentIssue,
+  } from "./validationRecovery";
   import {
     ApplyProfile,
     DiscardPendingApply,
@@ -8,10 +17,13 @@
     DeleteConfiguration,
     DeleteProfile,
     DuplicateProfile,
+    ExportConfiguration,
+    ExportProfile,
     Geometries,
     IdentifyCancel,
     IdentifyOperation,
     IdentifyStart,
+    ImportProfile,
     Info,
     PreviewProfile,
     Profiles,
@@ -25,6 +37,7 @@
     type AppInfo,
     type Capability,
     type Configuration,
+    type ConfigurationExport,
     type Device,
     type GeometryTemplate,
     type ManagerStatus,
@@ -39,6 +52,8 @@
 
   type View = "devices" | "setup" | "editor";
   type KeyOption = GeometryTemplate["keys"][number];
+  type PaletteKey = Pick<KeyOption, "label" | "source_key">;
+  type PaletteCategory = "all" | "0" | "1" | "2" | "3" | "4" | "5" | "6";
   type ComplexAction = "tap_hold" | "layer" | "alias" | "macro" | "layers";
   type EditableState = Pick<
     Profile,
@@ -48,6 +63,17 @@
   type DraftSaveState = "saved" | "saving" | "failed";
   const draftHistoryLimit = 100;
   const defaultTapHoldTimeoutMS = 200;
+  const compactPaletteHeight = 720;
+  const paletteCategories: { id: PaletteCategory; label: string }[] = [
+    { id: "all", label: "All" },
+    { id: "0", label: "Numbers" },
+    { id: "1", label: "Letters" },
+    { id: "2", label: "Modifiers" },
+    { id: "3", label: "Function" },
+    { id: "4", label: "Navigation" },
+    { id: "5", label: "Media" },
+    { id: "6", label: "Other" },
+  ];
   const modifierSourceKeys = new Set([
     "caps",
     "cmp",
@@ -60,6 +86,42 @@
     "rmet",
     "rsft",
   ]);
+  const navigationSystemKeys = [
+    { label: "Num Lock", source_key: "nlck" },
+    { label: "Scroll Lock", source_key: "scrlck" },
+    { label: "System Request", source_key: "ssrq" },
+    { label: "Break", source_key: "break" },
+  ];
+  const navigationSystemSourceKeys = new Set([
+    "ins",
+    "home",
+    "pgup",
+    "del",
+    "end",
+    "pgdn",
+    "up",
+    "down",
+    "left",
+    "rght",
+    "prnt",
+    "pause",
+    ...navigationSystemKeys.map((key) => key.source_key),
+  ]);
+  const mediaSystemKeys = [
+    { label: "Mute", source_key: "mute" },
+    { label: "Volume up", source_key: "volu" },
+    { label: "Volume down", source_key: "voldwn" },
+    { label: "Play / pause", source_key: "pp" },
+    { label: "Next track", source_key: "next" },
+    { label: "Previous track", source_key: "prev" },
+    { label: "Stop playback", source_key: "stopcd" },
+    { label: "Brightness up", source_key: "brup" },
+    { label: "Brightness down", source_key: "brdown" },
+    { label: "Keyboard backlight toggle", source_key: "kbdillumtoggle" },
+    { label: "Keyboard backlight up", source_key: "blup" },
+    { label: "Keyboard backlight down", source_key: "bldn" },
+    { label: "Eject media", source_key: "eject" },
+  ];
   const browserCodeToSourceKey: Record<string, string> = {
     Escape: "esc",
     Backquote: "grv",
@@ -107,7 +169,7 @@
     const key = String.fromCharCode(letter);
     browserCodeToSourceKey[`Key${key}`] = key.toLowerCase();
   }
-  for (let functionKey = 1; functionKey <= 12; functionKey += 1) {
+  for (let functionKey = 1; functionKey <= 24; functionKey += 1) {
     browserCodeToSourceKey[`F${functionKey}`] = `f${functionKey}`;
   }
   const initialStatus: ManagerStatus = {
@@ -118,9 +180,6 @@
 
   let info: AppInfo = { name: "KeyboarDeer", version: "starting…" };
   let workspace: ManagerWorkspace = { status: initialStatus, stale: false };
-  let view: View = "devices";
-  let selectedDevice: Device | null = null;
-  let profiles: Profile[] = [];
   const uiStateStorageKey = "keyboardeer-ui-state";
   type PersistedUIState = {
     view?: View;
@@ -132,20 +191,30 @@
   };
   function readPersistedUIState(): PersistedUIState {
     try {
-      const value: unknown = JSON.parse(localStorage.getItem(uiStateStorageKey) ?? "{}");
-      return typeof value === "object" && value !== null ? value as PersistedUIState : {};
+      const value: unknown = JSON.parse(
+        localStorage.getItem(uiStateStorageKey) ?? "{}",
+      );
+      return typeof value === "object" && value !== null
+        ? (value as PersistedUIState)
+        : {};
     } catch {
       return {};
     }
   }
   const persistedUIState = readPersistedUIState();
   let uiStateRestored = false;
+  let view: View = "devices";
+  let selectedDevice: Device | null = null;
+  let profiles: Profile[] = [];
   let geometries: GeometryTemplate[] = [];
   let selectedGeometryID = "";
   let profileName = "";
   let activeProfile: Profile | null = null;
   let selectedSourceKey = "";
   let selectedLayerID = "base";
+  let selectedLayerBehaviors: Record<string, ProfileBehavior> = {};
+  let activePaletteCategory: PaletteCategory = "all";
+  let viewportHeight = 0;
   let behaviorDialog: ComplexAction | null = null;
   let tapKey = "";
   let tapHoldMode: "key" | "layer" = "key";
@@ -196,6 +265,9 @@
   let identifyBusy = false;
   let identifyOpen = false;
   let externalOpen = false;
+  let rawConfiguration: ConfigurationExport | null = null;
+  let rawConfigurationOpen = false;
+  let rawConfigurationBusy = false;
   let identifyTimeoutMS = 15_000;
   let identifyDeadlineMS = 0;
   let identifyRemainingSeconds = 0;
@@ -222,8 +294,7 @@
     deviceDiscovery.available &&
     !!workspace.snapshot &&
     (workspaceLive || workspace.stale);
-  $: canIdentify =
-    workspaceLive && deviceIdentification.available;
+  $: canIdentify = workspaceLive && deviceIdentification.available;
   $: devices = workspace.snapshot?.devices ?? [];
   // Device roles are manager-owned semantics. Keep an absent role visible for
   // compatibility with older managers, but never configure an explicit
@@ -243,12 +314,16 @@
       ),
   );
   $: unconfiguredBoards = visibleBoards.filter(
-    (device) => !setUpBoards.some((setUpDevice) => setUpDevice.id === device.id),
+    (device) =>
+      !setUpBoards.some((setUpDevice) => setUpDevice.id === device.id),
   );
   $: sortedBoards = [...setUpBoards, ...unconfiguredBoards];
   $: managedConfigurations =
     capabilities.find((item) => item.name === "managed_configurations") ??
     unavailableCapability("managed_configurations");
+  $: configurationExport =
+    capabilities.find((item) => item.name === "configuration_export") ??
+    unavailableCapability("configuration_export");
   $: activeGeometry = activeProfile
     ? geometries.find((geometry) => geometry.id === activeProfile?.geometry.id)
     : undefined;
@@ -260,7 +335,17 @@
   // physical layout. Repeated source codes (for example on a split board)
   // therefore appear once, in a predictable category and alphabetical order.
   $: paletteKeyOptions = [
-    ...new Map(basicKeyOptions.map((key) => [key.source_key, key])).values(),
+    ...new Map(
+      [
+        ...basicKeyOptions,
+        ...Array.from({ length: 24 }, (_, index) => {
+          const number = index + 1;
+          return { label: `F${number}`, source_key: `f${number}` };
+        }),
+        ...navigationSystemKeys,
+        ...mediaSystemKeys,
+      ].map((key) => [key.source_key, key]),
+    ).values(),
   ].sort(comparePaletteKeys);
   $: normalizedKeySearch = keySearch.trim().toLowerCase();
   $: visiblePaletteKeys = normalizedKeySearch
@@ -270,9 +355,21 @@
         ),
       )
     : paletteKeyOptions;
+  $: compactPaletteKeys = visiblePaletteKeys.filter(
+    (key) =>
+      activePaletteCategory === "all" ||
+      paletteKeyGroup(key) === Number(activePaletteCategory),
+  );
+  $: renderedPaletteKeys = compactPalette
+    ? compactPaletteKeys
+    : visiblePaletteKeys;
+  $: compactPalette =
+    viewportHeight > 0 && viewportHeight <= compactPaletteHeight;
   $: activeHistory = activeProfile ? draftHistory[activeProfile.id] : undefined;
   $: canUndo =
-    !!activeHistory?.past.length && !profileBusy && !activeProfile?.apply_pending;
+    !!activeHistory?.past.length &&
+    !profileBusy &&
+    !activeProfile?.apply_pending;
   $: canRedo =
     !!activeHistory?.future.length &&
     !profileBusy &&
@@ -293,7 +390,39 @@
   $: activeLayer = activeProfile?.layers.find(
     (layer) => layer.id === selectedLayerID,
   );
+  $: selectedLayerIndex =
+    activeProfile?.layers.findIndex((layer) => layer.id === selectedLayerID) ??
+    -1;
+  $: selectedLayerAssignments =
+    activeProfile?.assignments?.filter(
+      (assignment) => assignment.layer_id === selectedLayerID,
+    ).length ?? 0;
+  $: selectedLayerBehaviors = Object.fromEntries(
+    (activeProfile?.assignments ?? [])
+      .filter((assignment) => assignment.layer_id === selectedLayerID)
+      .map((assignment) => [assignment.source_key, assignment.behavior]),
+  );
+  $: selectedLayerReferences = activeProfile
+    ? layerEntryCount(selectedLayerID)
+    : 0;
   $: editorOpen = view === "editor" && Boolean(activeProfile);
+  $: if (uiStateRestored) {
+    try {
+      localStorage.setItem(
+        uiStateStorageKey,
+        JSON.stringify({
+          view,
+          deviceID: selectedDevice?.id,
+          profileID: activeProfile?.id,
+          geometryID: selectedGeometryID,
+          layerID: selectedLayerID,
+          sourceKey: selectedSourceKey,
+        } satisfies PersistedUIState),
+      );
+    } catch {
+      // The application remains usable when browser storage is unavailable.
+    }
+  }
   $: currentPreview =
     activeProfile &&
     profilePreview?.profile_id === activeProfile.id &&
@@ -303,26 +432,24 @@
     workspaceLive
       ? profilePreview
       : null;
+  $: mappedPreviewIssues =
+    activeProfile && currentPreview?.validation.outcome === "rejected"
+      ? (currentPreview.validation.diagnostics ?? [])
+          .map((diagnostic) =>
+            mapDiagnosticToAssignment(
+              currentPreview!,
+              diagnostic,
+              activeProfile!,
+            ),
+          )
+          .filter((issue): issue is MappedAssignmentIssue => issue !== null)
+      : [];
   $: linkedConfiguration = activeProfile?.manager_configuration_id
     ? configurations.find(
         (configuration) =>
           configuration.id === activeProfile?.manager_configuration_id,
       )
     : undefined;
-  $: if (uiStateRestored) {
-    try {
-      localStorage.setItem(uiStateStorageKey, JSON.stringify({
-        view,
-        deviceID: selectedDevice?.id,
-        profileID: activeProfile?.id,
-        geometryID: selectedGeometryID,
-        layerID: selectedLayerID,
-        sourceKey: selectedSourceKey,
-      } satisfies PersistedUIState));
-    } catch {
-      // The application remains usable when browser storage is unavailable.
-    }
-  }
   $: shownApplyOperation =
     (applyOperationProfileID === activeProfile?.id ? applyOperation : null) ??
     activeProfile?.last_apply_operation ??
@@ -361,7 +488,9 @@
     return device.availability === "connected";
   }
   function deviceState(device: Device) {
-    return device.runtime_conflict ? "conflict" : device.availability || "unknown";
+    return device.runtime_conflict
+      ? "conflict"
+      : device.availability || "unknown";
   }
   function deviceStateSummary(device: Device) {
     switch (deviceState(device)) {
@@ -382,15 +511,32 @@
   function isConfigurable(device: Device) {
     return device.role === undefined || device.role === "input";
   }
-  function paletteKeyGroup(key: KeyOption) {
+  function paletteKeyGroup(key: PaletteKey) {
     if (/^[0-9]$/.test(key.source_key)) return 0;
     if (/^[a-z]$/.test(key.source_key)) return 1;
     if (modifierSourceKeys.has(key.source_key)) return 2;
-    return 3;
+    if (/^f\d+$/.test(key.source_key)) return 3;
+    if (navigationSystemSourceKeys.has(key.source_key)) return 4;
+    if (mediaSystemKeys.some((item) => item.source_key === key.source_key))
+      return 5;
+    return 6;
   }
-  function comparePaletteKeys(left: KeyOption, right: KeyOption) {
+  function paletteGroupLabel(group: number) {
+    return {
+      3: "Function keys",
+      4: "Navigation & system",
+      5: "Media & system",
+      6: "Other keys",
+    }[group];
+  }
+  function comparePaletteKeys(left: PaletteKey, right: PaletteKey) {
     const groupDifference = paletteKeyGroup(left) - paletteKeyGroup(right);
     if (groupDifference) return groupDifference;
+    if (/^f\d+$/.test(left.source_key) && /^f\d+$/.test(right.source_key)) {
+      return (
+        Number(left.source_key.slice(1)) - Number(right.source_key.slice(1))
+      );
+    }
     if (paletteKeyGroup(left) === 0) {
       return Number(left.source_key) - Number(right.source_key);
     }
@@ -400,7 +546,7 @@
       }) || left.source_key.localeCompare(right.source_key)
     );
   }
-  function paletteLabel(key: KeyOption) {
+  function paletteLabel(key: PaletteKey) {
     const compactLabels: Record<string, string> = {
       bspc: "Bksp",
       fwd: "Fwd",
@@ -443,13 +589,72 @@
       "The manager did not provide a runtime explanation for this configuration."
     );
   }
-  function diagnosticResourceLabel(diagnostic: NonNullable<ProfilePreview["validation"]["diagnostics"]>[number]) {
+  function diagnosticResourceLabel(
+    diagnostic: NonNullable<
+      ProfilePreview["validation"]["diagnostics"]
+    >[number],
+  ) {
     if (!diagnostic.resource) return "Keymap-wide issue";
     if (diagnostic.resource.kind === "device") return "Selected keyboard";
     if (diagnostic.resource.kind === "configuration") return "Configuration";
     // The manager currently does not promise physical-key locations. Preserve
     // opaque, future resource kinds without guessing a key from display text.
     return `${humanize(diagnostic.resource.kind)} issue`;
+  }
+  function diagnosticIssue(diagnosticID: string) {
+    if (!activeProfile || !currentPreview) return null;
+    const diagnostic = currentPreview.validation.diagnostics?.find(
+      (candidate) => candidate.id === diagnosticID,
+    );
+    return diagnostic
+      ? mapDiagnosticToAssignment(currentPreview, diagnostic, activeProfile)
+      : null;
+  }
+  function recoveryForIssue(issue: MappedAssignmentIssue) {
+    if (!activeProfile || !currentPreview) return null;
+    return assignmentRecovery(
+      activeProfile,
+      issue,
+      currentPreview.manager_server_id,
+    );
+  }
+  function showMappedIssue(issue: MappedAssignmentIssue) {
+    selectedLayerID = issue.layerID;
+    selectedSourceKey = issue.sourceKey;
+    requestAnimationFrame(() => {
+      const key = Array.from(
+        document.querySelectorAll<HTMLButtonElement>("[data-issue-key]"),
+      ).find(
+        (candidate) =>
+          candidate.dataset.layerId === issue.layerID &&
+          candidate.dataset.sourceKey === issue.sourceKey,
+      );
+      key?.scrollIntoView({ block: "center", inline: "nearest" });
+      key?.focus();
+    });
+  }
+  async function revertMappedIssue(diagnosticID: string) {
+    if (!activeProfile || !currentPreview || profileBusy) return;
+    const issue = diagnosticIssue(diagnosticID);
+    if (!issue || !assignmentMatchesIssue(activeProfile, issue)) {
+      feedback =
+        "That recovery action is out of date. Check the current preview.";
+      return;
+    }
+    const recovery = recoveryForIssue(issue);
+    if (!recovery?.available) {
+      feedback =
+        recovery?.reason ?? "No safe assignment recovery is available.";
+      return;
+    }
+    const restored = await saveDraft(
+      applyAssignmentRecovery(activeProfile, issue, recovery),
+    );
+    if (restored) {
+      selectedLayerID = issue.layerID;
+      selectedSourceKey = issue.sourceKey;
+      feedback = `Restored ${issue.sourceKey} on ${layerName(issue.layerID)}. Other draft edits were kept; checking the whole draft again.`;
+    }
   }
   async function deleteConfiguration(configuration: Configuration) {
     if (configuration.ownership !== "managed" || lifecycleBusyID) return;
@@ -514,11 +719,16 @@
   // Drafts are saved on every edit, so switching never loses pending changes;
   // each profile also keeps its own undo history.
   async function switchProfile(target: Profile) {
-    if (!selectedDevice || profileBusy || target.id === activeProfile?.id) return;
+    if (!selectedDevice || profileBusy || target.id === activeProfile?.id)
+      return;
     try {
       await SelectProfile(selectedDevice.id, target.id);
-      selectedProfiles = { ...selectedProfiles, [selectedDevice.id]: target.id };
-      activeProfile = profiles.find((profile) => profile.id === target.id) ?? target;
+      selectedProfiles = {
+        ...selectedProfiles,
+        [selectedDevice.id]: target.id,
+      };
+      activeProfile =
+        profiles.find((profile) => profile.id === target.id) ?? target;
       selectedSourceKey = "";
       selectedLayerID = "base";
       profilePreview = null;
@@ -552,6 +762,52 @@
       profiles = [...profiles, copy];
       profileBusy = false;
       await switchProfile(copy);
+    } catch (error) {
+      feedback = explain(error);
+    } finally {
+      profileBusy = false;
+    }
+  }
+  async function exportActiveProfile() {
+    if (!activeProfile || profileBusy) return;
+    profileBusy = true;
+    try {
+      await ExportProfile(activeProfile.id);
+      feedback =
+        "Portable profile exported. It contains behavior and layout data, not a runnable .kbd file.";
+    } catch (error) {
+      feedback = explain(error);
+    } finally {
+      profileBusy = false;
+    }
+  }
+  async function viewRawConfiguration() {
+    const configurationID = activeProfile?.manager_configuration_id;
+    if (!configurationID || rawConfigurationBusy) return;
+    rawConfigurationBusy = true;
+    feedback = "";
+    try {
+      rawConfiguration = await ExportConfiguration(configurationID);
+      rawConfigurationOpen = true;
+    } catch (error) {
+      feedback = explain(error);
+    } finally {
+      rawConfigurationBusy = false;
+    }
+  }
+  async function importProfileForDevice() {
+    if (!selectedDevice || profileBusy) return;
+    profileBusy = true;
+    try {
+      const imported = await ImportProfile(selectedDevice.id);
+      profiles = [...profiles, imported];
+      selectedProfiles = {
+        ...selectedProfiles,
+        [selectedDevice.id]: imported.id,
+      };
+      profileBusy = false;
+      await switchProfile(imported);
+      feedback = `Imported “${imported.name}” as a new draft for this keyboard.`;
     } catch (error) {
       feedback = explain(error);
     } finally {
@@ -619,10 +875,11 @@
     behavior: ProfileBehavior | undefined,
     sourceKey: string,
   ) {
-    if (!behavior) return selectedLayerID === "base" ? sourceKey : "Pass through";
+    if (!behavior)
+      return selectedLayerID === "base" ? sourceKey : "Pass through";
     if (behavior.kind === "key") return behavior.key ?? sourceKey;
     if (behavior.kind === "transparent") return "Pass through";
-    if (behavior.kind === "disabled") return "Disabled";
+    if (behavior.kind === "disabled") return "No output";
     if (behavior.kind === "tap_hold") {
       return `Tap ${behavior.tap?.key ?? "…"} / hold ${
         behavior.hold?.kind === "hold_layer"
@@ -642,8 +899,10 @@
     if (behavior.kind === "key") return `Send ${behavior.key}`;
     if (behavior.kind === "disabled") return "Disable key";
     if (behavior.kind === "transparent") return "Pass through";
-    if (behavior.kind === "hold_layer") return `Hold ${layerName(behavior.target)}`;
-    if (behavior.kind === "switch_layer") return `Switch to ${layerName(behavior.target)}`;
+    if (behavior.kind === "hold_layer")
+      return `Hold ${layerName(behavior.target)}`;
+    if (behavior.kind === "switch_layer")
+      return `Switch to ${layerName(behavior.target)}`;
     if (behavior.kind === "tap_hold") return "Tap & hold";
     if (behavior.kind === "alias") return `Use alias ${behavior.target}`;
     if (behavior.kind === "macro") return `Run macro ${behavior.target}`;
@@ -666,15 +925,23 @@
     if (behavior.kind === "tap_hold") {
       return Boolean(
         (behavior.tap && behaviorTargetsLayer(behavior.tap, layerID, seen)) ||
-          (behavior.hold && behaviorTargetsLayer(behavior.hold, layerID, seen)),
+        (behavior.hold && behaviorTargetsLayer(behavior.hold, layerID, seen)),
       );
     }
-    if (behavior.kind === "alias" && behavior.target && !seen.has(`a:${behavior.target}`)) {
+    if (
+      behavior.kind === "alias" &&
+      behavior.target &&
+      !seen.has(`a:${behavior.target}`)
+    ) {
       seen.add(`a:${behavior.target}`);
       const alias = activeProfile?.aliases?.[behavior.target];
       return alias ? behaviorTargetsLayer(alias, layerID, seen) : false;
     }
-    if (behavior.kind === "macro" && behavior.target && !seen.has(`m:${behavior.target}`)) {
+    if (
+      behavior.kind === "macro" &&
+      behavior.target &&
+      !seen.has(`m:${behavior.target}`)
+    ) {
       seen.add(`m:${behavior.target}`);
       return Boolean(
         activeProfile?.macros?.[behavior.target]?.some((step) =>
@@ -751,6 +1018,7 @@
         stale: !!previous.snapshot,
         snapshot_at: previous.snapshot_at,
       };
+      invalidatePreview(false);
       feedback = explain(error);
     } finally {
       loading = false;
@@ -769,6 +1037,7 @@
         ? await SelectedProfiles()
         : {};
       profileStoreProblem = null;
+      restorePersistedUIState();
       resumePendingApplies();
     } catch {
       // Explain a damaged or newer draft file instead of silently showing
@@ -778,6 +1047,52 @@
         profileStoreProblem = status && status.state !== "ok" ? status : null;
       }
     }
+  }
+  function restorePersistedUIState() {
+    if (uiStateRestored) return;
+    uiStateRestored = true;
+    const saved = persistedUIState;
+    const device = workspace.snapshot?.devices?.find(
+      (item) => item.id === saved.deviceID && isConfigurable(item),
+    );
+    if (!device) return;
+    selectedDevice = device;
+    if (
+      saved.geometryID &&
+      geometries.some((item) => item.id === saved.geometryID)
+    ) {
+      selectedGeometryID = saved.geometryID;
+    }
+    if (saved.view === "setup") {
+      profileName = device.display_name
+        ? `${device.display_name} draft`
+        : "Keyboard draft";
+      view = "setup";
+      return;
+    }
+    if (saved.view !== "editor") return;
+    const profile =
+      profiles.find(
+        (item) => item.id === saved.profileID && item.device_id === device.id,
+      ) ??
+      profiles.find(
+        (item) =>
+          item.id === selectedProfiles[device.id] &&
+          item.device_id === device.id,
+      );
+    if (!profile) return;
+    activeProfile = profile;
+    selectedProfiles = { ...selectedProfiles, [device.id]: profile.id };
+    selectedLayerID = profile.layers.some((item) => item.id === saved.layerID)
+      ? saved.layerID!
+      : "base";
+    selectedSourceKey = profile.geometry.source_keys.includes(
+      saved.sourceKey ?? "",
+    )
+      ? (saved.sourceKey ?? "")
+      : "";
+    view = "editor";
+    schedulePreview(profile);
   }
   async function recoverProfileStore() {
     if (!confirmStoreReset) {
@@ -838,7 +1153,6 @@
   function handleHistoryKeydown(event: KeyboardEvent) {
     if (
       !editorOpen ||
-      restorePersistedUIState();
       behaviorDialog ||
       profilesOpen ||
       applyReviewOpen ||
@@ -849,39 +1163,6 @@
       event.target instanceof HTMLInputElement ||
       event.target instanceof HTMLSelectElement ||
       event.target instanceof HTMLTextAreaElement
-  function restorePersistedUIState() {
-    if (uiStateRestored) return;
-    uiStateRestored = true;
-    const saved = persistedUIState;
-    const device = workspace.snapshot?.devices?.find(
-      (item) => item.id === saved.deviceID && isConfigurable(item),
-    );
-    if (!device) return;
-    selectedDevice = device;
-    if (saved.geometryID && geometries.some((item) => item.id === saved.geometryID)) {
-      selectedGeometryID = saved.geometryID;
-    }
-    if (saved.view === "setup") {
-      profileName = device.display_name ? `${device.display_name} draft` : "Keyboard draft";
-      view = "setup";
-      return;
-    }
-    if (saved.view !== "editor") return;
-    const profile = profiles.find(
-      (item) => item.id === saved.profileID && item.device_id === device.id,
-    ) ?? profiles.find((item) => item.id === selectedProfiles[device.id] && item.device_id === device.id);
-    if (!profile) return;
-    activeProfile = profile;
-    selectedProfiles = { ...selectedProfiles, [device.id]: profile.id };
-    selectedLayerID = profile.layers.some((item) => item.id === saved.layerID)
-      ? saved.layerID!
-      : "base";
-    selectedSourceKey = profile.geometry.source_keys.includes(saved.sourceKey ?? "")
-      ? saved.sourceKey ?? ""
-      : "";
-    view = "editor";
-    schedulePreview(profile);
-  }
     )
       return;
     const key = event.key.toLowerCase();
@@ -984,13 +1265,19 @@
     recordHistory = true,
   ): Promise<Profile | undefined> {
     if (profileBusy) return undefined;
-    const before = activeProfile?.id === draft.id ? editableState(activeProfile) : null;
+    const before =
+      activeProfile?.id === draft.id ? editableState(activeProfile) : null;
+    const saveableDraft =
+      activeProfile?.id === draft.id
+        ? withPreEditFallback(activeProfile, draft)
+        : draft;
     profileBusy = true;
     draftSaveState = "saving";
     feedback = "";
-    profilePreview = null;
+    invalidatePreview(false);
+    previewBusy = true;
     try {
-      const saved = await SaveProfile(draft);
+      const saved = await SaveProfile(saveableDraft);
       activeProfile = saved;
       profiles = profiles.map((profile) =>
         profile.id === saved.id ? saved : profile,
@@ -1010,6 +1297,7 @@
       return saved;
     } catch (error) {
       draftSaveState = "failed";
+      previewBusy = false;
       feedback = explain(error);
       return undefined;
     } finally {
@@ -1236,7 +1524,11 @@
       (layer) => layer.id === selectedLayerID,
     );
     const destination = index + direction;
-    if (index < 1 || destination < 1 || destination >= activeProfile.layers.length) {
+    if (
+      index < 1 ||
+      destination < 1 ||
+      destination >= activeProfile.layers.length
+    ) {
       return;
     }
     const layers = [...activeProfile.layers];
@@ -1248,9 +1540,10 @@
       feedback = "The Base layer is always required.";
       return;
     }
-    const ownAssignments = activeProfile.assignments?.filter(
-      (assignment) => assignment.layer_id === selectedLayerID,
-    ).length ?? 0;
+    const ownAssignments =
+      activeProfile.assignments?.filter(
+        (assignment) => assignment.layer_id === selectedLayerID,
+      ).length ?? 0;
     const references = layerEntryCount(selectedLayerID);
     if (ownAssignments || references) {
       feedback = `Remove ${ownAssignments} assignment${ownAssignments === 1 ? "" : "s"} and ${references} layer action${references === 1 ? "" : "s"} before deleting this layer.`;
@@ -1270,6 +1563,7 @@
   }
   function schedulePreview(draft: Profile) {
     if (previewTimer) clearTimeout(previewTimer);
+    pendingPreview = null;
     if (keyFlashTimer) clearTimeout(keyFlashTimer);
     const generation = ++previewGeneration;
     previewBusy = true;
@@ -1277,6 +1571,15 @@
       previewTimer = undefined;
       queuePreview(draft, generation);
     }, 250);
+  }
+  function invalidatePreview(recheck: boolean) {
+    if (previewTimer) clearTimeout(previewTimer);
+    previewTimer = undefined;
+    pendingPreview = null;
+    previewGeneration += 1;
+    previewBusy = false;
+    profilePreview = null;
+    if (recheck && activeProfile) schedulePreview(activeProfile);
   }
   function queuePreview(draft: Profile, generation: number) {
     if (previewInFlight) {
@@ -1439,13 +1742,27 @@
     try {
       const result = await PreviewProfile(draft.id);
       if (
+        generation === previewGeneration &&
         activeProfile?.id === result.profile_id &&
         activeProfile.draft_revision === result.draft_revision
       ) {
         profilePreview = result;
+        if (
+          result.validation.outcome === "valid" &&
+          result.validation_recovery
+        ) {
+          activeProfile = {
+            ...activeProfile,
+            validation_recovery: result.validation_recovery,
+          };
+          profiles = profiles.map((profile) =>
+            profile.id === activeProfile!.id ? activeProfile! : profile,
+          );
+        }
       }
     } catch (error) {
       if (
+        generation === previewGeneration &&
         activeProfile?.id === draft.id &&
         activeProfile.draft_revision === draft.draft_revision
       ) {
@@ -1508,14 +1825,16 @@
     selectedDevice = null;
     operation = null;
     activeProfile = null;
-    profilePreview = null;
+    invalidatePreview(false);
     applyOperation = null;
   }
 
   function acceptWorkspaceUpdate(next: ManagerWorkspace) {
     const wasLive = workspaceLive;
     const previousServerID = workspace.status.server_id;
+    const nextLive = next.status.state === "ready" && !next.stale;
     const environmentChanged =
+      wasLive !== nextLive ||
       workspace.status.server_id !== next.status.server_id ||
       workspace.snapshot?.state_revision !== next.snapshot?.state_revision ||
       JSON.stringify(workspace.status.capabilities ?? []) !==
@@ -1530,22 +1849,24 @@
       queueMicrotask(resumePendingApplies);
     }
     if (environmentChanged && activeProfile) {
-      profilePreview = null;
-      schedulePreview(activeProfile);
+      invalidatePreview(nextLive);
     }
     if (!identifyOpen || !selectedDevice) return;
     const refreshedDevice = next.snapshot?.devices?.find(
       (device) => device.id === selectedDevice?.id,
     );
     if (!refreshedDevice) {
-      feedback = "The selected keyboard is no longer reported by the manager. Identification may have ended.";
+      feedback =
+        "The selected keyboard is no longer reported by the manager. Identification may have ended.";
       return;
     }
     selectedDevice = refreshedDevice;
     if (refreshedDevice.runtime_conflict) {
-      feedback = "The selected keyboard now has a runtime conflict. The manager may stop identification.";
+      feedback =
+        "The selected keyboard now has a runtime conflict. The manager may stop identification.";
     } else if (!isConnected(refreshedDevice)) {
-      feedback = "The selected keyboard disconnected. The manager may stop identification.";
+      feedback =
+        "The selected keyboard disconnected. The manager may stop identification.";
     }
   }
 
@@ -1579,7 +1900,10 @@
 </script>
 
 <svelte:head><title>{info.name}</title></svelte:head>
-<svelte:window on:keydown={handleGlobalKeydown} />
+<svelte:window
+  bind:innerHeight={viewportHeight}
+  on:keydown={handleGlobalKeydown}
+/>
 
 <div class:editor-mode={editorOpen} class="app-shell">
   <header class="app-header">
@@ -1600,8 +1924,8 @@
         <i></i>{workspace.stale
           ? "Manager state stale"
           : workspace.status.state === "ready"
-          ? "Manager ready"
-          : humanize(workspace.status.state)}
+            ? "Manager ready"
+            : humanize(workspace.status.state)}
       </span>
     </div>
   </header>
@@ -1629,12 +1953,13 @@
               <p class="eyebrow">LAST KNOWN MANAGER STATE</p>
               <h2 id="manager-title">Keyboard status may be out of date</h2>
               <p>
-                {workspace.status.message} KeyboarDeer is showing the last
-                authoritative snapshot and will refresh it when the manager is
-                reachable again.
+                {workspace.status.message} KeyboarDeer is showing the last authoritative
+                snapshot and will refresh it when the manager is reachable again.
               </p>
               {#if workspace.snapshot_at}<small
-                  >Last snapshot: {new Date(workspace.snapshot_at).toLocaleString()}</small
+                  >Last snapshot: {new Date(
+                    workspace.snapshot_at,
+                  ).toLocaleString()}</small
                 >{/if}
             </div>
           </section>
@@ -1648,7 +1973,9 @@
             <div>
               <p class="eyebrow">KEYBOARD INVENTORY</p>
               <h2>Loading keyboards</h2>
-              <p>Contacting the local manager for the current device snapshot.</p>
+              <p>
+                Contacting the local manager for the current device snapshot.
+              </p>
             </div>
           </section>
         {:else if workspace.status.state !== "ready"}
@@ -1716,13 +2043,14 @@
                   Running mappings are unaffected. You can keep the damaged file
                   as a backup and start with an empty draft list.
                 </p>
-                <button
-                  class="button primary store-recovery"
+                <Button
+                  variant="primary"
+                  className="store-recovery"
                   type="button"
                   on:click={recoverProfileStore}
                   >{confirmStoreReset
                     ? "Confirm: back up and start fresh"
-                    : "Back up and start fresh"}</button
+                    : "Back up and start fresh"}</Button
                 >
               {/if}
             </div>
@@ -1765,8 +2093,7 @@
                     <h2>{device.display_name || "Unnamed keyboard"}</h2>
                     <span
                       class:connected={isConnected(device)}
-                      class="availability"
-                        >{humanize(deviceState(device))}</span
+                      class="availability">{humanize(deviceState(device))}</span
                     >
                   </div>
                   <p>
@@ -1781,21 +2108,26 @@
                   {#if profileForDevice(device)}
                     {@const deviceProfiles = profilesForDevice(device.id)}
                     <small class="device-profile-summary"
-                      >Profile: {profileForDevice(device)?.name}{deviceProfiles.length >
-                      1
+                      >Profile: {profileForDevice(device)
+                        ?.name}{deviceProfiles.length > 1
                         ? ` · ${deviceProfiles.length} profiles`
                         : ""}</small
                     >
                   {/if}
                   {#each deviceConfigurations as configuration (configuration.id)}
-                    {@const lastOperation = operationForConfiguration(configuration)}
+                    {@const lastOperation =
+                      operationForConfiguration(configuration)}
                     <section
                       class:unhealthy={!configuration.runtime.healthy &&
                         configuration.enabled}
                       class="configuration-state"
                     >
-                      <strong>{configuration.name || "Unnamed configuration"}</strong>
-                      <span>{humanize(configuration.ownership)} configuration</span>
+                      <strong
+                        >{configuration.name || "Unnamed configuration"}</strong
+                      >
+                      <span
+                        >{humanize(configuration.ownership)} configuration</span
+                      >
                       <dl>
                         <div>
                           <dt>Desired</dt>
@@ -1812,7 +2144,9 @@
                       </dl>
                       <small>{runtimeHealthDetail(configuration)}</small>
                       {#if lastOperation}<small class="configuration-operation"
-                          >Latest manager operation: {humanize(lastOperation.state)}
+                          >Latest manager operation: {humanize(
+                            lastOperation.state,
+                          )}
                           — {lastOperation.reason}</small
                         >{/if}
                       {#if configuration.ownership === "managed"}
@@ -1825,15 +2159,17 @@
                         {/if}
                         <div class="configuration-actions">
                           {#if confirmConfigurationDeleteID === configuration.id}
-                            <button
-                              class="button secondary"
+                            <Button
+                              variant="secondary"
                               type="button"
-                              on:click={() => (confirmConfigurationDeleteID = "")}
-                              >Keep mapping</button
+                              on:click={() =>
+                                (confirmConfigurationDeleteID = "")}
+                              >Keep mapping</Button
                             >
                           {/if}
-                          <button
-                            class="button secondary configuration-delete"
+                          <Button
+                            variant="secondary"
+                            className="configuration-delete"
                             type="button"
                             on:click={() => deleteConfiguration(configuration)}
                             disabled={!!lifecycleBusyID ||
@@ -1844,9 +2180,10 @@
                               : managedConfigurations.reason}
                             >{lifecycleBusyID === configuration.id
                               ? "Removing…"
-                              : confirmConfigurationDeleteID === configuration.id
+                              : confirmConfigurationDeleteID ===
+                                  configuration.id
                                 ? "Confirm: remove from keyboard"
-                                : "Remove from keyboard"}</button
+                                : "Remove from keyboard"}</Button
                           >
                         </div>
                       {/if}
@@ -1854,8 +2191,9 @@
                   {/each}
                 </div>
                 <div class="device-actions">
-                  <button
-                    class="button text identify-trigger"
+                  <Button
+                    variant="text"
+                    className="identify-trigger"
                     on:click={() => openIdentify(device)}
                     disabled={!canIdentify ||
                       !isConfigurable(device) ||
@@ -1871,10 +2209,10 @@
                       <path d="M12 8a4 4 0 1 1-4 4" />
                       <path d="M4 4l8 8" />
                       <circle cx="12" cy="12" r="1.5" />
-                    </svg></button
+                    </svg></Button
                   >
-                  <button
-                    class="button primary"
+                  <Button
+                    variant="primary"
                     on:click={() => openDraft(device)}
                     disabled={!workspaceLive ||
                       !isConfigurable(device) ||
@@ -1883,13 +2221,13 @@
                     title={profileStoreProblem
                       ? "Saved drafts must be recovered before editing."
                       : geometries.length === 0
-                      ? "Loading verified keyboard geometries."
-                      : profileForDevice(device)
-                        ? "Open this local keyboard draft"
-                        : "Create a local keyboard draft"}
+                        ? "Loading verified keyboard geometries."
+                        : profileForDevice(device)
+                          ? "Open this local keyboard draft"
+                          : "Create a local keyboard draft"}
                     >{profileForDevice(device)
                       ? "Edit draft"
-                      : "Set up"}</button
+                      : "Set up"}</Button
                   >
                   {#each deviceConfigurations.filter((item) => item.ownership === "managed") as configuration (configuration.id)}
                     <label
@@ -1947,8 +2285,9 @@
                 </p>
               </div>
               <div class="device-actions">
-                <button
-                  class="button text identify-trigger"
+                <Button
+                  variant="text"
+                  className="identify-trigger"
                   aria-label="Identify"
                   title="Device discovery is unavailable"
                   disabled
@@ -1957,14 +2296,17 @@
                     <path d="M12 8a4 4 0 1 1-4 4" />
                     <path d="M4 4l8 8" />
                     <circle cx="12" cy="12" r="1.5" />
-                  </svg></button
-                ><button class="button primary" disabled>Set up</button>
+                  </svg></Button
+                ><Button variant="primary" disabled>Set up</Button>
               </div>
             </article>
           </section>
         {/if}
         {#if configurations.filter((configuration) => configuration.ownership === "external").length}
-          <section class="external-configurations" aria-labelledby="external-title">
+          <section
+            class="external-configurations"
+            aria-labelledby="external-title"
+          >
             <div class="external-heading">
               <div>
                 <p class="eyebrow">MANAGER-SUPERVISED</p>
@@ -1978,10 +2320,13 @@
             </p>
             <div class="external-configuration-list">
               {#each configurations.filter((configuration) => configuration.ownership === "external") as configuration (configuration.id)}
-                {@const lastOperation = operationForConfiguration(configuration)}
+                {@const lastOperation =
+                  operationForConfiguration(configuration)}
                 <article class="external-configuration">
                   <div>
-                    <h3>{configuration.name || "Unnamed external configuration"}</h3>
+                    <h3>
+                      {configuration.name || "Unnamed external configuration"}
+                    </h3>
                     <span>{runtimeHealthLabel(configuration)}</span>
                   </div>
                   <dl>
@@ -1991,9 +2336,9 @@
                     </div>
                     <div>
                       <dt>Desired / active</dt>
-                      <dd
-                        >{configuration.desired_revision} / {configuration.active_revision}</dd
-                      >
+                      <dd>
+                        {configuration.desired_revision} / {configuration.active_revision}
+                      </dd>
                     </div>
                   </dl>
                   <p>{runtimeHealthDetail(configuration)}</p>
@@ -2004,10 +2349,11 @@
                 </article>
               {/each}
             </div>
-            <button
-              class="button secondary external-open"
+            <Button
+              variant="secondary"
+              className="external-open"
               on:click={() => (externalOpen = true)}
-              >View external configuration details</button
+              >View external configuration details</Button
             >
           </section>
         {/if}
@@ -2021,9 +2367,7 @@
       </section>
     {:else if view === "setup" && selectedDevice}
       <section class="setup-page" aria-labelledby="setup-title">
-        <button class="back-link" on:click={backToDevices}
-          >← All keyboards</button
-        >
+        <Button variant="link" on:click={backToDevices}>← All keyboards</Button>
         <div class="page-heading">
           <div>
             <p class="eyebrow">A FRESH START</p>
@@ -2057,16 +2401,14 @@
             layout from the keyboard’s name.
           </p>
           <div class="setup-actions">
-            <button
-              class="button secondary"
-              type="button"
-              on:click={backToDevices}>Cancel</button
+            <Button variant="secondary" type="button" on:click={backToDevices}
+              >Cancel</Button
             >
-            <button
-              class="button primary"
+            <Button
+              variant="primary"
               type="submit"
               disabled={profileBusy || !selectedGeometryID}
-              >{profileBusy ? "Creating…" : "Create draft"}</button
+              >{profileBusy ? "Creating…" : "Create draft"}</Button
             >
           </div>
         </form>
@@ -2075,21 +2417,26 @@
           </p>{/if}
       </section>
     {:else if view === "editor" && activeProfile}
-      <section class="editor-page" aria-labelledby="editor-title">
+      <section
+        class="editor-page"
+        class:compact-palette={compactPalette}
+        aria-labelledby="editor-title"
+      >
         <div class="editor-heading">
           <nav aria-label="Editor breadcrumb">
-            <button class="back-link" on:click={backToDevices}
-              >← All keyboards</button
+            <Button variant="link" on:click={backToDevices}
+              >← All keyboards</Button
             >
-            <button
-              class="button secondary profiles-trigger"
+            <Button
+              variant="secondary"
+              className="profiles-trigger"
               type="button"
               on:click={openProfiles}
               title="Switch, rename, duplicate, or delete profiles"
               >Profiles{selectedDevice &&
               profilesForDevice(selectedDevice.id).length > 1
                 ? ` (${profilesForDevice(selectedDevice.id).length})`
-                : ""}</button
+                : ""}</Button
             >
           </nav>
           <div class="editor-title">
@@ -2100,21 +2447,23 @@
             >{draftStatusText}</span
           >
           <div class="history-actions">
-            <button
-              class="button secondary history-button"
+            <Button
+              variant="secondary"
+              className="history-button"
               type="button"
               on:click={undoEdit}
               disabled={!canUndo}
               aria-label="Undo"
-              title="Undo (Ctrl+Z)">↶</button
+              title="Undo (Ctrl+Z)">↶</Button
             >
-            <button
-              class="button secondary history-button"
+            <Button
+              variant="secondary"
+              className="history-button"
               type="button"
               on:click={redoEdit}
               disabled={!canRedo}
               aria-label="Redo"
-              title="Redo (Ctrl+Shift+Z)">↷</button
+              title="Redo (Ctrl+Shift+Z)">↷</Button
             >
           </div>
           <span
@@ -2125,15 +2474,32 @@
             title={validationLabel}
             ><i></i>{#if validationState === "valid"}Valid configuration{/if}</span
           >
-          <button
-            class="button primary editor-apply"
+          <Button
+            variant="primary"
+            className="editor-apply"
             type="button"
             on:click={openApplyReview}
             disabled={!canApply || applyBusy}
             title={canApply
               ? "Apply this validated draft to the keyboard"
               : "Apply requires a current valid manager preview, a connected keyboard, and the managed-configurations capability."}
-            >{applyBusy ? "Applying…" : "Apply to keyboard"}</button
+            >{applyBusy ? "Applying…" : "Apply to keyboard"}</Button
+          >
+          <Button
+            variant="secondary"
+            type="button"
+            on:click={viewRawConfiguration}
+            disabled={rawConfigurationBusy ||
+              !activeProfile.manager_configuration_id ||
+              !workspaceLive ||
+              !configurationExport.available ||
+              !hasDesktopBinding("ExportConfiguration")}
+            title={!activeProfile.manager_configuration_id
+              ? "Apply this profile before viewing its manager-rendered KMonad configuration."
+              : !configurationExport.available
+                ? configurationExport.reason
+                : "View the manager-rendered KMonad configuration for this keyboard."}
+            >{rawConfigurationBusy ? "Loading .kbd…" : "View .kbd"}</Button
           >
         </div>
         {#if activeGeometry}
@@ -2141,7 +2507,8 @@
             <div class="keyboard-editor" aria-label={activeGeometry.name}>
               {#if currentPreview && currentPreview.validation.outcome !== "valid"}
                 <aside
-                  class:blocked={currentPreview.validation.outcome === "blocked"}
+                  class:blocked={currentPreview.validation.outcome ===
+                    "blocked"}
                   class="preview-message"
                   aria-live="polite"
                 >
@@ -2152,10 +2519,18 @@
                   >
                   <p>{currentPreview.validation.reason}</p>
                   {#if currentPreview.validation.outcome === "rejected"}
-                    <p>
-                      No keyboard mapping has been applied. The manager did not
-                      provide a reliable key location for this result.
-                    </p>
+                    {#if mappedPreviewIssues.length === 0}
+                      <p>
+                        No keyboard mapping has been applied. No exact manager
+                        location matched one assignment, so KeyboarDeer will not
+                        guess a key or offer a targeted revert.
+                      </p>
+                    {:else}
+                      <p>
+                        No keyboard mapping has been applied. The exact manager
+                        locations below are mapped to this draft only.
+                      </p>
+                    {/if}
                   {:else if currentPreview.validation.outcome === "blocked"}
                     <p>
                       This is an environmental blockage, not an invalid key
@@ -2166,12 +2541,40 @@
                   {#if currentPreview.validation.diagnostics?.length}
                     <ul class="validation-diagnostics">
                       {#each currentPreview.validation.diagnostics as diagnostic (diagnostic.id)}
+                        {@const issue = diagnosticIssue(diagnostic.id)}
+                        {@const recovery = issue
+                          ? recoveryForIssue(issue)
+                          : null}
                         <li>
                           <strong>{diagnosticResourceLabel(diagnostic)}</strong>
                           <span>{diagnostic.summary}</span>
                           {#if diagnostic.remediation}<small
                               >{diagnostic.remediation}</small
                             >{/if}
+                          {#if issue}
+                            <div class="validation-issue-actions">
+                              <Button
+                                variant="text"
+                                type="button"
+                                on:click={() => showMappedIssue(issue)}
+                                >Show {layerName(issue.layerID)} · {issue.sourceKey}</Button
+                              >
+                              {#if recovery?.available}
+                                <Button
+                                  variant="secondary"
+                                  type="button"
+                                  on:click={() =>
+                                    revertMappedIssue(diagnostic.id)}
+                                  disabled={profileBusy ||
+                                    !!activeProfile?.apply_pending}
+                                  >Revert {issue.sourceKey}</Button
+                                >
+                              {/if}
+                            </div>
+                            {#if recovery?.reason}<small
+                                >{recovery.reason}</small
+                              >{/if}
+                          {/if}
                         </li>
                       {/each}
                     </ul>
@@ -2181,11 +2584,17 @@
               {#each activeRows as row}
                 <div class="keyboard-row">
                   {#each activeGeometry.keys.filter((key) => key.row === row) as key (key.id)}
-                    <button
-                      class:selected-key={selectedSourceKey === key.source_key}
-                      class:flashing-key={flashingSourceKey === key.source_key}
-                      class="editor-key"
+                    <Button
+                      variant="key"
+                      className={`${selectedLayerBehaviors[key.source_key]?.kind === "disabled" ? "disabled-key " : ""}${selectedSourceKey === key.source_key ? "selected-key " : ""}${mappedPreviewIssues.some((issue) => issue.layerID === selectedLayerID && issue.sourceKey === key.source_key) ? "invalid-key " : ""}${flashingSourceKey === key.source_key ? "flashing-key" : ""}`}
                       style={`width: ${key.width * 42}px; margin-left: ${(key.gap_before ?? 0) * 42}px`}
+                      data-issue-key
+                      data-layer-id={selectedLayerID}
+                      data-source-key={key.source_key}
+                      title={selectedLayerBehaviors[key.source_key]?.kind ===
+                      "disabled"
+                        ? `Disabled on ${activeLayer?.name ?? "current"} layer: this key sends no input and blocks lower layers.`
+                        : undefined}
                       on:click={() =>
                         (selectedSourceKey =
                           selectedSourceKey === key.source_key
@@ -2195,23 +2604,26 @@
                     >
                       <strong>{key.label}</strong><small
                         >{behaviorLabel(
-                          behaviorFor(key.source_key),
+                          selectedLayerBehaviors[key.source_key],
                           key.source_key,
                         )}</small
                       >
-                    </button>
+                    </Button>
                   {/each}
                 </div>
               {/each}
             </div>
             {#if activeProfile.layers.length > 1}
-              <section class="layer-guidance" aria-labelledby="layer-guidance-title">
+              <section
+                class="layer-guidance"
+                aria-labelledby="layer-guidance-title"
+              >
                 <strong id="layer-guidance-title">Layer entry and exit</strong>
                 <p>
-                  Assign a <b>Hold layer</b> or <b>Switch layer</b> action on a
-                  reachable key to enter an overlay. Hold layers end when that
-                  key is released. Switched layers remain active until another
-                  Switch layer action—normally one targeting Base—changes them.
+                  Assign a <b>Hold layer</b> or <b>Switch layer</b> action on a reachable
+                  key to enter an overlay. Hold layers end when that key is released.
+                  Switched layers remain active until another Switch layer action—normally
+                  one targeting Base—changes them.
                 </p>
                 {#each activeProfile.layers.filter((layer) => !layerIsReachable(layer.id)) as layer (layer.id)}
                   <small>{layer.name} has no entry action yet.</small>
@@ -2234,20 +2646,21 @@
                     can safely check again without applying it twice.
                   </p>
                 {/if}
-                <button
-                  class="button secondary"
+                <Button
+                  variant="secondary"
                   type="button"
                   on:click={checkPendingApply}
                   disabled={applyBusy}
-                  >{applyBusy ? "Checking…" : "Check apply outcome"}</button
+                  >{applyBusy ? "Checking…" : "Check apply outcome"}</Button
                 >
                 {#if activeProfile.apply_pending.operation_id}
-                  <button
-                    class="button secondary legacy-discard"
+                  <Button
+                    variant="secondary"
+                    className="legacy-discard"
                     type="button"
                     on:click={discardLegacyPendingApply}
                     disabled={applyBusy}
-                    >I checked the keyboard — clear unresolved apply</button
+                    >I checked the keyboard — clear unresolved apply</Button
                   >
                 {/if}
               </div>
@@ -2255,16 +2668,16 @@
               <p class="apply-status">
                 An Apply sent at {new Date(
                   activeProfile.apply_pending.started_at,
-                ).toLocaleString()} has an unknown outcome. The manager version
-                that received it does not guarantee durable idempotency, so
-                KeyboarDeer will not replay it. Check the keyboard card before
-                continuing.
+                ).toLocaleString()} has an unknown outcome. The manager version that
+                received it does not guarantee durable idempotency, so KeyboarDeer
+                will not replay it. Check the keyboard card before continuing.
               </p>
-              <button
-                class="button secondary legacy-discard"
+              <Button
+                variant="secondary"
+                className="legacy-discard"
                 type="button"
                 on:click={discardLegacyPendingApply}
-                >I checked the keyboard — continue editing</button
+                >I checked the keyboard — continue editing</Button
               >
             {:else if shownApplyOperation}
               <div
@@ -2298,7 +2711,9 @@
               <div class="selected-key-context">
                 <strong>{selectedSourceKey || "Select a key"}</strong>
                 <span
-                  >{activeLayer ? `${activeLayer.name} layer` : "No active layer"}</span
+                  >{activeLayer
+                    ? `${activeLayer.name} layer`
+                    : "No active layer"}</span
                 >
                 {#if activeLayer && !layerIsReachable(activeLayer.id)}
                   <em>Needs an entry action</em>
@@ -2306,60 +2721,66 @@
               </div>
               <div class="layer-tabs" role="tablist" aria-label="Keymap layers">
                 {#each activeProfile.layers as layer (layer.id)}
-                  <button
-                    class:active={selectedLayerID === layer.id}
-                    class:unreachable={!layerIsReachable(layer.id)}
-                    class="button secondary layer-tab"
+                  <Button
+                    variant="secondary"
+                    className={`layer-tab${selectedLayerID === layer.id ? " active" : ""}${!layerIsReachable(layer.id) ? " unreachable" : ""}`}
                     role="tab"
                     aria-selected={selectedLayerID === layer.id}
                     on:click={() => (selectedLayerID = layer.id)}
                     title={layerIsReachable(layer.id)
                       ? `${layer.name} layer`
                       : `${layer.name} has no entry action`}
-                    >{layer.name}</button
+                    >{layer.name}</Button
                   >
                 {/each}
-                <button
-                  class="button secondary layer-tab"
+                <Button
+                  variant="secondary"
+                  className="layer-tab"
                   on:click={() => openBehaviorDialog("layers")}
-                  title="Manage layers">Manage</button
+                  title="Manage layers">Manage</Button
                 >
               </div>
               <div class="complex-actions">
-                <button
-                  class="button secondary"
+                <Button
+                  variant="secondary"
                   on:click={() => openBehaviorDialog("tap_hold")}
-                  disabled={!selectedSourceKey || profileBusy}>Tap &amp; hold</button
+                  disabled={!selectedSourceKey || profileBusy}
+                  >Tap &amp; hold</Button
                 >
-                <button
-                  class="button secondary"
+                <Button
+                  variant="secondary"
                   on:click={() => openBehaviorDialog("layer")}
-                  disabled={!selectedSourceKey || profileBusy}>Layer action</button
+                  disabled={!selectedSourceKey || profileBusy}
+                  >Layer action</Button
                 >
-                <button
-                  class="button secondary"
+                <Button
+                  variant="secondary"
                   on:click={() => openBehaviorDialog("alias")}
-                  disabled={!selectedSourceKey || profileBusy}>Alias</button
+                  disabled={!selectedSourceKey || profileBusy}>Alias</Button
                 >
-                <button
-                  class="button secondary"
+                <Button
+                  variant="secondary"
                   on:click={() => openBehaviorDialog("macro")}
-                  disabled={!selectedSourceKey || profileBusy}>Macro</button
+                  disabled={!selectedSourceKey || profileBusy}>Macro</Button
                 >
                 {#each Object.keys(activeProfile.aliases ?? {}).sort() as name}
-                  <button
-                    class="button secondary declaration-action"
-                    on:click={() => assignBehavior({ kind: "alias", target: name })}
+                  <Button
+                    variant="secondary"
+                    className="declaration-action"
+                    on:click={() =>
+                      assignBehavior({ kind: "alias", target: name })}
                     disabled={!selectedSourceKey || profileBusy}
-                    title={`Assign alias ${name}`}>@{name}</button
+                    title={`Assign alias ${name}`}>@{name}</Button
                   >
                 {/each}
                 {#each Object.keys(activeProfile.macros ?? {}).sort() as name}
-                  <button
-                    class="button secondary declaration-action"
-                    on:click={() => assignBehavior({ kind: "macro", target: name })}
+                  <Button
+                    variant="secondary"
+                    className="declaration-action"
+                    on:click={() =>
+                      assignBehavior({ kind: "macro", target: name })}
                     disabled={!selectedSourceKey || profileBusy}
-                    title={`Assign macro ${name}`}>#{name}</button
+                    title={`Assign macro ${name}`}>#{name}</Button
                   >
                 {/each}
               </div>
@@ -2377,10 +2798,31 @@
                   >{visiblePaletteKeys.length} of {paletteKeyOptions.length}</span
                 >{/if}
             </div>
+            <div
+              class="palette-categories"
+              role="tablist"
+              aria-label="Key categories"
+            >
+              {#each paletteCategories as category (category.id)}
+                <Button
+                  variant="secondary"
+                  className={`palette-category${activePaletteCategory === category.id ? " active" : ""}`}
+                  role="tab"
+                  aria-selected={activePaletteCategory === category.id}
+                  on:click={() => (activePaletteCategory = category.id)}
+                  >{category.label}</Button
+                >
+              {/each}
+            </div>
             <div class="palette-buttons">
-              {#each visiblePaletteKeys as key (key.source_key)}
-                <button
-                  class="button secondary palette-key"
+              {#each renderedPaletteKeys as key, index (key.source_key)}
+                {#if !compactPalette && !normalizedKeySearch && (index === 0 || paletteKeyGroup(renderedPaletteKeys[index - 1]) !== paletteKeyGroup(key)) && paletteKeyGroup(key) >= 3}
+                  <h3 class="palette-group-heading">
+                    {paletteGroupLabel(paletteKeyGroup(key))}
+                  </h3>
+                {/if}
+                <Button
+                  variant="palette"
                   on:click={() =>
                     assignBehavior({
                       kind: "key",
@@ -2390,35 +2832,40 @@
                   title={`Assign ${key.label} (${key.source_key})`}
                   ><span>{paletteLabel(key)}</span><small
                     >{key.source_key}</small
-                  ></button
+                  ></Button
                 >
               {:else}
-                <p class="palette-empty">No keys match “{keySearch.trim()}”.</p>
+                <p class="palette-empty">
+                  {normalizedKeySearch
+                    ? `No keys match “${keySearch.trim()}”.`
+                    : "No keys in this category."}
+                </p>
               {/each}
               <div class="palette-utility">
-                <button
-                  class="button secondary palette-disable"
+                <Button
+                  variant="secondary"
+                  className="palette-disable"
                   on:click={() => assignBehavior({ kind: "disabled" })}
                   disabled={profileBusy || !selectedSourceKey}
-                  >Disable selected key</button
+                  >Disable selected key</Button
                 >
-                <button
-                  class="button secondary palette-restore"
+                <Button
+                  variant="secondary"
+                  className="palette-restore"
                   on:click={restoreSelectedKey}
                   disabled={profileBusy || !selectedSourceKey}
-                  >Restore original</button
+                  >Restore original</Button
                 >
-                <button
-                  class="button secondary"
+                <Button
+                  variant="secondary"
                   on:click={() => assignBehavior({ kind: "transparent" })}
-                  disabled={
-                    profileBusy || !selectedSourceKey || selectedLayerID === "base"
-                  }
-                  title={
-                    selectedLayerID === "base"
-                      ? "The Base layer cannot fall through."
-                      : "Let this key fall through to the lower layer."
-                  }>Pass through</button
+                  disabled={profileBusy ||
+                    !selectedSourceKey ||
+                    selectedLayerID === "base"}
+                  title={selectedLayerID === "base"
+                    ? "The Base layer cannot fall through."
+                    : "Let this key fall through to the lower layer."}
+                  >Pass through</Button
                 >
               </div>
             </div>
@@ -2449,11 +2896,12 @@
         open
         aria-labelledby="behavior-dialog-title"
       >
-        <button
-          class="behavior-dialog-close"
+        <Button
+          variant="icon"
+          className="behavior-dialog-close"
           on:click={closeBehaviorDialog}
           aria-label="Close complex action dialog"
-          title="Close">×</button
+          title="Close">×</Button
         >
         <p class="eyebrow">COMPLEX ACTION · {selectedSourceKey}</p>
         {#if behaviorDialog === "layers"}
@@ -2462,11 +2910,32 @@
             Layers without an entry action cannot be reached from the keyboard.
             Add a Hold layer or Switch layer action before applying this draft.
           </p>
+          <div class="new-layer-control">
+            <label for="manage-new-layer-name">Add a layer</label>
+            <div>
+              <input
+                id="manage-new-layer-name"
+                bind:value={newLayerName}
+                maxlength="40"
+                placeholder="Navigation"
+              />
+              <Button
+                variant="secondary"
+                type="button"
+                disabled={profileBusy || !newLayerName.trim()}
+                on:click={createLayer}>Add layer</Button
+              >
+            </div>
+            <small
+              >The new layer is selected automatically; add a layer action to
+              make it reachable.</small
+            >
+          </div>
           <div class="layer-manager-list" aria-label="Layers">
             {#each activeProfile.layers as layer, index (layer.id)}
-              <button
-                class:active={selectedLayerID === layer.id}
-                class:unreachable={!layerIsReachable(layer.id)}
+              <Button
+                variant="plain"
+                className={`${selectedLayerID === layer.id ? "active " : ""}${!layerIsReachable(layer.id) ? "unreachable" : ""}`}
                 on:click={() => {
                   selectedLayerID = layer.id;
                   layerRename = layer.name;
@@ -2475,12 +2944,16 @@
                   >{layerIsReachable(layer.id)
                     ? "Reachable"
                     : "No entry action"}</small
-                ></button
+                ></Button
               >
-              {#if index === 0}<span class="layer-manager-base">Required</span>{/if}
+              {#if index === 0}<span class="layer-manager-base">Required</span
+                >{/if}
             {/each}
           </div>
-          <form class="behavior-form" on:submit|preventDefault={renameSelectedLayer}>
+          <form
+            class="behavior-form"
+            on:submit|preventDefault={renameSelectedLayer}
+          >
             <label for="rename-layer">Rename selected layer</label>
             <input
               id="rename-layer"
@@ -2489,35 +2962,66 @@
               required
             />
             <div class="layer-manager-actions">
-              <button
-                class="button secondary"
+              <Button
+                variant="secondary"
                 type="button"
-                disabled={selectedLayerID === "base" || profileBusy}
-                on:click={() => moveSelectedLayer(-1)}>Move earlier</button
+                disabled={selectedLayerIndex <= 1 || profileBusy}
+                title={selectedLayerIndex <= 1
+                  ? "Base is fixed at the beginning of the layer order."
+                  : "Move this layer earlier in the order."}
+                on:click={() => moveSelectedLayer(-1)}>Move earlier</Button
               >
-              <button
-                class="button secondary"
+              <Button
+                variant="secondary"
                 type="button"
-                disabled={selectedLayerID === "base" || profileBusy}
-                on:click={() => moveSelectedLayer(1)}>Move later</button
+                disabled={selectedLayerIndex < 1 ||
+                  selectedLayerIndex >= activeProfile.layers.length - 1 ||
+                  profileBusy}
+                title={selectedLayerIndex >= activeProfile.layers.length - 1
+                  ? "This layer is already last."
+                  : selectedLayerID === "base"
+                    ? "Base is fixed at the beginning of the layer order."
+                    : "Move this layer later in the order."}
+                on:click={() => moveSelectedLayer(1)}>Move later</Button
               >
-              <button
-                class="button secondary"
+              <Button
+                variant="secondary"
                 type="button"
-                disabled={selectedLayerID === "base" || profileBusy}
-                on:click={deleteSelectedLayer}>Delete layer</button
+                disabled={selectedLayerID === "base" ||
+                  selectedLayerAssignments > 0 ||
+                  selectedLayerReferences > 0 ||
+                  profileBusy}
+                title={selectedLayerID === "base"
+                  ? "The Base layer is required."
+                  : selectedLayerAssignments || selectedLayerReferences
+                    ? `Remove ${selectedLayerAssignments} assignment(s) and ${selectedLayerReferences} layer action(s) first.`
+                    : "Delete this empty, unreferenced layer."}
+                on:click={deleteSelectedLayer}>Delete layer</Button
               >
             </div>
             <div class="behavior-form-actions">
-              <button
-                class="button secondary"
+              <Button
+                variant="secondary"
                 type="button"
-                on:click={closeBehaviorDialog}>Close</button
+                on:click={closeBehaviorDialog}>Close</Button
               >
-              <button
-                class="button primary"
-                disabled={profileBusy || !layerRename.trim()}
-                type="submit">Rename layer</button
+              <Button
+                variant="primary"
+                disabled={profileBusy ||
+                  !layerRename.trim() ||
+                  activeProfile.layers.some(
+                    (layer) =>
+                      layer.id !== selectedLayerID &&
+                      layer.name === layerRename.trim(),
+                  )}
+                title={activeProfile.layers.some(
+                  (layer) =>
+                    layer.id !== selectedLayerID &&
+                    layer.name === layerRename.trim(),
+                )
+                  ? "Layer names must be unique."
+                  : "Save the selected layer name."}
+                type="submit">Rename layer</Button
               >
             </div>
           </form>
@@ -2531,8 +3035,7 @@
           <p class="timing-explanation">
             <strong>{defaultTapHoldTimeoutMS} ms default:</strong> release before
             the timeout to send the tap action; keep holding beyond it to use the
-            hold action. A held layer stays active only while this key remains
-            pressed.
+            hold action. A held layer stays active only while this key remains pressed.
           </p>
           <form class="behavior-form" on:submit|preventDefault={assignTapHold}>
             <label for="tap-key">Tap</label>
@@ -2571,13 +3074,13 @@
               required
             />
             <div class="behavior-form-actions">
-              <button
-                class="button secondary"
+              <Button
+                variant="secondary"
                 type="button"
-                on:click={closeBehaviorDialog}>Cancel</button
+                on:click={closeBehaviorDialog}>Cancel</Button
               >
-              <button class="button primary" disabled={profileBusy} type="submit"
-                >Assign tap &amp; hold</button
+              <Button variant="primary" disabled={profileBusy} type="submit"
+                >Assign tap &amp; hold</Button
               >
             </div>
           </form>
@@ -2611,22 +3114,22 @@
                   maxlength="40"
                   placeholder="Navigation"
                 />
-                <button
-                  class="button secondary"
+                <Button
+                  variant="secondary"
                   type="button"
                   disabled={profileBusy || !newLayerName.trim()}
-                  on:click={createLayer}>Add layer</button
+                  on:click={createLayer}>Add layer</Button
                 >
               </div>
             </div>
             <div class="behavior-form-actions">
-              <button
-                class="button secondary"
+              <Button
+                variant="secondary"
                 type="button"
-                on:click={closeBehaviorDialog}>Cancel</button
+                on:click={closeBehaviorDialog}>Cancel</Button
               >
-              <button class="button primary" disabled={profileBusy} type="submit"
-                >Assign layer action</button
+              <Button variant="primary" disabled={profileBusy} type="submit"
+                >Assign layer action</Button
               >
             </div>
           </form>
@@ -2653,21 +3156,21 @@
               {/each}
             </select>
             <div class="behavior-form-actions">
-              <button
-                class="button secondary"
+              <Button
+                variant="secondary"
                 type="button"
-                on:click={closeBehaviorDialog}>Cancel</button
+                on:click={closeBehaviorDialog}>Cancel</Button
               >
-              <button class="button primary" disabled={profileBusy} type="submit"
-                >Create and assign alias</button
+              <Button variant="primary" disabled={profileBusy} type="submit"
+                >Create and assign alias</Button
               >
             </div>
           </form>
         {:else}
           <h2 id="behavior-dialog-title">Macro sequence</h2>
           <p class="dialog-intro">
-            Build an ordered sequence of key presses. It will be saved as a named
-            macro and assigned to the selected key.
+            Build an ordered sequence of key presses. It will be saved as a
+            named macro and assigned to the selected key.
           </p>
           <form class="behavior-form" on:submit|preventDefault={createMacro}>
             <label for="macro-name">Macro name</label>
@@ -2686,34 +3189,36 @@
                   <option value={key.source_key}>{key.label}</option>
                 {/each}
               </select>
-              <button class="button secondary" type="button" on:click={addMacroStep}
-                >Add</button
+              <Button variant="secondary" type="button" on:click={addMacroStep}
+                >Add</Button
               >
             </div>
             <ol class="macro-steps" aria-label="Macro key sequence">
               {#each macroSteps as step, index (`${step}-${index}`)}
                 <li>
                   <span>{step}</span>
-                  <button
+                  <Button
+                    variant="plain"
+                    className="macro-remove"
                     type="button"
                     on:click={() =>
                       (macroSteps = macroSteps.filter(
                         (_, stepIndex) => stepIndex !== index,
-                      ))}>Remove</button
+                      ))}>Remove</Button
                   >
                 </li>
               {/each}
             </ol>
             <div class="behavior-form-actions">
-              <button
-                class="button secondary"
+              <Button
+                variant="secondary"
                 type="button"
-                on:click={closeBehaviorDialog}>Cancel</button
+                on:click={closeBehaviorDialog}>Cancel</Button
               >
-              <button
-                class="button primary"
+              <Button
+                variant="primary"
                 disabled={profileBusy || !macroSteps.length}
-                type="submit">Create and assign macro</button
+                type="submit">Create and assign macro</Button
               >
             </div>
           </form>
@@ -2724,11 +3229,12 @@
   {#if profilesOpen && activeProfile && selectedDevice}
     <div class="behavior-dialog-backdrop">
       <dialog class="behavior-dialog" open aria-labelledby="profiles-title">
-        <button
-          class="behavior-dialog-close"
+        <Button
+          variant="icon"
+          className="behavior-dialog-close"
           on:click={closeProfiles}
           aria-label="Close profiles"
-          title="Close">×</button
+          title="Close">×</Button
         >
         <p class="eyebrow">
           PROFILES · {selectedDevice.display_name || "Keyboard"}
@@ -2737,7 +3243,8 @@
         <p class="dialog-intro">
           Each profile is a separate draft for this keyboard. Switching saves
           nothing extra and applies nothing; use Apply to send a profile to the
-          keyboard.
+          keyboard. Import and export share portable behavior data, not runnable
+          device-specific .kbd files.
         </p>
         <ul class="profile-list" aria-label="Profiles for this keyboard">
           {#each profilesForDevice(selectedDevice.id) as candidate (candidate.id)}
@@ -2753,18 +3260,21 @@
               {#if candidate.id === activeProfile.id}
                 <span class="profile-current">Editing</span>
               {:else}
-                <button
-                  class="button secondary"
+                <Button
+                  variant="secondary"
                   type="button"
                   on:click={() => switchProfile(candidate)}
                   disabled={profileBusy}
-                  aria-label={`Open ${candidate.name}`}>Open</button
+                  aria-label={`Open ${candidate.name}`}>Open</Button
                 >
               {/if}
             </li>
           {/each}
         </ul>
-        <form class="behavior-form" on:submit|preventDefault={renameActiveProfile}>
+        <form
+          class="behavior-form"
+          on:submit|preventDefault={renameActiveProfile}
+        >
           <label for="profile-rename">Rename this profile</label>
           <input
             id="profile-rename"
@@ -2772,12 +3282,13 @@
             maxlength="80"
             required
           />
-          <button
-            class="button secondary"
+          <Button
+            variant="secondary"
             type="submit"
             disabled={profileBusy ||
               !profileRename.trim() ||
-              profileRename.trim() === activeProfile.name}>Rename profile</button
+              profileRename.trim() === activeProfile.name}
+            >Rename profile</Button
           >
         </form>
         {#if confirmProfileDelete}
@@ -2789,24 +3300,41 @@
           </p>
         {/if}
         <div class="behavior-form-actions">
-          <button
-            class="button secondary"
+          <Button
+            variant="secondary"
+            type="button"
+            on:click={importProfileForDevice}
+            disabled={profileBusy || !hasDesktopBinding("ImportProfile")}
+            >Import</Button
+          >
+          <Button
+            variant="secondary"
+            type="button"
+            on:click={exportActiveProfile}
+            disabled={profileBusy || !hasDesktopBinding("ExportProfile")}
+            >Export</Button
+          >
+          <Button
+            variant="secondary"
             type="button"
             on:click={newProfileForDevice}
-            disabled={profileBusy}>New profile</button
+            disabled={profileBusy}>New profile</Button
           >
-          <button
-            class="button secondary"
+          <Button
+            variant="secondary"
             type="button"
             on:click={duplicateActiveProfile}
-            disabled={profileBusy}>Duplicate</button
+            disabled={profileBusy}>Duplicate</Button
           >
-          <button
-            class="button secondary profile-delete"
+          <Button
+            variant="secondary"
+            className="profile-delete"
             type="button"
             on:click={deleteActiveProfile}
             disabled={profileBusy || !!activeProfile.apply_pending}
-            >{confirmProfileDelete ? "Confirm delete" : "Delete profile"}</button
+            >{confirmProfileDelete
+              ? "Confirm delete"
+              : "Delete profile"}</Button
           >
         </div>
       </dialog>
@@ -2815,11 +3343,12 @@
   {#if applyReviewOpen && activeProfile}
     <div class="behavior-dialog-backdrop">
       <dialog class="behavior-dialog" open aria-labelledby="apply-review-title">
-        <button
-          class="behavior-dialog-close"
+        <Button
+          variant="icon"
+          className="behavior-dialog-close"
           on:click={() => (applyReviewOpen = false)}
           aria-label="Close apply review"
-          title="Close">×</button
+          title="Close">×</Button
         >
         <p class="eyebrow">REVIEW &amp; APPLY</p>
         <h2 id="apply-review-title">Ready to send this draft?</h2>
@@ -2827,34 +3356,41 @@
           <p class="apply-review-notice" role="alert">{applyReviewNotice}</p>
         {/if}
         <p class="dialog-intro">
-          The manager will render, validate, persist, and supervise this profile.
-          Nothing changes until you confirm.
+          The manager will render, validate, persist, and supervise this
+          profile. Nothing changes until you confirm.
         </p>
         <ul class="apply-review-list">
           {#each activeProfile.assignments ?? [] as assignment (`${assignment.layer_id}-${assignment.source_key}`)}
             <li>
-              <strong>{layerName(assignment.layer_id)} · {assignment.source_key}</strong>
+              <strong
+                >{layerName(assignment.layer_id)} · {assignment.source_key}</strong
+              >
               <span>{behaviorSummary(assignment.behavior)}</span>
             </li>
           {:else}
-            <li><span>No explicit assignments; the original Base layout will be applied.</span></li>
+            <li>
+              <span
+                >No explicit assignments; the original Base layout will be
+                applied.</span
+              >
+            </li>
           {/each}
         </ul>
         <div class="behavior-form-actions">
-          <button
-            class="button secondary"
+          <Button
+            variant="secondary"
             type="button"
-            on:click={() => (applyReviewOpen = false)}>Keep editing</button
+            on:click={() => (applyReviewOpen = false)}>Keep editing</Button
           >
-          <button
-            class="button primary"
+          <Button
+            variant="primary"
             type="button"
             on:click={confirmApply}
             disabled={!canApply || applyBusy}
             title={canApply
               ? "Send this draft to the keyboard"
               : "Waiting for a current valid preview of the refreshed keyboard state."}
-            >Apply to keyboard</button
+            >Apply to keyboard</Button
           >
         </div>
       </dialog>
@@ -2867,11 +3403,12 @@
         open
         aria-labelledby="external-dialog-title"
       >
-        <button
-          class="behavior-dialog-close"
+        <Button
+          variant="icon"
+          className="behavior-dialog-close"
           on:click={() => (externalOpen = false)}
           aria-label="Close external configuration details"
-          title="Close">×</button
+          title="Close">×</Button
         >
         <p class="eyebrow">MANAGER-SUPERVISED · READ ONLY</p>
         <h2 id="external-dialog-title">External configurations</h2>
@@ -2902,14 +3439,45 @@
       </dialog>
     </div>
   {/if}
+  {#if rawConfigurationOpen && rawConfiguration}
+    <div class="behavior-dialog-backdrop">
+      <dialog
+        class="behavior-dialog raw-configuration-dialog"
+        open
+        aria-labelledby="raw-configuration-title"
+      >
+        <Button
+          variant="icon"
+          className="behavior-dialog-close"
+          on:click={() => (rawConfigurationOpen = false)}
+          aria-label="Close KMonad configuration"
+          title="Close">×</Button
+        >
+        <p class="eyebrow">MANAGER-RENDERED · DEVICE-BOUND</p>
+        <h2 id="raw-configuration-title">KMonad configuration</h2>
+        <p class="dialog-intro">
+          This is the runnable configuration rendered by the manager for this
+          keyboard. Device-specific input/output settings are manager-owned.
+        </p>
+        <p class="raw-configuration-meta">
+          Revision {rawConfiguration.revision} · {rawConfiguration.format} ·
+          {rawConfiguration.digest}
+        </p>
+        <pre class="raw-configuration-content"><code
+            >{rawConfiguration.content}</code
+          ></pre>
+      </dialog>
+    </div>
+  {/if}
   {#if identifyOpen && selectedDevice}
     <div class="identify-dialog-backdrop">
       <dialog class="identify-dialog" open aria-labelledby="identify-title">
-        <button
-          class="identify-close"
+        <Button
+          variant="icon"
+          className="identify-close"
           on:click={closeIdentify}
           aria-label="Close keyboard identification"
-          title="Close identification">×</button
+          title="Close identification">×</Button
         >
         <div class="identify-dialog-heading">
           <p class="eyebrow">LET’S FIND YOUR KEYBOARD</p>
@@ -2953,8 +3521,8 @@
               {/if}
             </div>
             <div class="identify-actions">
-              <button
-                class="button primary"
+              <Button
+                variant="primary"
                 on:click={startIdentify}
                 disabled={!canIdentify ||
                   identifyBusy ||
@@ -2963,13 +3531,13 @@
                   ? "Working…"
                   : operation && terminal(operation.state)
                     ? "Try again"
-                    : `Start ${identifyTimeoutMS / 1000}-second identification`}</button
-              ><button
-                class="button text"
+                    : `Start ${identifyTimeoutMS / 1000}-second identification`}</Button
+              ><Button
+                variant="text"
                 on:click={cancelIdentify}
                 disabled={!operation ||
                   terminal(operation.state) ||
-                  identifyBusy}>Cancel</button
+                  identifyBusy}>Cancel</Button
               >
             </div>
           </div>

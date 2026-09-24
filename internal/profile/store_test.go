@@ -123,6 +123,60 @@ func TestStoreRecordsApplyStateWithoutChangingDraftRevision(t *testing.T) {
 	}
 }
 
+func TestStorePersistsValidationCheckpointWithoutAdvancingDraftRevision(t *testing.T) {
+	store := NewStore(filepath.Join(t.TempDir(), "profiles.json"))
+	saved, err := store.Upsert(testProfile(t, "Recovery"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved.ValidationRecovery = &ValidationRecovery{PreEdit: []AssignmentFallback{{
+		GeometryID: saved.Geometry.ID, LayerID: "base", SourceKey: "a", HadAssignment: true,
+		Behavior: Behavior{Kind: "key", Key: "esc"},
+	}}}
+	saved, err = store.Upsert(saved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Checkpoint requests are made from Profile(), which reloads the JSON
+	// representation. Use that normalized form here too (empty maps tagged
+	// omitempty come back as nil).
+	data, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved = data.Profiles[0]
+	checkpoint := ValidationCheckpoint{
+		DraftRevision: saved.DraftRevision, ManagerServerID: "server-1",
+		CandidateDigest: "sha256:fixture", Geometry: saved.Geometry,
+		Layers: saved.Layers, Assignments: saved.Assignments,
+		Aliases: saved.Aliases, Macros: saved.Macros,
+	}
+	recorded, err := store.SetValidationCheckpoint(saved.ID, saved.DraftRevision, checkpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if recorded.DraftRevision != saved.DraftRevision || recorded.ValidationRecovery == nil ||
+		recorded.ValidationRecovery.Checkpoint == nil || recorded.ValidationRecovery.Checkpoint.CandidateDigest != checkpoint.CandidateDigest ||
+		len(recorded.ValidationRecovery.PreEdit) != 0 {
+		t.Fatalf("unexpected validation recovery metadata: %#v", recorded.ValidationRecovery)
+	}
+	reopened, err := NewStore(store.Path()).Load()
+	if err != nil || len(reopened.Profiles) != 1 || reopened.Profiles[0].ValidationRecovery == nil || reopened.Profiles[0].ValidationRecovery.Checkpoint == nil {
+		t.Fatalf("validation checkpoint was not persisted: %#v, %v", reopened, err)
+	}
+
+	stale := checkpoint
+	stale.DraftRevision--
+	if _, err := store.SetValidationCheckpoint(saved.ID, saved.DraftRevision-1, stale); err == nil {
+		t.Fatal("stale validation checkpoint was accepted")
+	}
+	wrongState := checkpoint
+	wrongState.Assignments = nil
+	if _, err := store.SetValidationCheckpoint(saved.ID, saved.DraftRevision, wrongState); err == nil {
+		t.Fatal("checkpoint state that differed from the saved draft was accepted")
+	}
+}
+
 func TestStoreMigratesUnversionedSchema(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "profiles.json")
 	profile := testProfile(t, "Migrated")
@@ -141,7 +195,7 @@ func TestStoreMigratesUnversionedSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(string(persisted), "{\n  \"version\": 2,") {
+	if !strings.HasPrefix(string(persisted), "{\n  \"version\": 3,") {
 		t.Fatalf("migration was not persisted: %s", persisted)
 	}
 	if loaded.Selected["device-1"] != profile.ID {
@@ -149,6 +203,31 @@ func TestStoreMigratesUnversionedSchema(t *testing.T) {
 	}
 	backup, err := os.ReadFile(path + ".v0-backup")
 	if err != nil || string(backup) != `{"profiles":[`+mustJSON(t, profile)+`]}` {
+		t.Fatalf("pre-migration backup = %s, %v", backup, err)
+	}
+}
+
+func TestStoreMigratesLegacyANSI60SourceMapping(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "profiles.json")
+	draft := testProfile(t, "Legacy ANSI 60")
+	draft.Geometry = Geometry{ID: "us-ansi-60-v1", SourceKeys: []string{"esc", "a"}}
+	draft.Assignments = []Assignment{{LayerID: "base", SourceKey: "esc", Behavior: Behavior{Kind: "key", Key: "x"}}}
+	document := `{"version":2,"profiles":[` + mustJSON(t, draft) + `]}`
+	if err := os.WriteFile(path, []byte(document), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := NewStore(path).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Version != StoreVersion || len(loaded.Profiles) != 1 {
+		t.Fatalf("store migration result: %#v", loaded)
+	}
+	migrated := loaded.Profiles[0]
+	if migrated.Geometry.ID != "us-ansi-60-v2" || migrated.Geometry.SourceKeys[0] != "grv" || migrated.Assignments[0].SourceKey != "grv" {
+		t.Fatalf("legacy ANSI 60 profile was not migrated consistently: %#v", migrated)
+	}
+	if backup, err := os.ReadFile(path + ".v2-backup"); err != nil || string(backup) != document {
 		t.Fatalf("pre-migration backup = %s, %v", backup, err)
 	}
 }

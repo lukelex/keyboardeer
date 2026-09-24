@@ -3,6 +3,8 @@ package managerapi
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net"
@@ -109,6 +111,94 @@ func TestClientNegotiatesBeforeDeviceList(t *testing.T) {
 	}
 }
 
+func TestClientPreviewPreservesCandidateDigestAndDiagnosticLocation(t *testing.T) {
+	const digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
+		switch request.Method {
+		case "session.hello":
+			writeResult(t, rw, request.ID, `{"selected_version":1,"server_id":"server-1","manager_version":"test","state_revision":0}`)
+		case "validation.preview":
+			var params PreviewParams
+			if err := json.Unmarshal(request.Params, &params); err != nil || params.Model == nil || params.Model.Behavior != "(defsrc a)" {
+				t.Errorf("preview params = %#v, decode error = %v", params, err)
+			}
+			writeResult(t, rw, request.ID, `{"validation":{"outcome":"rejected","reason_code":"validation_failed","reason":"rejected","candidate_digest":"`+digest+`","diagnostics":[{"id":"diag-1","severity":"error","reason_code":"validation_failed","summary":"rejected","remediation":"fix it","location":{"scope":"future_scope","start_line":2,"start_column":3,"end_line":2,"end_column":4}}]}}`)
+		default:
+			t.Errorf("unexpected method %s", request.Method)
+		}
+	})
+	client := New(Options{Endpoint: socket})
+	defer client.Close()
+	result, err := client.Preview(context.Background(), PreviewParams{Model: &PreviewModel{DeviceID: "device-1", Behavior: "(defsrc a)"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Validation.CandidateDigest != digest || len(result.Validation.Diagnostics) != 1 {
+		t.Fatalf("preview validation = %#v", result.Validation)
+	}
+	location := result.Validation.Diagnostics[0].Location
+	if location == nil || location.Scope != "future_scope" || location.StartLine != 2 || location.StartColumn != 3 || location.EndLine != 2 || location.EndColumn != 4 {
+		t.Fatalf("diagnostic location = %#v", location)
+	}
+}
+
+func TestManagerValidationLocationJSONLinesFixture(t *testing.T) {
+	file, err := os.Open(filepath.Join("..", "..", "tests", "fixtures", "validation-preview-locations.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	type frame struct {
+		Type   string `json:"type"`
+		ID     string `json:"id"`
+		Params struct {
+			Model struct {
+				Behavior string `json:"behavior"`
+			} `json:"model"`
+		} `json:"params"`
+		Result json.RawMessage `json:"result"`
+	}
+	responses := map[string]ValidationResult{}
+	requests := map[string]string{}
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		var value frame
+		if err := json.Unmarshal(scanner.Bytes(), &value); err != nil {
+			t.Fatalf("decode fixture frame: %v", err)
+		}
+		if value.Type != "response" {
+			requests[value.ID] = value.Params.Model.Behavior
+			continue
+		}
+		var preview PreviewResult
+		if err := json.Unmarshal(value.Result, &preview); err != nil {
+			t.Fatalf("decode %s result as manager preview: %v", value.ID, err)
+		}
+		responses[value.ID] = preview.Validation
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	mapped := responses["mapped-rejection"]
+	if mapped.Outcome != "rejected" || len(mapped.Diagnostics) != 1 ||
+		mapped.CandidateDigest != "sha256:5d5146d001b73ad7e72168f8c69cb1f598d1f2b27f67a969aa057d5be21aa4c7" ||
+		mapped.Diagnostics[0].Location == nil || mapped.Diagnostics[0].Location.Scope != "submitted_behavior" {
+		t.Fatalf("mapped fixture response = %#v", mapped)
+	}
+	digest := sha256.Sum256([]byte(requests["mapped-rejection"]))
+	if want := "sha256:" + hex.EncodeToString(digest[:]); mapped.CandidateDigest != want {
+		t.Fatalf("mapped candidate digest = %q, want exact request digest %q", mapped.CandidateDigest, want)
+	}
+	if unmapped := responses["unmapped-rejection"]; unmapped.Outcome != "rejected" || len(unmapped.Diagnostics) != 1 || unmapped.Diagnostics[0].Location != nil {
+		t.Fatalf("unmapped fixture response = %#v", unmapped)
+	}
+	if blocked := responses["blocked-preview"]; blocked.Outcome != "blocked" || len(blocked.Diagnostics) != 1 || blocked.Diagnostics[0].Location != nil {
+		t.Fatalf("blocked fixture response = %#v", blocked)
+	}
+}
+
 func TestClientCompletesAFrameAfterShortWrites(t *testing.T) {
 	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
 		switch request.Method {
@@ -169,6 +259,135 @@ func TestClientHonoursResponseCorrelation(t *testing.T) {
 	defer client.Close()
 	if _, err := client.IdentifyStart(context.Background(), IdentifyStartParams{DeviceID: "dev", TimeoutMS: 1000}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestClientMatchesConcurrentResponsesByRequestID(t *testing.T) {
+	var received []capturedRequest
+	var mu sync.Mutex
+	completed := make(chan struct{})
+	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
+		if request.Method == "session.hello" {
+			writeResult(t, rw, request.ID, `{"selected_version":1,"server_id":"server","manager_version":"test"}`)
+			return
+		}
+		mu.Lock()
+		received = append(received, request)
+		if len(received) != 2 {
+			mu.Unlock()
+			return
+		}
+		batch := append([]capturedRequest(nil), received...)
+		mu.Unlock()
+		for index := len(batch) - 1; index >= 0; index-- {
+			var params IdentifyStartParams
+			if err := json.Unmarshal(batch[index].Params, &params); err != nil {
+				t.Error(err)
+				continue
+			}
+			writeResult(t, rw, batch[index].ID, `{"operation":{"id":"op-`+params.DeviceID+`","kind":"identify","state":"waiting","reason_code":"operation_running","reason":"waiting"}}`)
+		}
+		close(completed)
+	})
+	client := New(Options{Endpoint: socket})
+	defer client.Close()
+	type result struct {
+		device string
+		id     string
+		err    error
+	}
+	results := make(chan result, 2)
+	for _, device := range []string{"dev-a", "dev-b"} {
+		go func(device string) {
+			operation, err := client.IdentifyStart(context.Background(), IdentifyStartParams{DeviceID: device, TimeoutMS: 1000})
+			results <- result{device: device, id: operation.ID, err: err}
+		}(device)
+	}
+	select {
+	case <-completed:
+	case <-time.After(time.Second):
+		t.Fatal("server did not receive both concurrent requests")
+	}
+	for range 2 {
+		got := <-results
+		if got.err != nil || got.id != "op-"+got.device {
+			t.Fatalf("response mismatch: %#v", got)
+		}
+	}
+}
+
+func TestClientReconnectsAfterManagerDisconnect(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "manager.sock")
+	listener, err := net.Listen("unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	accepted := make(chan int, 2)
+	go func() {
+		for connectionNumber := 1; connectionNumber <= 2; connectionNumber++ {
+			connection, acceptErr := listener.Accept()
+			if acceptErr != nil {
+				return
+			}
+			accepted <- connectionNumber
+			go func(number int, connection net.Conn) {
+				defer connection.Close()
+				rw := bufio.NewReadWriter(bufio.NewReader(connection), bufio.NewWriter(connection))
+				for {
+					line, readErr := rw.ReadBytes('\n')
+					if readErr != nil {
+						return
+					}
+					var request capturedRequest
+					if json.Unmarshal(line, &request) != nil {
+						return
+					}
+					switch request.Method {
+					case "session.hello":
+						writeResult(t, rw, request.ID, `{"selected_version":1,"server_id":"server","manager_version":"test"}`)
+					case "device.list":
+						if number == 1 {
+							writeResult(t, rw, request.ID, `{"devices":[]}`)
+							return
+						}
+						writeResult(t, rw, request.ID, `{"devices":[]}`)
+					}
+				}
+			}(connectionNumber, connection)
+		}
+	}()
+	client := New(Options{Endpoint: path, ReconnectInitial: 5 * time.Millisecond})
+	defer client.Close()
+	if _, err := client.DeviceList(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-accepted:
+	case <-time.After(time.Second):
+		t.Fatal("initial connection was not accepted")
+	}
+	deadline := time.Now().Add(time.Second)
+	for {
+		devices, callErr := client.DeviceList(context.Background())
+		if callErr == nil {
+			if len(devices.Devices) != 0 {
+				t.Fatalf("unexpected devices after reconnect: %#v", devices)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("client did not recover after disconnect: %v", callErr)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	select {
+	case number := <-accepted:
+		if number != 2 {
+			t.Fatalf("accepted connection number %d, want 2", number)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("reconnect did not establish a second socket")
 	}
 }
 
@@ -283,6 +502,36 @@ func TestConfigurationSetEnabledUsesTheObservedRevision(t *testing.T) {
 	operation, err := client.ConfigurationSetEnabled(context.Background(), ConfigurationSetEnabledParams{ConfigurationID: "cfg-1", ExpectedRevision: 7, Enabled: false}, "key-enable")
 	if err != nil || operation.State != "succeeded" || operation.ConfigurationRevision != 8 {
 		t.Fatalf("set enabled = %#v, %v", operation, err)
+	}
+}
+
+func TestConfigurationExportRequestsManagerRenderedKBD(t *testing.T) {
+	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
+		switch request.Method {
+		case "session.hello":
+			writeResult(t, rw, request.ID, `{"selected_version":1,"server_id":"server","manager_version":"test"}`)
+		case "configuration.export":
+			var params ConfigurationExportParams
+			if err := json.Unmarshal(request.Params, &params); err != nil {
+				t.Error(err)
+				return
+			}
+			if params.ConfigurationID != "cfg-1" || params.Format != "manager_rendered_kbd" {
+				t.Errorf("unexpected export params: %#v", params)
+			}
+			writeResult(t, rw, request.ID, `{"configuration_id":"cfg-1","revision":3,"format":"manager_rendered_kbd","digest":"sha256:abc","content":"(defcfg)"}`)
+		default:
+			t.Errorf("unexpected method %s", request.Method)
+		}
+	})
+	client := New(Options{Endpoint: socket})
+	defer client.Close()
+	result, err := client.ConfigurationExport(context.Background(), ConfigurationExportParams{
+		ConfigurationID: "cfg-1",
+		Format:          "manager_rendered_kbd",
+	})
+	if err != nil || result.Revision != 3 || result.Digest != "sha256:abc" || result.Content != "(defcfg)" {
+		t.Fatalf("export = %#v, %v", result, err)
 	}
 }
 

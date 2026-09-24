@@ -47,6 +47,13 @@ actions. This is intentional: the app does not substitute preview fixtures for
 live manager data. The browser Vite preview also keeps controls disabled because
 it has no Wails bindings.
 
+The window uses the committed app icon where supported and restores its previous
+size and position from the per-user KeyboarDeer configuration directory. The
+window close button quits the editor; it does not stop the independent manager
+or mappings already supervised by it. There is no tray icon in v1: background
+runtime control belongs to the manager, and the editor has no hide-to-tray
+workflow that requires an always-resident GUI.
+
 ## Launch the desktop app
 
 From the repository root, run:

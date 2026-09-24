@@ -114,8 +114,8 @@ type Event struct {
 }
 
 type Device struct {
-	ID                string   `json:"id"`
-	DisplayName       string   `json:"display_name"`
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
 	// Role is optional for compatibility with managers that predate semantic
 	// device roles. Explicit non-input roles are not configurable.
 	Role              string   `json:"role,omitempty"`
@@ -184,19 +184,31 @@ type Operation struct {
 }
 
 type Diagnostic struct {
-	ID          string       `json:"id"`
-	Severity    string       `json:"severity"`
-	ReasonCode  string       `json:"reason_code"`
-	Summary     string       `json:"summary"`
-	Remediation string       `json:"remediation"`
-	Resource    *ResourceRef `json:"resource,omitempty"`
+	ID          string              `json:"id"`
+	Severity    string              `json:"severity"`
+	ReasonCode  string              `json:"reason_code"`
+	Summary     string              `json:"summary"`
+	Remediation string              `json:"remediation"`
+	Resource    *ResourceRef        `json:"resource,omitempty"`
+	Location    *ValidationLocation `json:"location,omitempty"`
+}
+
+// ValidationLocation is optional manager-provided source metadata. Clients
+// must ignore unknown scopes and treat absent/unknown locations as unmapped.
+type ValidationLocation struct {
+	Scope       string `json:"scope"`
+	StartLine   int    `json:"start_line"`
+	StartColumn int    `json:"start_column"`
+	EndLine     int    `json:"end_line"`
+	EndColumn   int    `json:"end_column"`
 }
 
 type ValidationResult struct {
-	Outcome     string       `json:"outcome"`
-	ReasonCode  string       `json:"reason_code"`
-	Reason      string       `json:"reason"`
-	Diagnostics []Diagnostic `json:"diagnostics"`
+	Outcome         string       `json:"outcome"`
+	ReasonCode      string       `json:"reason_code"`
+	Reason          string       `json:"reason"`
+	CandidateDigest string       `json:"candidate_digest,omitempty"`
+	Diagnostics     []Diagnostic `json:"diagnostics"`
 }
 
 type IdentifyStartParams struct {
@@ -255,4 +267,17 @@ type ConfigurationSetEnabledResult struct {
 type ConfigurationDeleteParams struct {
 	ConfigurationID  string `json:"configuration_id"`
 	ExpectedRevision uint64 `json:"expected_revision"`
+}
+
+type ConfigurationExportParams struct {
+	ConfigurationID string `json:"configuration_id"`
+	Format          string `json:"format"`
+}
+
+type ConfigurationExportResult struct {
+	ConfigurationID string `json:"configuration_id"`
+	Revision        uint64 `json:"revision"`
+	Digest          string `json:"digest"`
+	Format          string `json:"format"`
+	Content         string `json:"content"`
 }

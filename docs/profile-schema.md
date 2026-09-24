@@ -1,8 +1,25 @@
 # Profile schema
 
+## Portable profile files
+
+KeyboarDeer imports and exports the behavior-only `keyboardeer-profile` JSON
+format, version 1 (`.kbdprofile.json`). It contains a profile name, a verified
+geometry ID and source-key order, layers, assignments, aliases, macros, and
+compiler settings. It deliberately excludes the local profile ID, machine-local
+manager device/configuration IDs, apply/recovery state, and timestamps. Import
+validates the full profile schema and only accepts a verified geometry matching
+a profile already associated with the target keyboard; it creates a new local
+draft and never applies it.
+
+This file is not KMonad syntax and is not a runnable `.kbd` file. The GUI does
+not render device-specific configuration. Manager v1.1.0 provides bounded raw
+content reads and manager-rendered export, but their GUI workflows remain
+separate integration work. KeyboarDeer must not infer or synthesize the
+device-specific `defcfg` representation.
+
 KeyboarDeer profiles are the source of truth for keyboard drafts. Generated
 KMonad behavior is derived from them and is never parsed back. This document
-describes store version **2**, defined in `internal/profile/profile.go`.
+describes store version **3**, defined in `internal/profile/profile.go`.
 
 ## Storage
 
@@ -18,7 +35,7 @@ describes store version **2**, defined in `internal/profile/profile.go`.
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "profiles": [Profile],
   "selected": { "<device_id>": "<profile_id>" }
 }
@@ -49,6 +66,7 @@ moves the link, rather than creating a second configuration for the device.
 | `aliases` | Named reusable behaviors. Names use the identifier form and are distinct from macro names. |
 | `macros` | Named ordered key presses (at least one step). |
 | `settings.version` | Compiler settings version; currently `1`. |
+| `validation_recovery` | Local-only provenance for targeted draft recovery: the last whole-draft manager-validated checkpoint and per-assignment pre-edit values. It is not included in portable profile exports. |
 | `created_at`, `updated_at` | UTC timestamps maintained by the store. |
 
 ### Behaviors
@@ -70,7 +88,10 @@ References must resolve, and alias/macro references must not form a cycle.
 
 - `version` identifies the whole document. A missing version is version 0.
   Version 1 added draft revisions; version 2 added `selected`, choosing the
-  linked profile (or else the earliest) for each keyboard.
+  linked profile (or else the earliest) for each keyboard. Version 3 corrects
+  the original ANSI 60% `esc` source token to KMonad's documented `grv` token
+  and migrates affected assignments with it; see
+  [geometry verification](geometry-verification.md).
 - On load, older versions are upgraded one step at a time by the functions in
   `migrations` (`internal/profile/store.go`). Before the upgraded store is
   written, the exact original bytes are kept as `profiles.json.v<N>-backup`.

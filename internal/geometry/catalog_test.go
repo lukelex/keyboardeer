@@ -14,7 +14,7 @@ func TestANSI60USMatchesDocumentedKMonadSourceOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{
-		"esc", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "bspc",
+		"grv", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "bspc",
 		"tab", "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "[", "]", "\\",
 		"caps", "a", "s", "d", "f", "g", "h", "j", "k", "l", ";", "'", "ret",
 		"lsft", "z", "x", "c", "v", "b", "n", "m", ",", ".", "/", "rsft",
@@ -32,6 +32,55 @@ func TestANSI60USMatchesDocumentedKMonadSourceOrder(t *testing.T) {
 	}
 	if err := profile.Validate(fixture); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestEverySelectableGeometryHasAnExplicitValidVisualToSourceMap(t *testing.T) {
+	for _, template := range List() {
+		t.Run(template.ID, func(t *testing.T) {
+			if err := template.Validate(); err != nil {
+				t.Fatal(err)
+			}
+			geometry, err := template.ProfileGeometry()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(template.Keys) != len(geometry.SourceKeys) {
+				t.Fatalf("visual keys=%d, source keys=%d", len(template.Keys), len(geometry.SourceKeys))
+			}
+			seenIDs := map[string]bool{}
+			lastRow := -1
+			for index, drawnKey := range template.Keys {
+				if drawnKey.ID == "" || drawnKey.SourceKey == "" || drawnKey.Label == "" {
+					t.Fatalf("visual key %d is missing an ID, label, or source key: %#v", index, drawnKey)
+				}
+				if seenIDs[drawnKey.ID] {
+					t.Fatalf("duplicate visual key ID %q", drawnKey.ID)
+				}
+				seenIDs[drawnKey.ID] = true
+				if drawnKey.Row < lastRow {
+					t.Fatalf("visual key rows are out of order at %q", drawnKey.ID)
+				}
+				lastRow = drawnKey.Row
+				if drawnKey.SourceKey != geometry.SourceKeys[index] {
+					t.Fatalf("visual key %q maps to %q at index %d, profile source is %q", drawnKey.ID, drawnKey.SourceKey, index, geometry.SourceKeys[index])
+				}
+			}
+		})
+	}
+}
+
+func TestLegacyANSI60ProfileMigrationMovesFirstKeyAndAssignmentsTogether(t *testing.T) {
+	draft := profile.Profile{
+		Geometry:    profile.Geometry{ID: LegacyANSI60USID, SourceKeys: []string{"esc", "a"}},
+		Assignments: []profile.Assignment{{LayerID: "base", SourceKey: "esc", Behavior: profile.Behavior{Kind: "key", Key: "x"}}},
+	}
+	migrated := MigrateLegacyProfile(draft)
+	if migrated.Geometry.ID != ANSI60USID || migrated.Geometry.SourceKeys[0] != "grv" || migrated.Assignments[0].SourceKey != "grv" {
+		t.Fatalf("legacy map was not migrated consistently: %#v", migrated)
+	}
+	if draft.Geometry.ID != LegacyANSI60USID || draft.Geometry.SourceKeys[0] != "esc" {
+		t.Fatal("migration mutated its input profile")
 	}
 }
 
@@ -102,7 +151,7 @@ func TestCatalogReturnsIndependentTemplates(t *testing.T) {
 	}
 	first.Keys[0].Label = "Changed"
 	second, ok := Lookup(ANSI60USID)
-	if !ok || second.Keys[0].Label != "Esc" {
+	if !ok || second.Keys[0].Label != "` ~" {
 		t.Fatalf("catalog template was mutated: %#v", second.Keys[0])
 	}
 }

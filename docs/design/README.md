@@ -8,8 +8,8 @@ Start with the **[current high-fidelity workspace](high-fidelity-workspace.html)
 Use its **Explore** selector to browse all seven screens, or follow the normal
 device → setup/identify → keymap → layers navigation.
 
-**Current scope:** Keyboards, Setup, Identify, Keymap, Layers, Diagnostics, and
-External configuration. **Profiles and Review & Apply are parked.** The current
+**Current scope:** Keyboards, Setup, Identify, Keymap, Layers, Diagnostics,
+External configuration, and Preferences. **Profiles and Review & Apply are parked.** The current
 prototype has no navigation or actions for either. Changes stay in per-keyboard,
 in-memory drafts and are explicitly not applied.
 
@@ -194,6 +194,9 @@ large application sidebar competing with the keyboard canvas.
   and incomplete API. Unknown health never appears as healthy.
 - **External:** show read-only source and runtime details. A new visual draft is
   separate from adoption and does not take over a claimed device automatically.
+- **Preferences:** choose an optional folder for editable profile JSON. The
+  prototype remembers the setting locally; folder access and profile file syncing
+  are illustrative and do not write files or interact with Git.
 
 The linked pages are design fixtures, not a shared persistent application store.
 Refreshing resets examples. Numbered gallery navigation and result selectors

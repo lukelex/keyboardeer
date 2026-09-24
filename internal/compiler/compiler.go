@@ -300,6 +300,12 @@ func uniqueSourceKeys(sourceKeys []string) []string {
 
 var knownKeys = geometry.KnownSourceKeys()
 
+func init() {
+	for key := range geometry.KnownOutputKeys() {
+		knownKeys[key] = true
+	}
+}
+
 // renderKey is the single place a key name becomes KMonad text, so defsrc
 // and deflayer spell every key identically. A bare backslash would escape
 // the following character in KMonad's lexer and must be written as `\\`.
@@ -308,7 +314,7 @@ func renderKey(value string) (string, error) {
 		return "", err
 	}
 	if !knownKeys[value] {
-		return "", fmt.Errorf("unsupported KMonad key %q; only keys from verified layouts are supported", value)
+		return "", fmt.Errorf("unsupported KMonad key %q; only verified layout keys and supported additional outputs are allowed", value)
 	}
 	if value == "\\" {
 		return "\\\\", nil

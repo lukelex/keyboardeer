@@ -33,6 +33,7 @@ physicalRows[5] = [['Ctrl', 1.3], ['Super', 1.3], ['Alt', 1.3], ['Space', 6], 'R
 const navigation = ['Ins', 'Home', 'PgUp', 'Del', 'End', 'PgDn', 'Print Screen', 'Scroll Lock', 'Pause'];
 const arrows = ['↑', '←', '↓', '→'];
 const numpad = ['Num Lock', 'KP /', 'KP *', 'KP −', 'KP 7', 'KP 8', 'KP 9', 'KP +', 'KP 4', 'KP 5', 'KP 6', 'KP Enter', 'KP 1', 'KP 2', 'KP 3', 'KP .', 'KP 0'];
+const extendedKeys = ['F13','F14','F15','F16','F17','F18','F19','F20','F21','F22','F23','F24','SysRq','Break','Menu','Compose','International backslash','International Ro','International Yen','Kana','Convert','Non-convert','Hangul','Hanja'];
 const actions = new Map();
 function register(id, label, category, description, short = label) {
   const action = { id, label, category, description, short };
@@ -42,7 +43,7 @@ function register(id, label, category, description, short = label) {
 function keyName(key) { return names[key] || key; }
 function rowEntry(entry) { return Array.isArray(entry) ? entry : [entry, 1]; }
 const basicKeys = basicRows.flatMap((row) => row.map((entry) => rowEntry(entry)[0]));
-for (const key of new Set([...basicKeys, ...navigation, ...arrows, ...numpad])) {
+for (const key of new Set([...basicKeys, ...navigation, ...arrows, ...numpad, ...extendedKeys])) {
   register(key, keyName(key), 'Basic', `Send ${keyName(key)} when pressed.`, key);
 }
 // The physical Fn position maps to a layer action, not a universal sendable key.
@@ -137,7 +138,16 @@ function group(label) {
 function renderBasic() {
   const layout = document.createElement('div'); layout.className = 'basic-palette';
   const main = group('LETTERS, NUMBERS & EVERYDAY KEYS');
-  basicRows.forEach((row) => {
+  const functionKeys = group('FUNCTION KEYS');
+  const functionRow = document.createElement('div'); functionRow.className = 'palette-row function-key-row';
+  for (let number = 1; number <= 24; number++) functionRow.append(actionButton(`F${number}`));
+  functionKeys.append(functionRow);
+  basicRows.slice(0, 1).forEach((row) => {
+    const line = document.createElement('div'); line.className = 'palette-row';
+    row.filter((entry) => rowEntry(entry)[0] === 'Esc').forEach((entry) => { const [id, width] = rowEntry(entry); const button = actionButton(id); button.style.setProperty('--width', width); line.append(button); });
+    main.append(line);
+  });
+  basicRows.slice(1).forEach((row) => {
     const line = document.createElement('div'); line.className = 'palette-row';
     row.forEach((entry) => { const [id, width] = rowEntry(entry); const button = actionButton(id); button.style.setProperty('--width', width); line.append(button); });
     main.append(line);
@@ -148,7 +158,9 @@ function renderBasic() {
   arrows.forEach((id, index) => { const button = actionButton(id); if (!index) { button.style.gridColumn = '2'; button.style.gridRow = '1'; } else button.style.gridRow = '2'; arrowGrid.append(button); }); nav.append(arrowGrid);
   const pad = group('NUMPAD'); const padGrid = document.createElement('div'); padGrid.className = 'numpad-grid';
   numpad.forEach((id) => { const button = actionButton(id); button.textContent = id.replace('KP ', ''); padGrid.append(button); }); pad.append(padGrid);
-  layout.append(main, nav, pad); $('#palette').append(layout);
+  const extra = group('LESS COMMON & INTERNATIONAL KEYS'); const extraGrid = document.createElement('div'); extraGrid.className = 'utility-grid';
+  extendedKeys.slice(12).forEach((id) => extraGrid.append(actionButton(id))); extra.append(extraGrid);
+  layout.append(functionKeys, main, nav, pad, extra); $('#palette').append(layout);
 }
 function renderPalette() {
   const query = $('#key-search').value.trim().toLowerCase();

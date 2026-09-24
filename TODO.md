@@ -11,9 +11,10 @@ This is the delivery checklist for an installable **Linux v1**, followed by
 explicit expansion work toward the cross-platform product. A checked design or
 planning item does not mean the application feature is implemented.
 
-Dependencies refer to the [manager API audit](docs/manager-api-status.md), pinned
-to upstream `533a7d7` on 2026-09-23. The [roadmap](docs/gui-integration-roadmap.md)
-explains sequencing; this file is the place to track completion.
+Dependencies refer to the [manager API audit](docs/manager-api-status.md),
+reconciled with manager `origin/main` `712f4aa` / v1.1.0 on 2026-09-24. The
+[roadmap](docs/gui-integration-roadmap.md) explains sequencing; this file is the
+place to track completion.
 
 ## Completed foundations
 
@@ -44,7 +45,7 @@ explains sequencing; this file is the place to track completion.
   Prove these calls against the supported manager revision, not just mocks.
 - [x] **API-05** Implement normal capability negotiation using `manager.get`;
   show API-incomplete when unsupported and never silently enable features.
-  **Upstream gate: MGR-01.**
+  Manager contract is implemented in v1.1.0 (`manager.get`).
 - [ ] **DESIGN-01** Review the prototype with first-time users; validate key
   selection, draft/live distinction, and blocked/rejected recovery.
 
@@ -59,17 +60,17 @@ supervision code in KeyboarDeer.
 - [x] **DEV-02** Join authoritative devices/configurations/diagnostics by opaque
   IDs; separate device availability, desired revision, active revision, and
   runtime health. Never infer active profiles from `configured_by` names.
-  **Upstream gate: MGR-02.**
+  Manager contract is implemented in v1.1.0 (`snapshot.get`).
 - [x] **DEV-03** Show external configurations as read-only and preserve
   per-resource diagnostics and remediation.
 - [x] **DEV-04** Integrate bounded identification, countdown, cancellation,
   timeout/hotplug/conflict handling, and operation polling; explain that only
-  the chosen mapping may pause. **Normal UI gate: MGR-01.**
+  the chosen mapping may pause. Manager support is capability-gated at runtime.
 - [x] **STATE-01** Add bounded snapshot refresh while events are unsupported;
   mark stale state on disconnect rather than presenting it as live health.
 - [x] **STATE-02** Add events with a gap-free snapshot handoff, replay cursor,
   unknown-event tolerance, manager restart handling, and resync after backlog.
-  **Upstream gate: MGR-04.**
+  Manager contract is implemented in v1.1.0 (`events.subscribe`).
 
 **Exit:** available keyboards and runtime state are understandable without a
 terminal, and reconnect restores an authoritative view.
@@ -83,12 +84,15 @@ terminal, and reconnect restores an authoritative view.
   storage; cover migrations, corrupted files, recovery, and reopen after a crash.
 - [x] **PROFILE-03** Add create/rename/duplicate/delete/switch workflows for
   multiple profiles and keyboards, preserving pending edits per profile.
-- [ ] **GEOMETRY-01** Provide a verified first layout and explicit selection;
-  map every drawn key to a source key without guessing from a product name.
+- [x] **GEOMETRY-01** Provide verified layouts and explicit selection; map every
+  drawn key to a source key without guessing from a product name. Source mapping
+  evidence and the ANSI 60% correction/migration are documented in
+  [`geometry-verification.md`](docs/geometry-verification.md).
 - [x] **EDIT-01** Implement keyboard rendering, selection, bottom action palette, key search,
   single-key remapping, restore-original, undo/redo, and persistent draft status.
-- [x] **EDIT-02** Implement layer create/rename/delete/reorder, transparency,
-  reachability, and layer-switch behaviors; previews must not change live state.
+- [x] **EDIT-02** Implement visible layer create/rename/delete/reorder controls
+  in Manage layers, transparency, reachability, and layer-switch behaviors;
+  previews must not change live state.
 - [x] **EDIT-03** Add tap/hold behavior with explicit timing semantics and
   defaults; explain how to reach/exit layers before applying a profile.
 - [x] **COMPILE-01** Compile deterministically to platform-neutral behavior
@@ -120,7 +124,7 @@ Implementation handover for the remaining recovery work:
 - [x] **VALIDATE-04** Implement quiet valid/checking status, prominent rejection
   with causes/remedies, affected keys and layer counts, accessible announcements,
   and issue-to-key navigation. Separate environmental blockage from bad edits.
-- [ ] **VALIDATE-05** Keep last validated assignment provenance and per-key
+- [x] **VALIDATE-05** Keep last validated assignment provenance and per-key
   pre-edit fallback. Revert only an identified offending assignment with current
   revision/value guards, preserve unrelated edits, protect missing dependencies,
   record undo, and revalidate the complete draft. Do not silently auto-revert.
@@ -134,19 +138,23 @@ Implementation handover for the remaining recovery work:
   distinguish local draft saved, candidate accepted, and active/healthy.
 - [x] **APPLY-02** Integrate managed create/update with configuration association,
   idempotency keys, expected revisions, uncertain-response recovery, and
-  refresh-and-review for `stale_revision`. **Upstream gate: MGR-03.**
+  refresh-and-review for `stale_revision`. Manager contract is implemented in
+  v1.1.0.
 - [x] **APPLY-03** Track accepted operations through reconnect/GUI restart;
   show rejection, rollback succeeded/failed, and the actual active revision.
   Closing the GUI must not cancel accepted apply.
 - [x] **LIFE-01** Add enable/disable/delete for managed configurations with clear
   effects on the selected keyboard; local profile deletion and runtime deletion
   must be explicit, distinct operations.
-- [ ] **IO-01** Import/export versioned GUI profiles with validation. Define the
-  generated-config export contract with the manager; behavior-only export must
-  not masquerade as a runnable device-specific `.kbd` file. **Gate: MGR-05.**
+- [ ] **IO-01** Import/export versioned GUI profiles with validation and expose
+  generated-config export through the manager's `configuration.export` API.
+  Portable `.kbdprofile.json` v1 is implemented, and manager-rendered export is
+  available in v1.1.0; the GUI client flow remains to be implemented. Never
+  present behavior-only profile data as a runnable device-specific `.kbd` file.
 - [x] **EXTERNAL-01** Display external runtime state and, when supported, raw
   configuration content. Full arbitrary `.kbd` visual import is outside v1.
-  **Content-read gate: MGR-05.**
+  The content API is available in manager v1.1.0; GUI content display remains
+  future integration work.
 
 **Exit:** edit → preview → apply works for one keyboard without disturbing
 another, and failed changes do not falsely appear as active.
@@ -158,9 +166,9 @@ another, and failed changes do not falsely appear as active.
   small-window behavior, and reduced motion.
 - [ ] **UX-02** Provide first-run setup, missing-manager guidance, structured
   diagnostics, supported-feature explanations, and concise contextual help.
-- [ ] **DESKTOP-01** Add app identity/icons, window-state persistence, and
+- [x] **DESKTOP-01** Add app identity/icons, window-state persistence, and
   documented close/quit behavior; decide whether a tray adds value to v1.
-- [ ] **TEST-01** Cover socket framing, concurrent response matching, deadlines,
+- [x] **TEST-01** Cover socket framing, concurrent response matching, deadlines,
   unknown schema fields, incomplete APIs, disconnect/reconnect, and resync.
 - [ ] **TEST-02** Cover profile migration/recovery, compiler semantics, layer
   references, undo/redo, preview invalidation, and per-keyboard draft isolation.
@@ -181,18 +189,18 @@ These are dependencies to coordinate, not functionality to duplicate in the GUI.
 Manager implementation handover:
 [`manager-improvement-plan.md`](docs/manager-improvement-plan.md).
 
-- [ ] **MGR-01** Implement capability/health/version reporting via `manager.get`;
-  reconcile the wiki's status header with the implemented-method inventory.
-- [ ] **MGR-02** Implement authoritative `snapshot.get`, stable configurations,
-  desired/active/runtime/operation separation, and structured diagnostics;
-  finalize durable known-device identity and storage policy.
-- [ ] **MGR-03** Implement managed create/update/enable/disable/delete, durable
-  metadata, revision checks, idempotency, last-known-good rollback, activation
-  confirmation, and queryable mutation operations. Preserve external files.
-- [ ] **MGR-04** Implement ordered events, retained replay, gap-free snapshot
-  handoff, resynchronization, and non-blocking slow-client handling.
-- [ ] **MGR-05** Define API-supported raw external content reads and generated
-  config export, including ownership and device-rendering boundaries.
+- [x] **MGR-01** Implement capability/health/version reporting via `manager.get`.
+- [x] **MGR-02** Implement authoritative snapshots, desired/active/runtime/
+  operation separation, structured diagnostics, and persisted known-device
+  inventory.
+- [x] **MGR-03** Implement managed lifecycle, durable idempotency, revision
+  checks, last-known-good rollback, activation confirmation, and queryable
+  operations while preserving external files.
+- [x] **MGR-04** Implement ordered events, retained replay, snapshot cursors,
+  resynchronization, and non-blocking slow-client handling.
+- [x] **MGR-05** Define and implement revision-checked external content reads and
+  manager-rendered managed `.kbd` export with explicit ownership/rendering
+  boundaries. GUI use of these methods remains tracked under IO-01/EXTERNAL-01.
 
 ## After Linux v1 — full product expansion
 
