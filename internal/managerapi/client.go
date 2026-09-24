@@ -461,3 +461,8 @@ func (c *APIClient) ConfigurationSetEnabled(ctx context.Context, params Configur
 	err := c.call(ctx, "configuration.set_enabled", params, &result)
 	return result.Operation, err
 }
+func (c *APIClient) ConfigurationDelete(ctx context.Context, params ConfigurationDeleteParams) (Operation, error) {
+	var result ConfigurationSetEnabledResult
+	err := c.call(ctx, "configuration.delete", params, &result)
+	return result.Operation, err
+}

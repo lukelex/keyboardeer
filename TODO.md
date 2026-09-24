@@ -138,7 +138,7 @@ Implementation handover for the remaining recovery work:
 - [ ] **APPLY-03** Track accepted operations through reconnect/GUI restart;
   show rejection, rollback succeeded/failed, and the actual active revision.
   Closing the GUI must not cancel accepted apply.
-- [ ] **LIFE-01** Add enable/disable/delete for managed configurations with clear
+- [x] **LIFE-01** Add enable/disable/delete for managed configurations with clear
   effects on the selected keyboard; local profile deletion and runtime deletion
   must be explicit, distinct operations.
 - [ ] **IO-01** Import/export versioned GUI profiles with validation. Define the

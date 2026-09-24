@@ -301,6 +301,33 @@ func (s *Store) SetApplyState(id string, expectedDraftRevision uint64, configura
 	return Profile{}, fmt.Errorf("profile %q does not exist", id)
 }
 
+// ClearConfigurationLink forgets a manager configuration that no longer
+// exists. Like SetApplyState it changes lifecycle metadata only, so no draft
+// revision advances and no draft content changes.
+func (s *Store) ClearConfigurationLink(configurationID string) error {
+	if configurationID == "" {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	data, err := s.load()
+	if err != nil {
+		return err
+	}
+	changed := false
+	for index := range data.Profiles {
+		if data.Profiles[index].ManagerConfigurationID == configurationID {
+			data.Profiles[index].ManagerConfigurationID = ""
+			data.Profiles[index].UpdatedAt = time.Now().UTC()
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return s.save(data)
+}
+
 func (s *Store) Delete(id string, expectedDraftRevision uint64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

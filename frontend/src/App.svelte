@@ -3,6 +3,7 @@
   import {
     ApplyProfile,
     CreateProfile,
+    DeleteConfiguration,
     DeleteProfile,
     DuplicateProfile,
     Geometries,
@@ -164,6 +165,7 @@
   let applyReviewOpen = false;
   let applyOperation: Operation | null = null;
   let lifecycleBusyID = "";
+  let confirmConfigurationDeleteID = "";
   let operation: Operation | null = null;
   let loading = false;
   let identifyBusy = false;
@@ -395,6 +397,25 @@
     // The manager currently does not promise physical-key locations. Preserve
     // opaque, future resource kinds without guessing a key from display text.
     return `${humanize(diagnostic.resource.kind)} issue`;
+  }
+  async function deleteConfiguration(configuration: Configuration) {
+    if (configuration.ownership !== "managed" || lifecycleBusyID) return;
+    if (confirmConfigurationDeleteID !== configuration.id) {
+      confirmConfigurationDeleteID = configuration.id;
+      return;
+    }
+    confirmConfigurationDeleteID = "";
+    lifecycleBusyID = configuration.id;
+    feedback = "";
+    try {
+      const result = await DeleteConfiguration(configuration.id);
+      await refresh();
+      feedback = `Removed “${configuration.name}” from the keyboard: ${result.reason}. Your profiles were kept.`;
+    } catch (error) {
+      feedback = explain(error);
+    } finally {
+      lifecycleBusyID = "";
+    }
   }
   async function setLifecycleEnabled(
     configuration: Configuration,
@@ -1583,6 +1604,41 @@
                           >Latest manager operation: {humanize(lastOperation.state)}
                           — {lastOperation.reason}</small
                         >{/if}
+                      {#if configuration.ownership === "managed"}
+                        {#if confirmConfigurationDeleteID === configuration.id}
+                          <p class="configuration-delete-warning" role="alert">
+                            This stops the mapping on this keyboard and removes
+                            it from the manager. Your KeyboarDeer profiles are
+                            kept and can be applied again.
+                          </p>
+                        {/if}
+                        <div class="configuration-actions">
+                          {#if confirmConfigurationDeleteID === configuration.id}
+                            <button
+                              class="button secondary"
+                              type="button"
+                              on:click={() => (confirmConfigurationDeleteID = "")}
+                              >Keep mapping</button
+                            >
+                          {/if}
+                          <button
+                            class="button secondary configuration-delete"
+                            type="button"
+                            on:click={() => deleteConfiguration(configuration)}
+                            disabled={!!lifecycleBusyID ||
+                              !workspaceLive ||
+                              !managedConfigurations.available}
+                            title={managedConfigurations.available
+                              ? "Stop this mapping and remove it from the manager"
+                              : managedConfigurations.reason}
+                            >{lifecycleBusyID === configuration.id
+                              ? "Removing…"
+                              : confirmConfigurationDeleteID === configuration.id
+                                ? "Confirm: remove from keyboard"
+                                : "Remove from keyboard"}</button
+                          >
+                        </div>
+                      {/if}
                     </section>
                   {/each}
                 </div>
@@ -2459,7 +2515,7 @@
           <p class="profile-delete-warning" role="alert">
             Delete “{activeProfile.name}” from KeyboarDeer?
             {activeProfile.manager_configuration_id
-              ? "The mapping already applied to this keyboard keeps running in the manager."
+              ? "The mapping already applied to this keyboard keeps running. To stop it, use Remove from keyboard on the keyboard card."
               : "This draft has not been applied."}
           </p>
         {/if}

@@ -635,6 +635,57 @@ test("switches, renames, duplicates, and deletes profiles per keyboard", async (
   expect(errors).toEqual([]);
 });
 
+test("removes a managed mapping from the keyboard with confirmation", async ({
+  page,
+}) => {
+  await page.addInitScript((fixture) => {
+    const state = JSON.parse(JSON.stringify(fixture)) as ManagerWorkspace;
+    window.go = {
+      main: {
+        App: {
+          Info: async () => ({ name: "KeyboarDeer", version: "test" }),
+          Workspace: async () => state,
+          Geometries: async () => [],
+          Profiles: async () => [],
+          DeleteConfiguration: async (id) => {
+            state.snapshot!.configurations =
+              state.snapshot!.configurations!.filter(
+                (configuration) => configuration.id !== id,
+              );
+            state.snapshot!.state_revision += 1;
+            return {
+              id: "op-delete",
+              kind: "lifecycle",
+              state: "succeeded",
+              resource: { kind: "configuration", id },
+              reason_code: "operation_succeeded",
+              reason: "configuration deleted and its KMonad process stopped",
+            };
+          },
+        },
+      },
+    };
+  }, workspace);
+  await page.goto("/");
+  await expect(page.locator(".configuration-state")).toContainText(
+    "Managed fixture",
+  );
+  await page.getByRole("button", { name: "Remove from keyboard" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Your KeyboarDeer profiles are kept",
+  );
+  await page.getByRole("button", { name: "Keep mapping" }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await page.getByRole("button", { name: "Remove from keyboard" }).click();
+  await page
+    .getByRole("button", { name: "Confirm: remove from keyboard" })
+    .click();
+  await expect(page.locator(".configuration-state")).toHaveCount(0);
+  await expect(
+    page.getByText(/Removed “Managed fixture” from the keyboard/),
+  ).toBeVisible();
+});
+
 test("offers backup-and-reset recovery for a damaged draft file", async ({
   page,
 }) => {

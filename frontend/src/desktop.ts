@@ -197,6 +197,7 @@ type AppBindings = {
     configurationID: string,
     enabled: boolean,
   ) => Promise<Operation>;
+  DeleteConfiguration?: (configurationID: string) => Promise<Operation>;
   RecoverCorruptProfileStore?: () => Promise<string>;
   ProfileStoreStatus?: () => Promise<ProfileStoreStatus>;
   IdentifyStart?: (deviceID: string, timeoutMS: number) => Promise<Operation>;
@@ -279,6 +280,10 @@ export const SetConfigurationEnabled = (
   binding<(configurationID: string, enabled: boolean) => Promise<Operation>>(
     "SetConfigurationEnabled",
   )(configurationID, enabled);
+export const DeleteConfiguration = (configurationID: string) =>
+  binding<(configurationID: string) => Promise<Operation>>(
+    "DeleteConfiguration",
+  )(configurationID);
 export const RecoverCorruptProfileStore = () =>
   binding<() => Promise<string>>("RecoverCorruptProfileStore")();
 export const ProfileStoreStatus = () =>

@@ -265,6 +265,49 @@ func TestAppApplyingAnotherProfileUpdatesTheKeyboardsConfiguration(t *testing.T)
 	}
 }
 
+func TestAppDeletesManagedConfigurationButKeepsProfiles(t *testing.T) {
+	var deleteParams managerapi.ConfigurationDeleteParams
+	endpoint := testManager(t, func(method string, params json.RawMessage) string {
+		switch method {
+		case "session.hello":
+			return `{"selected_version":1,"server_id":"server-1","manager_version":"test"}`
+		case "manager.get":
+			return `{"server_id":"server-1","capabilities":[{"name":"managed_configurations","available":true,"reason_code":"capability_available","reason":"ready"}]}`
+		case "snapshot.get":
+			return `{"state_revision":4,"event_cursor":{"server_id":"server-1","event_id":2,"state_revision":4},"devices":[],"configurations":[{"id":"cfg-1","name":"Typing","ownership":"managed","enabled":true,"device_id":"device-1","desired_revision":5,"active_revision":5,"runtime":{"phase":"running","reason_code":"runtime_running","reason":"running","connected":true,"healthy":true,"failure_count":0}}],"operations":[],"health":{"healthy":true,"reason_code":"manager_healthy","reason":"ok"}}`
+		case "configuration.delete":
+			if err := json.Unmarshal(params, &deleteParams); err != nil {
+				t.Error(err)
+			}
+			return `{"operation":{"id":"op-2","kind":"lifecycle","state":"succeeded","resource":{"kind":"configuration","id":"cfg-1"},"reason_code":"operation_succeeded","reason":"configuration deleted and its KMonad process stopped"}}`
+		}
+		t.Errorf("unexpected manager method %q", method)
+		return `{}`
+	})
+	client := managerapi.New(managerapi.Options{Endpoint: endpoint, ClientName: "keyboardeer-test", ClientVersion: "test"})
+	store := profile.NewStore(filepath.Join(t.TempDir(), "profiles.json"))
+	app := &App{manager: client, profiles: store}
+	defer app.manager.Close()
+	typing, err := app.CreateProfile("device-1", "Typing", geometry.ANSI60USID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.SetApplyState(typing.ID, typing.DraftRevision, "cfg-1", nil); err != nil {
+		t.Fatal(err)
+	}
+	operation, err := app.DeleteConfiguration("cfg-1")
+	if err != nil || operation.State != "succeeded" {
+		t.Fatalf("delete = %#v, %v", operation, err)
+	}
+	if deleteParams.ConfigurationID != "cfg-1" || deleteParams.ExpectedRevision != 5 {
+		t.Fatalf("delete params = %#v", deleteParams)
+	}
+	kept, err := app.profileByID(typing.ID)
+	if err != nil || kept.ManagerConfigurationID != "" || kept.DraftRevision != typing.DraftRevision {
+		t.Fatalf("profile after configuration delete = %#v, %v", kept, err)
+	}
+}
+
 // testManager serves one JSON Lines connection, answering each request with
 // the result returned by respond.
 func testManager(t *testing.T, respond func(method string, params json.RawMessage) string) string {

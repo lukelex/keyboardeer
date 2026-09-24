@@ -1457,6 +1457,31 @@ h1 {
   margin: 12px 0 0;
   padding: 9px 11px;
 }
+.configuration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+.configuration-actions .button {
+  color: #35604c;
+  min-height: 28px;
+  padding: 4px 10px;
+}
+.configuration-delete {
+  color: #a1462f !important;
+}
+.configuration-delete-warning {
+  background: #fbefe9;
+  border: 1px solid #e3b9a8;
+  border-radius: 7px;
+  color: #8a3b24;
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 8px 0 0;
+  padding: 7px 9px;
+}
 .profile-delete {
   color: #a1462f !important;
 }

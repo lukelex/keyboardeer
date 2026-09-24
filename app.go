@@ -459,6 +459,57 @@ func (a *App) SetConfigurationEnabled(configurationID string, enabled bool) (man
 	return managerapi.Operation{}, fmt.Errorf("manager configuration %q does not exist", configurationID)
 }
 
+// DeleteConfiguration stops a manager-owned mapping and removes it from the
+// manager. It is deliberately separate from DeleteProfile: KeyboarDeer
+// profiles are kept, and only their link to the removed configuration is
+// cleared so a later Apply creates a fresh configuration.
+func (a *App) DeleteConfiguration(configurationID string) (managerapi.Operation, error) {
+	store, err := a.profileStore()
+	if err != nil {
+		return managerapi.Operation{}, err
+	}
+	library, err := store.Load()
+	if err != nil {
+		return managerapi.Operation{}, err
+	}
+	for _, draft := range library.Profiles {
+		if draft.ManagerConfigurationID == configurationID && draft.ApplyPending != nil {
+			return managerapi.Operation{}, fmt.Errorf("profile %q has an apply with an unknown outcome; resolve it before removing this mapping", draft.Name)
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := a.canUse(ctx, "managed_configurations"); err != nil {
+		return managerapi.Operation{}, err
+	}
+	snapshot, err := a.manager.SnapshotGet(ctx)
+	if err != nil {
+		return managerapi.Operation{}, err
+	}
+	for _, configuration := range snapshot.Configurations {
+		if configuration.ID != configurationID {
+			continue
+		}
+		if configuration.Ownership != "managed" {
+			return managerapi.Operation{}, fmt.Errorf("external configurations are read-only in KeyboarDeer")
+		}
+		operation, err := a.manager.ConfigurationDelete(ctx, managerapi.ConfigurationDeleteParams{
+			ConfigurationID:  configuration.ID,
+			ExpectedRevision: configuration.DesiredRevision,
+		})
+		if err != nil {
+			return managerapi.Operation{}, err
+		}
+		if operation.State == "succeeded" {
+			if err := store.ClearConfigurationLink(configuration.ID); err != nil {
+				return operation, fmt.Errorf("the mapping was removed, but KeyboarDeer could not update its profile link: %w", err)
+			}
+		}
+		return operation, nil
+	}
+	return managerapi.Operation{}, fmt.Errorf("manager configuration %q does not exist", configurationID)
+}
+
 func (a *App) RecoverCorruptProfileStore() (string, error) {
 	store, err := a.profileStore()
 	if err != nil {

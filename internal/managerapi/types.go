@@ -249,3 +249,10 @@ type ConfigurationSetEnabledParams struct {
 type ConfigurationSetEnabledResult struct {
 	Operation Operation `json:"operation"`
 }
+
+// ConfigurationDeleteParams stops and removes a manager-owned configuration.
+// ExpectedRevision prevents deleting a newer revision applied by another client.
+type ConfigurationDeleteParams struct {
+	ConfigurationID  string `json:"configuration_id"`
+	ExpectedRevision uint64 `json:"expected_revision"`
+}
