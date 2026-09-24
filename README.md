@@ -35,58 +35,67 @@ and shape—one key at a time.
 - **Close the window. Keep typing.** The device manager remains an independent
   service, supervising your mappings even when the GUI is closed.
 
-These are design goals, not currently available features.
+These describe the product direction; implemented scope and remaining release
+work are summarized below.
 
 ## Still growing its antlers
 
-**Status: desktop foundation in progress.** This repository contains the project
-identity, low-fidelity wireframes, a clickable high-fidelity prototype, an API
-integration plan, and a Wails desktop shell. The selected stack is **Wails + Go
-+ Svelte 5 + TypeScript**. The shell deliberately keeps manager-dependent
-controls disabled until their real API integration is available.
+**Status: Linux desktop application implemented; pre-v1 release hardening.**
+KeyboarDeer is a **Wails + Go + Svelte 5 + TypeScript** desktop app and a client
+of [KMonad Device Manager](https://github.com/lukelex/kmonad-device-manager).
+Linux is the first release target. Development builds target manager v1.2.0 or
+later, and enable features according to the capabilities negotiated with the
+running service.
 
-The next milestones are:
+Implemented application workflows include:
 
-- [x] Design the choose → edit → review workflow in low- and high-fidelity mockups.
-- [x] Select the GUI stack and document the manager boundary.
-- [x] Scaffold the application with reproducible frontend/backend checks.
-- [ ] Connect the implemented manager API methods.
-- [ ] Ship a capability-aware, read-only device view.
-- [ ] Implement profiles, visual editing, and validation preview.
-- [ ] Connect safe apply and lifecycle operations as the manager provides them.
+- Live keyboard inventory, runtime state, and keyboard identification.
+- Persistent per-keyboard profiles, verified keyboard geometries, visual key
+  and layer editing, and undo/redo.
+- Automatic whole-draft validation, actionable diagnostics, and targeted
+  recovery for invalid assignments.
+- Explicit review and apply, managed configuration lifecycle, and recovery of
+  operations across reconnects.
+- Portable profile import/export, manager-rendered `.kbd` export, and
+  read-only viewing or explicit adoption of supported external configurations.
+- Linux build and install packaging with CI release artifacts.
+
+The remaining Linux v1 release gates are real-keyboard acceptance (including
+hotplug, multi-keyboard isolation, and continued manager supervision when the
+GUI closes), a clean-install end-to-end acceptance run, and first-time-user
+design review. After Linux v1, the roadmap expands the verified geometry catalog
+and advanced behaviors, then adds macOS and Windows support as manager backends
+and transports become available. Arbitrary external `.kbd` files are not
+visually imported.
 
 ### Run the desktop shell
 
-On Linux with the [documented prerequisites](docs/development.md), launch the current desktop app with:
+On Linux with the [documented prerequisites](docs/development.md), launch the desktop app with:
 
 ```sh
 ./scripts/desktop.sh
 ```
 
-Manager-dependent controls stay disabled until the connected manager advertises the required API capabilities.
+For live device workflows, run KMonad Device Manager v1.2.0 or later. When the
+manager is unavailable or does not advertise a required capability, the app
+explains the unavailable state and keeps the affected actions disabled. The
+browser-based Vite preview has no desktop bindings and does not simulate a
+manager connection.
 
-### Explore the design and plan
+### Explore the design and development plan
 
-The current interface work covers Keyboards, Setup, Identify, the bottom-palette
-Keymap editor, Layers, Diagnostics, and read-only External configuration.
-Profiles and Review & Apply are parked for a later iteration.
-Key edits are checked continuously in the current design: valid state is subtle,
-while invalid assignments explain their cause and offer per-key draft recovery.
+The standalone HTML mockups are interactive design prototypes; they simulate
+state and operations rather than connecting to the manager. The desktop app
+contains the implemented workflows described above.
 
-- [Interface mockups and viewing instructions](docs/design/README.md)
-- [Current high-fidelity workspace](docs/design/high-fidelity-workspace.html)
+- [Design prototypes and viewing instructions](docs/design/README.md)
+- [High-fidelity workspace prototype](docs/design/high-fidelity-workspace.html)
 - [Project description](docs/project-description.md)
 - [Verified manager API status](docs/manager-api-status.md)
 - [Integration roadmap](docs/gui-integration-roadmap.md)
-- [Completion checklist](TODO.md)
+- [Implementation and release checklist](TODO.md)
 - [Live validation and per-key recovery](docs/live-validation.md)
 - [Development setup and commands](docs/development.md)
-
-The manager already implements device listing, keypress identification, and
-candidate preview through API v1. Capability reporting, full snapshots,
-configuration lifecycle methods, and events remain upstream dependencies at the
-[reviewed revision](docs/manager-api-status.md). The prototype simulates both
-current and future flows; it does not access your keyboards.
 
 The guiding principle is simple: **the GUI is a companion; the service keeps
 the keyboards running.**
