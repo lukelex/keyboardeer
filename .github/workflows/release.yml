@@ -1,0 +1,73 @@
+name: Linux release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without the v prefix"
+        required: true
+        default: "0.1.0"
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.12"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install Linux build dependencies
+        run: sudo apt-get update && sudo apt-get install --yes libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config dpkg-dev
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Verify Go
+        run: |
+          go test ./...
+          go vet ./...
+      - name: Verify frontend
+        run: |
+          npm run check
+          npm run build
+        working-directory: frontend
+
+  package:
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.12"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install Linux packaging dependencies
+        run: sudo apt-get update && sudo apt-get install --yes libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config dpkg-dev
+      - name: Build release artifacts
+        env:
+          VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.version }}
+        run: scripts/package-linux-release.sh
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: keyboardeer-linux-${{ github.ref_name || inputs.version }}
+          path: dist/
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes

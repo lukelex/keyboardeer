@@ -101,3 +101,28 @@ registration on removal.
 wails build
 BINARY=build/bin/keyboardeer VERSION=0.1.0 scripts/package-deb.sh
 ```
+
+## CI release artifacts
+
+The `Linux release` workflow runs on Ubuntu 24.04 for manual dispatches and
+`v*` tags. It verifies Go and frontend tests, builds the Wails binary with the
+pinned v2.16.0 CLI, creates a Debian package and a portable amd64 tarball, and
+writes `SHA256SUMS`. Tagged runs publish the artifacts as a GitHub Release;
+manual runs retain them as workflow artifacts.
+
+The release package targets Linux amd64 and requires GTK3 and WebKitGTK 4.1 at
+runtime, plus a running same-user `kmonad-device-manager` v1.2.0 or newer.
+Installers register `*.kbdprofile.json` for KeyboarDeer. Updates replace the
+binary and registration files in place; uninstall with the package manager or
+`scripts/uninstall.sh` for a per-user installation.
+
+The packaging path can also be smoke-tested without modifying the host:
+
+```sh
+./scripts/smoke-test-release.sh
+```
+
+The Ubuntu 24.04 container builds the artifacts, verifies `SHA256SUMS`, checks
+Debian metadata, installs the package, confirms its binary/desktop/MIME files,
+and removes it again. It does not replace real-keyboard TEST-04 coverage or
+desktop rendering tests.

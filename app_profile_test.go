@@ -396,6 +396,37 @@ func TestAppDeletesManagedConfigurationButKeepsProfiles(t *testing.T) {
 	}
 }
 
+func TestAppDisablesManagedConfigurationWithFreshRevision(t *testing.T) {
+	var params managerapi.ConfigurationSetEnabledParams
+	endpoint := testManager(t, func(method string, rawParams json.RawMessage) string {
+		switch method {
+		case "session.hello":
+			return `{"selected_version":1,"server_id":"server-1","manager_version":"v1.2.0"}`
+		case "manager.get":
+			return managedCapabilityReply
+		case "snapshot.get":
+			return `{"state_revision":4,"event_cursor":{"server_id":"server-1","event_id":2,"state_revision":4},"devices":[],"configurations":[{"id":"cfg-1","name":"Typing","ownership":"managed","enabled":true,"device_id":"device-1","desired_revision":7,"active_revision":7,"runtime":{"phase":"running","reason_code":"runtime_running","reason":"running","connected":true,"healthy":true,"failure_count":0}}],"operations":[],"health":{"healthy":true,"reason_code":"manager_healthy","reason":"ok"}}`
+		case "configuration.set_enabled":
+			if err := json.Unmarshal(rawParams, &params); err != nil {
+				t.Error(err)
+			}
+			return `{"operation":{"id":"op-disable","kind":"lifecycle","state":"succeeded","resource":{"kind":"configuration","id":"cfg-1"},"reason_code":"operation_succeeded","reason":"configuration disabled","configuration_revision":8}}`
+		}
+		t.Errorf("unexpected manager method %q", method)
+		return `{}`
+	})
+	client := managerapi.New(managerapi.Options{Endpoint: endpoint, ClientName: "keyboardeer-test", ClientVersion: "test"})
+	app := &App{manager: client, profiles: profile.NewStore(filepath.Join(t.TempDir(), "profiles.json")), preferencesPath: filepath.Join(t.TempDir(), "preferences.json")}
+	defer app.manager.Close()
+	operation, err := app.SetConfigurationEnabled("cfg-1", false)
+	if err != nil || operation.State != "succeeded" {
+		t.Fatalf("disable = %#v, %v", operation, err)
+	}
+	if params.ConfigurationID != "cfg-1" || params.ExpectedRevision != 7 || params.Enabled {
+		t.Fatalf("disable params = %#v", params)
+	}
+}
+
 const managedCapabilityReply = `{"server_id":"server-1","manager_version":"v1.1.0","capabilities":[{"name":"managed_configurations","available":true,"reason_code":"capability_available","reason":"ready"}]}`
 const emptySnapshotReply = `{"state_revision":4,"event_cursor":{"server_id":"server-1","event_id":2,"state_revision":4},"devices":[],"configurations":[],"operations":[],"health":{"healthy":true,"reason_code":"manager_healthy","reason":"ok"}}`
 const linkedSnapshotReply = `{"state_revision":4,"event_cursor":{"server_id":"server-1","event_id":2,"state_revision":4},"devices":[],"configurations":[{"id":"cfg-1","name":"Typing","ownership":"managed","enabled":true,"device_id":"device-1","desired_revision":3,"active_revision":3,"runtime":{"phase":"running","reason_code":"runtime_running","reason":"running","connected":true,"healthy":true,"failure_count":0}}],"operations":[],"health":{"healthy":true,"reason_code":"manager_healthy","reason":"ok"}}`

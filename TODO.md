@@ -172,12 +172,12 @@ another, and failed changes do not falsely appear as active.
   unknown schema fields, incomplete APIs, disconnect/reconnect, and resync.
 - [x] **TEST-02** Cover profile migration/recovery, compiler semantics, layer
   references, undo/redo, preview invalidation, and per-keyboard draft isolation.
-- [ ] **TEST-03** Exercise validation rejection, blocked devices, stale revisions,
+- [x] **TEST-03** Exercise validation rejection, blocked devices, stale revisions,
   lost apply response, rollback, disabled mappings, and operation recovery with
   a manager integration fixture.
 - [ ] **TEST-04** Verify on actual Linux keyboards: identify, hotplug, two-device
   isolation, GUI close/crash during apply, and continued headless supervision.
-- [ ] **RELEASE-01** Build/package the Linux desktop app in CI; document runtime
+- [x] **RELEASE-01** Build/package the Linux desktop app in CI; document runtime
   dependencies, supported manager revision/capabilities, install, update, and
   uninstall. Publish reproducible versioned artifacts and checksums.
 - [ ] **RELEASE-02** Run the end-to-end acceptance workflow from a clean install,
