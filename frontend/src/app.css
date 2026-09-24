@@ -653,11 +653,6 @@ h1 {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.editor-heading .build-label {
-  font-size: 9px;
-  margin-left: auto;
-  padding: 5px 8px;
-}
 .editor-apply {
   flex: 0 0 auto;
   white-space: nowrap;
@@ -666,6 +661,7 @@ h1 {
   color: #647669;
   flex: 0 0 auto;
   font-size: 11px;
+  margin-left: auto;
   white-space: nowrap;
 }
 .draft-status[data-state="saving"] {
@@ -698,20 +694,30 @@ h1 {
   white-space: nowrap;
 }
 .configuration-indicator i {
-  background: #4f9b68;
+  background: #a9b3a8;
   border: 2px solid #f7f5ed;
   border-radius: 50%;
   box-shadow: 0 1px 4px rgb(24 53 44 / 20%);
   height: 10px;
+  transition: background-color 0.2s ease;
   width: 10px;
 }
-.configuration-indicator.checking {
+.configuration-indicator[data-state="checking"] i {
   background: #c4a260;
-  border: 2px solid #f7f5ed;
-  border-radius: 50%;
-  box-shadow: 0 1px 4px rgb(24 53 44 / 20%);
-  height: 12px;
-  width: 12px;
+}
+.configuration-indicator[data-state="valid"] i {
+  background: #4f9b68;
+}
+.configuration-indicator[data-state="blocked"] i {
+  background: #d98a2b;
+}
+.configuration-indicator[data-state="rejected"] i {
+  background: #c2412d;
+}
+@media (prefers-reduced-motion: reduce) {
+  .configuration-indicator i {
+    transition: none;
+  }
 }
 .editor-scroll-region {
   min-height: 0;
@@ -1476,8 +1482,7 @@ footer {
   .editor-heading {
     gap: 10px;
   }
-  .editor-title span,
-  .editor-heading .build-label {
+  .editor-title span {
     display: none;
   }
   .identify-art {

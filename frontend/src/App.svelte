@@ -262,6 +262,18 @@
     workspaceLive
       ? profilePreview
       : null;
+  // The validation dot is always shown; only its color and label change.
+  $: validationState = previewBusy
+    ? "checking"
+    : (currentPreview?.validation.outcome ?? "unchecked");
+  $: validationLabel =
+    {
+      checking: "Checking draft preview",
+      valid: "Valid configuration",
+      rejected: "Invalid configuration",
+      blocked: "Validation blocked",
+      unchecked: "Draft not validated",
+    }[validationState] ?? `Validation ${humanize(validationState)}`;
   $: canApply =
     !!activeProfile &&
     workspaceLive &&
@@ -1592,11 +1604,6 @@
             <h1 id="editor-title">{activeProfile.name}</h1>
             <span>{selectedDevice?.display_name ?? "Keyboard"}</span>
           </div>
-          <span class="build-label"
-            >{activeProfile.manager_configuration_id
-              ? "MANAGED PROFILE"
-              : "DRAFT ONLY"}</span
-          >
           <span class="draft-status" data-state={draftSaveState} role="status"
             >{draftStatusText}</span
           >
@@ -1618,17 +1625,14 @@
               title="Redo (Ctrl+Shift+Z)">↷</button
             >
           </div>
-          {#if previewBusy}
-            <span
-              class="configuration-indicator checking"
-              aria-label="Checking draft preview"
-            ></span>
-          {:else if currentPreview?.validation.outcome === "valid"}
-            <span
-              class="configuration-indicator valid"
-              aria-label="Valid configuration"><i></i>Valid configuration</span
-            >
-          {/if}
+          <span
+            class="configuration-indicator"
+            data-state={validationState}
+            role="img"
+            aria-label={validationLabel}
+            title={validationLabel}
+            ><i></i>{#if validationState === "valid"}Valid configuration{/if}</span
+          >
           <button
             class="button primary editor-apply"
             type="button"

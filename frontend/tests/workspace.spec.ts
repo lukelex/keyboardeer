@@ -273,6 +273,7 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   expect(editorHeading).not.toBeNull();
   expect(Math.round(editorHeading!.height)).toBeGreaterThanOrEqual(54);
   await expect(page.locator(".editor-key")).toHaveCount(5);
+  await expect(page.locator(".configuration-indicator i")).toBeVisible();
   const firstEditorKey = await page
     .locator(".editor-key")
     .first()
@@ -394,7 +395,11 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   await expect(page.getByText("No keys match “zzz”.")).toBeVisible();
   await keySearch.fill("");
   await expect(paletteKeys).toHaveCount(5);
-  await expect(page.locator(".configuration-indicator.valid")).toBeVisible();
+  const indicator = page.locator(".configuration-indicator");
+  await expect(indicator).toHaveAttribute("data-state", "valid");
+  await expect(indicator).toHaveAccessibleName("Valid configuration");
+  await expect(page.getByText("MANAGED PROFILE")).toHaveCount(0);
+  await expect(page.getByText("DRAFT ONLY")).toHaveCount(0);
   await expect(
     page.getByText("Manager preview: Valid", { exact: true }),
   ).toHaveCount(0);
