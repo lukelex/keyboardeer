@@ -321,6 +321,8 @@
   let rawConfigurationBusy = false;
   let externalContent: ConfigurationContentState | null = null;
   let externalContentBusy = false;
+  const firstRunStorageKey = "keyboardeer-first-run-complete";
+  let firstRunOpen = false;
   let identifyTimeoutMS = 15_000;
   let identifyDeadlineMS = 0;
   let identifyRemainingSeconds = 0;
@@ -536,6 +538,20 @@
     return value
       .replace(/_/g, " ")
       .replace(/\b\w/g, (letter: string) => letter.toUpperCase());
+  }
+  function managerGuidance(status: ManagerStatus) {
+    if (status.state === "browser_preview") {
+      return "Use the native window from scripts/desktop.sh to connect to the local manager.";
+    }
+    if (status.state === "reconnecting" || status.state === "unavailable") {
+      return "Make sure kmonad-device-manager v1.2.0 or newer is running for this user, then wait for KeyboarDeer to reconnect.";
+    }
+    if (status.state === "incomplete") {
+      return status.capability === "manager.get"
+        ? "Upgrade the manager to a release with the v1 API and capability reporting."
+        : "The manager is reachable but has not enabled this capability; check its backend and permissions.";
+    }
+    return "KeyboarDeer will keep the manager-owned runtime untouched until the required capability is available.";
   }
   function isConnected(device: Device) {
     return device.availability === "connected";
@@ -969,6 +985,16 @@
     );
     selectedGeometryID ||= geometries[0]?.id ?? "";
     view = "setup";
+  }
+  function dismissFirstRun() {
+    firstRunOpen = false;
+    localStorage.setItem(firstRunStorageKey, "1");
+  }
+  function startFirstRun() {
+    const device = visibleBoards.find(isConfigurable);
+    if (!device) return;
+    dismissFirstRun();
+    openDraft(device);
   }
   async function detectLayout() {
     if (!selectedDevice || inputScanBusy) return;
@@ -2100,6 +2126,7 @@
   }
 
   onMount(() => {
+    firstRunOpen = localStorage.getItem(firstRunStorageKey) !== "1";
     if (hasDesktopBinding("Preferences")) {
       void Preferences()
         .then((value) => {
@@ -2282,6 +2309,7 @@
                     : "Manager unavailable"}
               </h2>
               <p>{workspace.status.message}</p>
+              <p class="notice-guidance">{managerGuidance(workspace.status)}</p>
               {#if workspace.status.capability}<small
                   >Required capability: {workspace.status.capability}</small
                 >{/if}
@@ -2307,6 +2335,33 @@
           </section>
         {/if}
 
+        {#if firstRunOpen && workspaceLive && canShowDevices && visibleBoards.length > 0 && profiles.length === 0 && !profileStoreProblem}
+          <section class="first-run-card" aria-labelledby="first-run-title">
+            <div class="first-run-icon" aria-hidden="true">⌨</div>
+            <div>
+              <p class="eyebrow">WELCOME TO KEYBOARDEER</p>
+              <h2 id="first-run-title">Start with a local keyboard draft</h2>
+              <p>
+                Choose a keyboard, confirm its verified physical layout, then
+                edit a draft. Nothing changes on the keyboard until you review
+                and apply it.
+              </p>
+              <ol>
+                <li>Choose a connected keyboard.</li>
+                <li>Detect or select its verified layout.</li>
+                <li>Map keys, preview the result, and apply when ready.</li>
+              </ol>
+              <div class="first-run-actions">
+                <Button variant="primary" type="button" on:click={startFirstRun}
+                  >Set up a keyboard</Button
+                >
+                <Button variant="link" type="button" on:click={dismissFirstRun}
+                  >Skip for now</Button
+                >
+              </div>
+            </div>
+          </section>
+        {/if}
         {#if pendingProfileFile}
           <section
             class="manager-notice"

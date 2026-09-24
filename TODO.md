@@ -164,13 +164,13 @@ another, and failed changes do not falsely appear as active.
 - [x] **UX-01** Complete keyboard navigation, useful accessible names, focus
   restoration, screen-reader announcements, contrast, scalable type, 200% zoom,
   small-window behavior, and reduced motion.
-- [ ] **UX-02** Provide first-run setup, missing-manager guidance, structured
+- [x] **UX-02** Provide first-run setup, missing-manager guidance, structured
   diagnostics, supported-feature explanations, and concise contextual help.
 - [x] **DESKTOP-01** Add app identity/icons, window-state persistence, and
   documented close/quit behavior; decide whether a tray adds value to v1.
 - [x] **TEST-01** Cover socket framing, concurrent response matching, deadlines,
   unknown schema fields, incomplete APIs, disconnect/reconnect, and resync.
-- [ ] **TEST-02** Cover profile migration/recovery, compiler semantics, layer
+- [x] **TEST-02** Cover profile migration/recovery, compiler semantics, layer
   references, undo/redo, preview invalidation, and per-keyboard draft isolation.
 - [ ] **TEST-03** Exercise validation rejection, blocked devices, stale revisions,
   lost apply response, rollback, disabled mappings, and operation recovery with

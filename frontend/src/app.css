@@ -291,6 +291,57 @@ h1 {
   margin-top: 5px;
   overflow-wrap: anywhere;
 }
+.manager-notice .notice-guidance {
+  border-top: 1px solid rgb(121 104 74 / 22%);
+  font-size: 13px;
+  margin-top: 10px;
+  padding-top: 9px;
+}
+.first-run-card {
+  align-items: flex-start;
+  background: #f0f6ea;
+  border: 1px solid #cbdcc2;
+  border-radius: 14px;
+  display: flex;
+  gap: 17px;
+  margin: 28px 0 32px;
+  padding: 24px;
+}
+.first-run-icon {
+  align-items: center;
+  background: #d9e9d0;
+  border-radius: 50%;
+  color: #35604c;
+  display: grid;
+  flex: 0 0 auto;
+  font-size: 22px;
+  height: 42px;
+  place-items: center;
+  width: 42px;
+}
+.first-run-card h2 {
+  color: #234438;
+  font-size: 20px;
+  margin: 0;
+}
+.first-run-card p:not(.eyebrow) {
+  color: #536b5a;
+  line-height: 1.55;
+  margin: 7px 0;
+  max-width: 700px;
+}
+.first-run-card ol {
+  color: #536b5a;
+  line-height: 1.7;
+  margin: 10px 0 14px;
+  padding-left: 21px;
+}
+.first-run-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
 .list-caption {
   border-bottom: 1px solid #dfe5d6;
   color: #75846d;
