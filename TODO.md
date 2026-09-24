@@ -201,7 +201,7 @@ Manager implementation handover:
 - [x] **MGR-05** Define and implement revision-checked external content reads and
   manager-rendered managed `.kbd` export with explicit ownership/rendering
   boundaries. GUI use of these methods remains tracked under IO-01/EXTERNAL-01.
-- [ ] **MGR-06** Offer a read-only, capability-gated device input-capability scan
+- [x] **MGR-06** Offer a read-only, capability-gated device input-capability scan
   that attests a versioned key-token set for a connected device, with optional
   bounded single-key probe. Facts only: no layout/product inference, no mapping
   change. Handover:

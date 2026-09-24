@@ -1,7 +1,7 @@
 # KeyboarDeer ↔ Manager API compatibility matrix
 
-**Source review:** 2026-09-24 at manager `origin/main` / v1.1.0 commit
-[`712f4aa7a146d14c3e967502ed661ec039664b7d`](https://github.com/lukelex/kmonad-device-manager/commit/712f4aa7a146d14c3e967502ed661ec039664b7d).
+**Source review:** 2026-09-24 at manager `v1.2.0` commit
+[`6fd18e804b8cacece6a4317f77f2941f6c30ab80`](https://github.com/lukelex/kmonad-device-manager/commit/6fd18e804b8cacece6a4317f77f2941f6c30ab80).
 
 **Development smoke test:** On 2026-09-23, KeyboarDeer built that exact source
 in an isolated worktree and exercised `session.hello`, `manager.get`,
@@ -61,9 +61,11 @@ Relevant source:
 | `configuration.list` | Implemented; returns managed and external configuration resources without paths/content. | Partially used through authoritative snapshots. | Inventory includes ownership and revisions; raw external text uses the separate content method. |
 | `configuration.content.get` | Implemented in v1.1.0; bounded external UTF-8 read requires the current content revision and returns a digest. | Not yet integrated. | Read-only external source display; manager paths are not exposed. |
 | `configuration.export` | Implemented in v1.1.0 for immutable manager-rendered managed revisions using `manager_rendered_kbd`. | Implemented for the editor's read-only View .kbd action. | Device-bound runnable artifact, never a portable GUI profile. |
+| `device.inputscan.get` | Implemented in v1.2.0. Read-only `kmonad-v1` token evidence with digest and generation. | Implemented; capability-gated and matched only against verified catalog templates. | Does not infer a layout or inspect devices directly; manual selection remains available. |
 | `device.identify.start` | Implemented. One bounded 1–30-second session for a connected device. | Implemented. | Normal UI is capability-gated; harness can exercise it. |
 | `device.identify.cancel` | Implemented. | Implemented. | Only while the matching identification operation is live. |
 | `operation.get` | Implemented over the retained operation store, despite the historical helper name. | Implemented. | Can read identify and retained apply/lifecycle operations. Polling is useful before events are integrated. |
+| `device.inputscan.probe` / `device.inputscan.cancel` | Implemented in v1.2.0 as optional bounded single-key observation. | Not yet integrated; not required for ranked scan candidates. | Add only if an ambiguous candidate needs explicit keypress disambiguation. |
 | `validation.preview` | Implemented. Model preview is side-effect-free; returns valid, rejected, or blocked, includes a digest of the submitted behavior, and only maps unambiguous KMonad error ranges to one submitted `deflayer` assignment. | Implemented; the client preserves optional locations and refuses to map absent/unknown scopes, digest mismatches, blocked results, or ambiguous source-map matches. | Use `{model:{device_id,behavior}}`; GUI profiles never supply `defcfg` or `device-file`. |
 | `configuration.apply` | Implemented by `2516765`; transactional render, validation, persistence, activation confirmation, and rollback pipeline. | Not used directly. | KeyboarDeer uses the explicit create/update routes so a local profile retains one opaque managed-configuration ID. |
 | `configuration.create` / `configuration.update` | Implemented. Create accepts name/model; update requires configuration ID and expected revision. | Implemented. | The Apply control sends a current validated draft directly; updates read the current authoritative desired revision and submit it as `expected_revision`. |

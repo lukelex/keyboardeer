@@ -25,6 +25,8 @@
     IdentifyCancel,
     IdentifyOperation,
     IdentifyStart,
+    InputScan,
+    MatchInputScan,
     ImportProfile,
     ImportProfileFromPath,
     Info,
@@ -49,6 +51,8 @@
     type GeometryTemplate,
     type ManagerStatus,
     type ManagerWorkspace,
+    type InputScan as InputScanState,
+    type ScanMatch,
     type Operation,
     type Profile,
     type ProfileApplyResult,
@@ -248,6 +252,10 @@
   let profiles: Profile[] = [];
   let geometries: GeometryTemplate[] = [];
   let selectedGeometryID = "";
+  let inputScan: InputScanState | null = null;
+  let inputScanMatches: ScanMatch[] = [];
+  let inputScanBusy = false;
+  let inputScanNotice = "";
   let profileName = "";
   let activeProfile: Profile | null = null;
   let selectedSourceKey = "";
@@ -918,6 +926,9 @@
     closeProfiles();
     activeProfile = null;
     profilePreview = null;
+    inputScan = null;
+    inputScanMatches = [];
+    inputScanNotice = "";
     profileName = uniqueProfileName(
       selectedDevice.display_name
         ? `${selectedDevice.display_name} profile`
@@ -925,6 +936,34 @@
     );
     selectedGeometryID ||= geometries[0]?.id ?? "";
     view = "setup";
+  }
+  async function detectLayout() {
+    if (!selectedDevice || inputScanBusy) return;
+    inputScanBusy = true;
+    inputScanNotice = "";
+    inputScan = null;
+    inputScanMatches = [];
+    try {
+      const scan = await InputScan(selectedDevice.id);
+      if (scan.token_namespace !== "kmonad-v1") {
+        throw new Error(`Unsupported input scan namespace: ${scan.token_namespace}`);
+      }
+      inputScan = scan;
+      inputScanMatches = await MatchInputScan(scan.keys);
+      if (!inputScanMatches.some((match) => match.kind === "exact")) {
+        inputScanNotice =
+          "No exact verified layout was found. Review the candidates below or choose a layout manually.";
+      }
+    } catch (error) {
+      inputScanNotice = explain(error);
+    } finally {
+      inputScanBusy = false;
+    }
+  }
+  function acceptDetectedLayout(match: ScanMatch) {
+    if (match.kind === "partial") return;
+    selectedGeometryID = match.geometry_id;
+    feedback = `${match.name} selected from manager-attested keyboard capabilities. Confirm by creating the draft.`;
   }
   function behaviorFor(sourceKey: string): ProfileBehavior | undefined {
     return activeProfile?.assignments?.find(
@@ -1351,6 +1390,9 @@
       return;
     }
     activeProfile = null;
+    inputScan = null;
+    inputScanMatches = [];
+    inputScanNotice = "";
     profileName = device.display_name
       ? `${device.display_name} draft`
       : "Keyboard draft";
@@ -2632,6 +2674,46 @@
                 ?.description}
             </p>
           {/if}
+          <div class="layout-detection">
+            <Button
+              variant="secondary"
+              type="button"
+              on:click={detectLayout}
+              disabled={inputScanBusy ||
+                !hasDesktopBinding("InputScan") ||
+                !isConnected(selectedDevice)}
+              >{inputScanBusy ? "Scanning keyboard…" : "Detect layout"}</Button
+            >
+            {#if !hasDesktopBinding("InputScan")}
+              <p class="field-help">Layout detection requires the desktop manager connection.</p>
+            {/if}
+            {#if inputScan}
+              <p class="field-help">
+                Manager attested {inputScan.keys.length} key tokens
+                {#if inputScan.unmapped_count}and {inputScan.unmapped_count} additional unmapped keys{/if}.
+                Evidence generation {inputScan.generation}.
+              </p>
+              <div class="layout-candidates" aria-live="polite">
+                <p class="eyebrow">VERIFIED CANDIDATES</p>
+                {#each inputScanMatches as match (match.geometry_id)}
+                  <button
+                    class="layout-candidate"
+                    class:selected={match.geometry_id === selectedGeometryID}
+                    type="button"
+                    disabled={match.kind === "partial"}
+                    on:click={() => acceptDetectedLayout(match)}
+                  >
+                    <span>
+                      <strong>{match.name}</strong>
+                      <small>{match.kind} · {match.missing} missing · {match.extra} extra</small>
+                    </span>
+                    <span>{match.geometry_id === selectedGeometryID ? "Selected" : "Choose"}</span>
+                  </button>
+                {/each}
+              </div>
+            {/if}
+            {#if inputScanNotice}<p class="inline-feedback" role="status">{inputScanNotice}</p>{/if}
+          </div>
           <p class="boundary-note">
             Layout selection is explicit. KeyboarDeer does not guess a physical
             layout from the keyboard’s name.

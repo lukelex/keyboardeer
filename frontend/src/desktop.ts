@@ -36,6 +36,22 @@ export interface Device {
   reason_code: string;
   reason: string;
 }
+export interface InputScan {
+  device_id: string;
+  token_namespace: string;
+  keys: string[];
+  unmapped_count: number;
+  generation: number;
+  digest: string;
+  observed_at: string;
+}
+export interface ScanMatch {
+  geometry_id: string;
+  name: string;
+  kind: "exact" | "superset" | "subset" | "partial" | string;
+  missing: number;
+  extra: number;
+}
 export interface ManagerWorkspace {
   status: ManagerStatus;
   snapshot?: Snapshot;
@@ -277,6 +293,8 @@ type AppBindings = {
   IdentifyStart?: (deviceID: string, timeoutMS: number) => Promise<Operation>;
   IdentifyCancel?: (operationID: string) => Promise<Operation>;
   IdentifyOperation?: (operationID: string) => Promise<Operation>;
+  InputScan?: (deviceID: string) => Promise<InputScan>;
+  MatchInputScan?: (tokens: string[]) => Promise<ScanMatch[]>;
   IntegrationDeviceList?: () => Promise<{ devices: Device[] }>;
   IntegrationIdentifyStart?: (
     deviceID: string,
@@ -399,6 +417,10 @@ export const IdentifyCancel = (id: string) =>
   binding<(id: string) => Promise<Operation>>("IdentifyCancel")(id);
 export const IdentifyOperation = (id: string) =>
   binding<(id: string) => Promise<Operation>>("IdentifyOperation")(id);
+export const InputScan = (deviceID: string) =>
+  binding<(deviceID: string) => Promise<InputScan>>("InputScan")(deviceID);
+export const MatchInputScan = (tokens: string[]) =>
+  binding<(tokens: string[]) => Promise<ScanMatch[]>>("MatchInputScan")(tokens);
 export const IntegrationDeviceList = () =>
   binding<() => Promise<{ devices: Device[] }>>("IntegrationDeviceList")();
 export const IntegrationIdentifyStart = (id: string, timeout: number) =>

@@ -1519,6 +1519,31 @@ func (a *App) IdentifyOperation(operationID string) (managerapi.Operation, error
 	return a.manager.OperationGet(ctx, operationID)
 }
 
+// InputScan reads manager-attested key capability evidence and ranks only the
+// explicitly verified geometry catalog. The manager remains responsible for
+// device access and token translation; the GUI only interprets the evidence.
+func (a *App) InputScan(deviceID string) (managerapi.InputScan, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := a.canUse(ctx, "device_input_scan"); err != nil {
+		return managerapi.InputScan{}, err
+	}
+	scan, err := a.manager.InputScan(ctx, managerapi.InputScanParams{DeviceID: deviceID})
+	if err != nil {
+		return managerapi.InputScan{}, err
+	}
+	if scan.TokenNamespace != "kmonad-v1" {
+		return managerapi.InputScan{}, fmt.Errorf("unsupported input scan token namespace %q", scan.TokenNamespace)
+	}
+	return scan, nil
+}
+
+// MatchInputScan interprets a previously returned scan against the verified
+// catalog. It does not contact the manager or select a layout automatically.
+func (a *App) MatchInputScan(tokens []string) ([]geometry.ScanMatch, error) {
+	return geometry.MatchInputScan(tokens)
+}
+
 // The following bindings support explicitly labelled integration development.
 // They do not replace normal capability-gated application flows.
 func (a *App) IntegrationDeviceList() (managerapi.DeviceListResult, error) {

@@ -134,6 +134,28 @@ type DeviceListResult struct {
 	Devices []Device `json:"devices"`
 }
 
+// InputScan is read-only evidence from the manager about the key tokens a
+// connected input device can emit. The token namespace and generation are
+// required to prevent clients from comparing evidence from different
+// vocabularies or stale device identities.
+type InputScan struct {
+	DeviceID       string   `json:"device_id"`
+	TokenNamespace string   `json:"token_namespace"`
+	Keys           []string `json:"keys"`
+	UnmappedCount  int      `json:"unmapped_count"`
+	Generation     int      `json:"generation"`
+	Digest         string   `json:"digest"`
+	ObservedAt     string   `json:"observed_at"`
+}
+
+type InputScanResult struct {
+	InputScan InputScan `json:"inputscan"`
+}
+
+type InputScanParams struct {
+	DeviceID string `json:"device_id"`
+}
+
 type RuntimeState struct {
 	Phase        string `json:"phase"`
 	ReasonCode   string `json:"reason_code"`

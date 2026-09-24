@@ -430,6 +430,11 @@ func (c *APIClient) DeviceList(ctx context.Context) (DeviceListResult, error) {
 	var result DeviceListResult
 	return result, c.call(ctx, "device.list", map[string]any{}, &result)
 }
+func (c *APIClient) InputScan(ctx context.Context, params InputScanParams) (InputScan, error) {
+	var result InputScanResult
+	err := c.call(ctx, "device.inputscan.get", params, &result)
+	return result.InputScan, err
+}
 func (c *APIClient) IdentifyStart(ctx context.Context, params IdentifyStartParams) (Operation, error) {
 	var result struct {
 		Operation Operation `json:"operation"`
