@@ -3941,9 +3941,10 @@
           </section>
         {:else}
           <section class="raw-external-unavailable">
-            <strong>Raw source is available through the manager</strong>
+            <strong>Raw KMonad source is unavailable</strong>
             <p>
-              Select View raw source on an external configuration. KeyboarDeer
+              Select View raw source on an external configuration when the
+              manager advertises its access-controlled content API. KeyboarDeer
               never reads manager-owned files directly.
             </p>
           </section>

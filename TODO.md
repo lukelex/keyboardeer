@@ -154,8 +154,7 @@ Implementation handover for the remaining recovery work:
   runnable device-specific `.kbd` file.
 - [x] **EXTERNAL-01** Display external runtime state and, when supported, raw
   configuration content. Full arbitrary `.kbd` visual import is outside v1.
-  The content API is available in manager v1.1.0; GUI content display remains
-  future integration work.
+  The content API is accessed through the manager's revision-checked GUI flow.
 
 **Exit:** edit → preview → apply works for one keyboard without disturbing
 another, and failed changes do not falsely appear as active.
