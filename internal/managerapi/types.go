@@ -176,6 +176,7 @@ type Configuration struct {
 	ActiveRevision  uint64       `json:"active_revision"`
 	Runtime         RuntimeState `json:"runtime"`
 	LastOperation   *Operation   `json:"last_operation,omitempty"`
+	ContentRevision uint64       `json:"content_revision,omitempty"`
 }
 
 type Snapshot struct {
@@ -301,5 +302,18 @@ type ConfigurationExportResult struct {
 	Revision        uint64 `json:"revision"`
 	Digest          string `json:"digest"`
 	Format          string `json:"format"`
+	Content         string `json:"content"`
+}
+
+type ConfigurationContentParams struct {
+	ConfigurationID  string `json:"configuration_id"`
+	ExpectedRevision uint64 `json:"expected_revision"`
+}
+
+type ConfigurationContentResult struct {
+	ConfigurationID string `json:"configuration_id"`
+	Ownership       string `json:"ownership"`
+	ContentRevision uint64 `json:"content_revision"`
+	Digest          string `json:"digest"`
 	Content         string `json:"content"`
 }

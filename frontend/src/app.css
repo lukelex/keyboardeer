@@ -606,6 +606,25 @@ h1 {
   line-height: 1.45;
   margin: 6px 0 0;
 }
+.external-detail-list button {
+  margin-top: 9px;
+}
+.raw-external-content {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+.raw-external-heading {
+  color: #486453;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  justify-content: space-between;
+}
+.raw-external-heading small {
+  color: #647669;
+  font: 11px ui-monospace, SFMono-Regular, Consolas, monospace;
+}
 .raw-external-unavailable {
   background: #fcf6e8;
   border: 1px solid #dfcea4;

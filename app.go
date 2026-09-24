@@ -296,6 +296,11 @@ func (a *App) Info() AppInfo {
 // have been explicitly verified. It does not infer a layout from device names.
 func (a *App) Geometries() []geometry.Template { return geometry.List() }
 
+// DeviceTemplates returns brand/model-specific community presentations. Each
+// entry references a verified geometry; these bindings are for discovery and
+// visual selection only, never automatic layout inference.
+func (a *App) DeviceTemplates() []geometry.DeviceTemplate { return geometry.DeviceTemplates() }
+
 // Profiles are application-owned editable drafts. None of these methods access
 // a device or mutate a manager configuration.
 func (a *App) Profiles() ([]profile.Profile, error) {
@@ -1112,6 +1117,57 @@ func (a *App) ExportConfiguration(configurationID string) (managerapi.Configurat
 		})
 	}
 	return managerapi.ConfigurationExportResult{}, fmt.Errorf("manager configuration %q does not exist", configurationID)
+}
+
+// SaveConfigurationExport asks the manager for the current device-bound .kbd
+// artifact and writes it only through a user-selected save dialog. The GUI
+// never constructs or edits manager-owned defcfg/device-file content.
+func (a *App) SaveConfigurationExport(configurationID string) error {
+	if a.ctx == nil {
+		return fmt.Errorf("desktop file dialogs are unavailable")
+	}
+	export, err := a.ExportConfiguration(configurationID)
+	if err != nil {
+		return err
+	}
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "Save manager-rendered KMonad configuration",
+		DefaultFilename: "keyboardeer.kbd",
+		Filters:         []runtime.FileFilter{{DisplayName: "KMonad configuration", Pattern: "*.kbd"}},
+	})
+	if err != nil || path == "" {
+		return err
+	}
+	return os.WriteFile(path, []byte(export.Content), 0o600)
+}
+
+// ConfigurationContent reads an external configuration only through the
+// manager's revision-checked, access-controlled content API.
+func (a *App) ConfigurationContent(configurationID string, expectedRevision uint64) (managerapi.ConfigurationContentResult, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := a.canUse(ctx, "configuration_content_read"); err != nil {
+		return managerapi.ConfigurationContentResult{}, err
+	}
+	snapshot, err := a.manager.SnapshotGet(ctx)
+	if err != nil {
+		return managerapi.ConfigurationContentResult{}, err
+	}
+	for _, configuration := range snapshot.Configurations {
+		if configuration.ID != configurationID {
+			continue
+		}
+		if configuration.Ownership != "external" {
+			return managerapi.ConfigurationContentResult{}, fmt.Errorf("manager content is available only for external configurations")
+		}
+		if expectedRevision == 0 {
+			expectedRevision = configuration.ContentRevision
+		}
+		return a.manager.ConfigurationContent(ctx, managerapi.ConfigurationContentParams{
+			ConfigurationID: configurationID, ExpectedRevision: expectedRevision,
+		})
+	}
+	return managerapi.ConfigurationContentResult{}, fmt.Errorf("manager configuration %q does not exist", configurationID)
 }
 
 // DeleteConfiguration stops a manager-owned mapping and removes it from the

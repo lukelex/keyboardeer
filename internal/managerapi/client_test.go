@@ -535,6 +535,35 @@ func TestConfigurationExportRequestsManagerRenderedKBD(t *testing.T) {
 	}
 }
 
+func TestConfigurationContentUsesExpectedExternalRevision(t *testing.T) {
+	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
+		switch request.Method {
+		case "session.hello":
+			writeResult(t, rw, request.ID, `{"selected_version":1,"server_id":"server","manager_version":"test"}`)
+		case "configuration.content.get":
+			var params ConfigurationContentParams
+			if err := json.Unmarshal(request.Params, &params); err != nil {
+				t.Error(err)
+				return
+			}
+			if params.ConfigurationID != "external-1" || params.ExpectedRevision != 42 {
+				t.Errorf("unexpected content params: %#v", params)
+			}
+			writeResult(t, rw, request.ID, `{"configuration_id":"external-1","ownership":"external","content_revision":42,"digest":"sha256:abc","content":"(defcfg)"}`)
+		default:
+			t.Errorf("unexpected method %s", request.Method)
+		}
+	})
+	client := New(Options{Endpoint: socket})
+	defer client.Close()
+	result, err := client.ConfigurationContent(context.Background(), ConfigurationContentParams{
+		ConfigurationID: "external-1", ExpectedRevision: 42,
+	})
+	if err != nil || result.Ownership != "external" || result.ContentRevision != 42 || result.Content != "(defcfg)" {
+		t.Fatalf("content = %#v, %v", result, err)
+	}
+}
+
 func TestWorkspaceDoesNotFetchSnapshotWhenManagerGetIsUnsupported(t *testing.T) {
 	var methods []string
 	var methodsMu sync.Mutex

@@ -78,6 +78,14 @@ export interface Configuration {
   active_revision: number;
   runtime: RuntimeState;
   last_operation?: Operation | null;
+  content_revision?: number;
+}
+export interface ConfigurationContent {
+  configuration_id: string;
+  ownership: string;
+  content_revision: number;
+  digest: string;
+  content: string;
 }
 export interface ConfigurationExport {
   configuration_id: string;
@@ -124,6 +132,21 @@ export interface GeometryTemplate {
     width: number;
     gap_before?: number;
   }>;
+}
+export interface DeviceTemplateEvidence {
+  kind: string;
+  url: string;
+  note?: string;
+}
+export interface DeviceTemplate {
+  id: string;
+  name: string;
+  brand: string;
+  model: string;
+  variant?: string;
+  geometry_id: string;
+  description: string;
+  evidence: DeviceTemplateEvidence[];
 }
 export interface ProfileLayer {
   id: string;
@@ -259,6 +282,7 @@ type AppBindings = {
   ManagerStatus?: () => Promise<ManagerStatus>;
   Workspace?: () => Promise<ManagerWorkspace>;
   Geometries?: () => Promise<GeometryTemplate[]>;
+  DeviceTemplates?: () => Promise<DeviceTemplate[]>;
   Profiles?: () => Promise<Profile[]>;
   CreateProfile?: (
     deviceID: string,
@@ -288,6 +312,11 @@ type AppBindings = {
   ExportConfiguration?: (
     configurationID: string,
   ) => Promise<ConfigurationExport>;
+  SaveConfigurationExport?: (configurationID: string) => Promise<void>;
+  ConfigurationContent?: (
+    configurationID: string,
+    expectedRevision: number,
+  ) => Promise<ConfigurationContent>;
   RecoverCorruptProfileStore?: () => Promise<string>;
   ProfileStoreStatus?: () => Promise<ProfileStoreStatus>;
   IdentifyStart?: (deviceID: string, timeoutMS: number) => Promise<Operation>;
@@ -341,6 +370,8 @@ export const Workspace = () =>
   binding<() => Promise<ManagerWorkspace>>("Workspace")();
 export const Geometries = () =>
   binding<() => Promise<GeometryTemplate[]>>("Geometries")();
+export const DeviceTemplates = () =>
+  binding<() => Promise<DeviceTemplate[]>>("DeviceTemplates")();
 export const Profiles = () => binding<() => Promise<Profile[]>>("Profiles")();
 export const CreateProfile = (
   deviceID: string,
@@ -404,6 +435,17 @@ export const ExportConfiguration = (configurationID: string) =>
   binding<(configurationID: string) => Promise<ConfigurationExport>>(
     "ExportConfiguration",
   )(configurationID);
+export const SaveConfigurationExport = (configurationID: string) =>
+  binding<(configurationID: string) => Promise<void>>("SaveConfigurationExport")(
+    configurationID,
+  );
+export const ConfigurationContent = (
+  configurationID: string,
+  expectedRevision: number,
+) =>
+  binding<
+    (configurationID: string, expectedRevision: number) => Promise<ConfigurationContent>
+  >("ConfigurationContent")(configurationID, expectedRevision);
 export const RecoverCorruptProfileStore = () =>
   binding<() => Promise<string>>("RecoverCorruptProfileStore")();
 export const ProfileStoreStatus = () =>

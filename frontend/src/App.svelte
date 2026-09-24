@@ -20,6 +20,8 @@
     DeleteProfile,
     DuplicateProfile,
     ExportConfiguration,
+    SaveConfigurationExport,
+    ConfigurationContent,
     ExportProfile,
     Geometries,
     IdentifyCancel,
@@ -47,6 +49,7 @@
     type Capability,
     type Configuration,
     type ConfigurationExport,
+    type ConfigurationContent as ConfigurationContentState,
     type Device,
     type GeometryTemplate,
     type ManagerStatus,
@@ -316,6 +319,8 @@
   let rawConfiguration: ConfigurationExport | null = null;
   let rawConfigurationOpen = false;
   let rawConfigurationBusy = false;
+  let externalContent: ConfigurationContentState | null = null;
+  let externalContentBusy = false;
   let identifyTimeoutMS = 15_000;
   let identifyDeadlineMS = 0;
   let identifyRemainingSeconds = 0;
@@ -852,6 +857,34 @@
       feedback = explain(error);
     } finally {
       rawConfigurationBusy = false;
+    }
+  }
+  async function saveRawConfiguration() {
+    const configurationID = activeProfile?.manager_configuration_id;
+    if (!configurationID || rawConfigurationBusy) return;
+    rawConfigurationBusy = true;
+    try {
+      await SaveConfigurationExport(configurationID);
+      feedback = "Manager-rendered .kbd configuration saved.";
+    } catch (error) {
+      feedback = explain(error);
+    } finally {
+      rawConfigurationBusy = false;
+    }
+  }
+  async function viewExternalContent(configuration: Configuration) {
+    if (externalContentBusy) return;
+    externalContentBusy = true;
+    externalContent = null;
+    try {
+      externalContent = await ConfigurationContent(
+        configuration.id,
+        configuration.content_revision ?? 0,
+      );
+    } catch (error) {
+      feedback = explain(error);
+    } finally {
+      externalContentBusy = false;
     }
   }
   async function importProfileForDevice(filePath = "") {
@@ -2773,6 +2806,19 @@
                   : "View the manager-rendered KMonad configuration for this keyboard."}
               >{rawConfigurationBusy ? "Loading .kbd…" : "View .kbd"}</Button
             >
+            <Button
+              variant="secondary"
+              className="profiles-trigger"
+              type="button"
+              on:click={saveRawConfiguration}
+              disabled={rawConfigurationBusy ||
+                !activeProfile.manager_configuration_id ||
+                !workspaceLive ||
+                !configurationExport.available ||
+                !hasDesktopBinding("SaveConfigurationExport")}
+              title="Save the manager-rendered, device-bound .kbd artifact."
+              >{rawConfigurationBusy ? "Saving .kbd…" : "Save .kbd"}</Button
+            >
           </nav>
           <div class="editor-title">
             <h1 id="editor-title">{activeProfile.name}</h1>
@@ -3873,16 +3919,35 @@
                   >Latest manager operation: {humanize(lastOperation.state)} —
                   {lastOperation.reason}</small
                 >{/if}
+              <Button
+                variant="secondary"
+                type="button"
+                on:click={() => viewExternalContent(configuration)}
+                disabled={externalContentBusy ||
+                  !hasDesktopBinding("ConfigurationContent") ||
+                  !configuration.content_revision}
+                >{externalContentBusy ? "Loading source…" : "View raw source"}</Button
+              >
             </article>
           {/each}
         </div>
-        <section class="raw-external-unavailable">
-          <strong>Raw KMonad source is unavailable</strong>
-          <p>
-            The manager has not provided an access-controlled content API, so
-            KeyboarDeer does not read manager-owned files directly.
-          </p>
-        </section>
+        {#if externalContent}
+          <section class="raw-external-content">
+            <div class="raw-external-heading">
+              <strong>Raw KMonad source · revision {externalContent.content_revision}</strong>
+              <small>{externalContent.digest}</small>
+            </div>
+            <pre class="raw-configuration-content"><code>{formatKMonad(externalContent.content)}</code></pre>
+          </section>
+        {:else}
+          <section class="raw-external-unavailable">
+            <strong>Raw source is available through the manager</strong>
+            <p>
+              Select View raw source on an external configuration. KeyboarDeer
+              never reads manager-owned files directly.
+            </p>
+          </section>
+        {/if}
       </dialog>
     </div>
   {/if}

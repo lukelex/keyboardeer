@@ -146,11 +146,12 @@ Implementation handover for the remaining recovery work:
 - [x] **LIFE-01** Add enable/disable/delete for managed configurations with clear
   effects on the selected keyboard; local profile deletion and runtime deletion
   must be explicit, distinct operations.
-- [ ] **IO-01** Import/export versioned GUI profiles with validation and expose
+- [x] **IO-01** Import/export versioned GUI profiles with validation and expose
   generated-config export through the manager's `configuration.export` API.
-  Portable `.kbdprofile.json` v1 is implemented, and manager-rendered export is
-  available in v1.1.0; the GUI client flow remains to be implemented. Never
-  present behavior-only profile data as a runnable device-specific `.kbd` file.
+  Portable `.kbdprofile.json` v1 and the manager-rendered `.kbd` save/view flow
+  are implemented. External raw source is read only through the manager's
+  revision-checked content API. Never present behavior-only profile data as a
+  runnable device-specific `.kbd` file.
 - [x] **EXTERNAL-01** Display external runtime state and, when supported, raw
   configuration content. Full arbitrary `.kbd` visual import is outside v1.
   The content API is available in manager v1.1.0; GUI content display remains
@@ -227,8 +228,10 @@ Manager implementation handover:
   `30b9705`) and make it the compiler's key gate, with pinned-count and
   containment tests.
 - [ ] **GEOMETRY-03 (continuation)** Authored 65/75/96, ortholinear, and
-  split-ergo conventions, a parametric position builder; rename `split-94`
-  with a legacy alias. Handover:
+  split-ergo conventions, plus a parametric position builder. The verified
+  `split-94-v1` rename, legacy alias, and store migration are complete;
+  Kinesis-specific presentation now belongs to the community device catalog.
+  Handover:
   [`geometry-catalog.md`](docs/geometry-catalog.md).
 - [ ] Advanced aliases/macros, behavior composition, timing controls, and visual
   explanations with compiler and KMonad conformance coverage.
