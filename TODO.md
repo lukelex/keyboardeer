@@ -178,6 +178,8 @@ another, and failed changes do not falsely appear as active.
 ## Upstream gates — owned by kmonad-device-manager
 
 These are dependencies to coordinate, not functionality to duplicate in the GUI.
+Manager implementation handover:
+[`manager-improvement-plan.md`](docs/manager-improvement-plan.md).
 
 - [ ] **MGR-01** Implement capability/health/version reporting via `manager.get`;
   reconcile the wiki's status header with the implemented-method inventory.
