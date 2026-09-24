@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const StoreVersion = 3
+const StoreVersion = 4
 
 // maxNameLength bounds user-visible names. Longer names cannot be displayed
 // usefully and are rejected rather than silently truncated.

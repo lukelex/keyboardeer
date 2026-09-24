@@ -6,7 +6,7 @@ and key tokens were compared with KMonad's published templates at commit
 
 - [US ANSI 60%](https://github.com/kmonad/kmonad/blob/30b9705fb56059483969624d58cad077d5c62300/keymap/template/us_ansi_60.kbd)
 - [US ANSI TKL](https://github.com/kmonad/kmonad/blob/30b9705fb56059483969624d58cad077d5c62300/keymap/template/us_ansi_tkl.kbd)
-- [Kinesis Freestyle 2](https://github.com/kmonad/kmonad/blob/30b9705fb56059483969624d58cad077d5c62300/keymap/template/freestyle2.kbd)
+- [Split 94 source order](https://github.com/kmonad/kmonad/blob/30b9705fb56059483969624d58cad077d5c62300/keymap/template/freestyle2.kbd) (Kinesis Freestyle 2 convention)
 - [ISO 60%](https://github.com/kmonad/kmonad/blob/30b9705fb56059483969624d58cad077d5c62300/keymap/template/iso_60.kbd)
 - [ISO TKL](https://github.com/kmonad/kmonad/blob/30b9705fb56059483969624d58cad077d5c62300/keymap/template/iso_tkl.kbd)
 - [US ANSI 100%](https://github.com/kmonad/kmonad/blob/30b9705fb56059483969624d58cad077d5c62300/keymap/template/us_ansi_100.kbd)

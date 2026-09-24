@@ -132,6 +132,23 @@ func TestAppExposesOnlyVerifiedGeometries(t *testing.T) {
 	}
 }
 
+func TestAppExposesCommunityDeviceTemplatesSeparately(t *testing.T) {
+	app := newAppWithProfileStore(profile.NewStore(filepath.Join(t.TempDir(), "profiles.json")))
+	defer app.manager.Close()
+	devices := app.DeviceTemplates()
+	if len(devices) != 3 {
+		t.Fatalf("device templates = %#v", devices)
+	}
+	for _, device := range devices {
+		if device.GeometryID == "" || device.Brand == "" || device.Model == "" {
+			t.Fatalf("incomplete device template = %#v", device)
+		}
+		if _, found := geometry.Lookup(device.GeometryID); !found {
+			t.Fatalf("device template %q references unknown geometry %q", device.ID, device.GeometryID)
+		}
+	}
+}
+
 func TestAppCompilesVerifiedSplitGeometryProfile(t *testing.T) {
 	app := newAppWithProfileStore(profile.NewStore(filepath.Join(t.TempDir(), "profiles.json")))
 	defer app.manager.Close()

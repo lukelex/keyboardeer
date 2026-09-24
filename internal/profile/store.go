@@ -152,6 +152,15 @@ var migrations = map[int]func(*StoreData){
 			}
 		}
 	},
+	// Version 4 separates the brand-neutral Split 94 geometry from the
+	// Kinesis-specific community/device template that originally supplied it.
+	3: func(store *StoreData) {
+		for profileIndex := range store.Profiles {
+			if store.Profiles[profileIndex].Geometry.ID == "kinesis-freestyle2-v1" {
+				store.Profiles[profileIndex].Geometry.ID = "split-94-v1"
+			}
+		}
+	},
 }
 
 func (data *StoreData) find(id string) *Profile {

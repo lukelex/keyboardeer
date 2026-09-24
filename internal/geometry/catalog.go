@@ -10,10 +10,14 @@ import (
 )
 
 const (
-	ANSI60USID       = "us-ansi-60-v2"
-	LegacyANSI60USID = "us-ansi-60-v1"
-	ANSITKLUSID      = "us-ansi-tkl-v1"
-	KinesisFreestyle = "kinesis-freestyle2-v1"
+	ANSI60USID               = "us-ansi-60-v2"
+	LegacyANSI60USID         = "us-ansi-60-v1"
+	ANSITKLUSID              = "us-ansi-tkl-v1"
+	Split94ID                = "split-94-v1"
+	LegacyKinesisFreestyleID = "kinesis-freestyle2-v1"
+	// KinesisFreestyle remains a source-compatible Go name for callers while
+	// resolving to the brand-neutral geometry ID.
+	KinesisFreestyle = Split94ID
 
 	ISO60USID   = "iso-60-v1"
 	ISOTKLUSID  = "iso-tkl-v1"
@@ -86,15 +90,15 @@ var ANSIUSTKL = templateFromRows(
 	},
 )
 
-// KinesisFreestyle2 is copied from KMonad's documented freestyle2 template.
+// Split94 is copied from KMonad's documented freestyle2 template.
 // Repeated source codes are intentionally preserved: KMonad sees each pair as
 // the same input code, so those physical positions share one editor binding.
 // KMonad's documented freestyle2 template at
 // 30b9705fb56059483969624d58cad077d5c62300 is the source order reference.
 var KinesisFreestyle2 = templateFromRows(
-	KinesisFreestyle,
-	"Kinesis Freestyle 2",
-	"Split Kinesis Freestyle 2 layout from KMonad’s documented source template. Repeated physical codes share a binding.",
+	Split94ID,
+	"Split 94",
+	"Brand-neutral split 94 layout from KMonad’s documented freestyle2 source template. Repeated physical codes share a binding.",
 	[]layoutKey{
 		layout("esc"), layout("f1"), layout("f2"), layout("f3"), layout("f4"), layout("f5"), layout("f6"), layout("f7"), gap(2, "f8"), layout("f9"), layout("f10"), layout("f11"), layout("f12"), gap(1, "prnt"), layout("del"), layout("pause"),
 	},
@@ -411,7 +415,7 @@ func Lookup(id string) (Template, bool) {
 		return clone(ANSI60US), true
 	case ANSITKLUSID:
 		return clone(ANSIUSTKL), true
-	case KinesisFreestyle:
+	case Split94ID, LegacyKinesisFreestyleID:
 		return clone(KinesisFreestyle2), true
 	case ISO60USID:
 		return clone(ISO60US), true

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -195,7 +196,7 @@ func TestStoreMigratesUnversionedSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(string(persisted), "{\n  \"version\": 3,") {
+	if !strings.HasPrefix(string(persisted), "{\n  \"version\": "+strconv.Itoa(StoreVersion)+",") {
 		t.Fatalf("migration was not persisted: %s", persisted)
 	}
 	if loaded.Selected["device-1"] != profile.ID {
@@ -204,6 +205,28 @@ func TestStoreMigratesUnversionedSchema(t *testing.T) {
 	backup, err := os.ReadFile(path + ".v0-backup")
 	if err != nil || string(backup) != `{"profiles":[`+mustJSON(t, profile)+`]}` {
 		t.Fatalf("pre-migration backup = %s, %v", backup, err)
+	}
+}
+
+func TestStoreMigratesLegacyKinesisGeometry(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "profiles.json")
+	candidate := testProfile(t, "Legacy split")
+	candidate.Geometry.ID = "kinesis-freestyle2-v1"
+	data := StoreData{Version: 3, Profiles: []Profile{candidate}, Selected: map[string]string{"device-1": candidate.ID}}
+	encoded, err := json.Marshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, encoded, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := NewStore(path).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Version != StoreVersion || loaded.Profiles[0].Geometry.ID != "split-94-v1" {
+		t.Fatalf("legacy geometry migration = %#v", loaded)
 	}
 }
 

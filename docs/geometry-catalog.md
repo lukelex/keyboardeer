@@ -73,7 +73,7 @@ A layout is identified by four independent axes. All four are brand-free.
   template (today's `catalog_test` / `geometry-verification.md`).
 - **`authored`** — no published canonical order exists (ortholinear,
   ergonomic-split, our own footprint conventions). Verification = documented
-  convention + compile + KMonad dry-run conformance (§6). The word "verified"
+  convention + compile + KMonad dry-run conformance (§7). The word "verified"
   means *documented, token-valid, and accepted by KMonad*, not "copied from
   KMonad".
 
@@ -99,7 +99,7 @@ Counts are approximate until the exact source list is written.
 > templates, with honest key counts (93 and 87 — the X220 source is 93, not the
 > 92 approximated below). All six pass the real KMonad dry-run conformance test,
 > and their tokens are confirmed against the pinned `Keycode.hs` spelling set
-> (§6.1). The remaining rows are proposed.
+> (§7.1). The remaining rows are proposed.
 
 | ID (proposed) | Layout name | Standard / class | ~keys | Source basis | Notable traits |
 | --- | --- | --- | --- | --- | --- |
@@ -109,7 +109,7 @@ Counts are approximate until the exact source list is written.
 | `iso-tkl-v1` | ISO TKL | ISO / TKL | 88 | kmonad-seed | `iso_key`, nav |
 | `us-ansi-100-v1` | US ANSI 100% | ANSI / 100 | 104 | kmonad-seed | numpad, nav, F-rows |
 | `iso-100-v1` | ISO 100% | ISO / 100 | 105 | kmonad-seed | `iso_key`, numpad |
-| `split-94-v1` | Split 94 (staggered) | split / ergo | 94 | kmonad-seed → rename | split, media keys |
+| `split-94-v1` | Split 94 (staggered) | split / ergo | 94 | kmonad-seed | split, media keys |
 | `us-ansi-65-v1` | US ANSI 65% | ANSI / 65 | 68 | authored | arrows + 4-nav |
 | `iso-65-v1` | ISO 65% | ISO / 65 | 69 | authored | `iso_key`, arrows + 4-nav |
 | `us-ansi-75-v1` | US ANSI 75% | ANSI / 75 | 83 | authored | F-row, arrows |
@@ -136,7 +136,7 @@ in v1 of the catalog.
   discriminators that separate 60/65/75/TKL/96/100 and ANSI/ISO.
 - The ISO-key alias problem noted in the detection plan (`lsgt` vs `102d` vs
   `nubs`) is solved in the **catalog** as a canonical trait (`has_iso_key`)
-  plus a small token-alias map kept with the vocabulary table (§6), so it never
+  plus a small token-alias map kept with the vocabulary table (§7.1), so it never
   leaks into UI or detection naming.
 - Laptop and split entries are deliberately device-profiling-free: their source
   lists are conventions, so detection can only *propose* them when the attested
@@ -145,15 +145,35 @@ in v1 of the catalog.
 ## 5. Renames and migration
 
 - Keep `us-ansi-60-v2`, `us-ansi-tkl-v1` as-is.
-- Rename `kinesis-freestyle2-v1` → `split-94-v1`, display "Split 94".
-  Keep `kinesis-freestyle2-v1` as a legacy alias in `Lookup` and in import
-  validation so existing drafts and exported `.kbdprofile.json` files keep
-  resolving; add a store migration step that rewrites the geometry ID on load,
-  mirroring the ANSI 60% `v1`→`v2` precedent.
+- The verified Freestyle source order is exposed as `split-94-v1`, display
+  "Split 94". `kinesis-freestyle2-v1` remains a legacy alias in `Lookup`, and
+  profile-store migration 4 rewrites saved geometry IDs. The known Kinesis
+  product binding lives separately in the community device catalog.
 - New authored IDs are versioned (`-v1`); corrections bump the version and add
   a migration + test, exactly like the `grv` fix.
 
-## 6. Enabling work (before/with the catalog)
+## 6. Community device templates
+
+Verified geometries and device presentations are separate catalogs:
+
+- `geometry.Template` is the brand-free, source-key-verified layout. Its ID is
+  the identity used by profiles, compilation, and detection candidates.
+- `geometry.DeviceTemplate` is a community/device-specific presentation. It
+  contains brand, model, variant, description, and evidence, then references a
+  verified geometry through `geometry_id`.
+
+The built-in device catalog currently includes ThinkPad X220 ISO US, ThinkPad
+T430 ISO US, and Kinesis Freestyle 2. Their model names help users find an
+exact visual representation; they do not alter the underlying geometry or
+become automatic detection inputs. Every device entry must resolve to an
+existing geometry and include evidence.
+
+Future community submissions may add visual overrides, case details, legends,
+knobs, and variant-specific artwork, but must preserve the same binding rule:
+they cannot introduce an unverified source-key order. A device-template picker
+should show the referenced geometry and evidence before creating a profile.
+
+## 7. Enabling work (before/with the catalog)
 
 1. **Verified KMonad token vocabulary** — ✅ implemented as
    `internal/geometry/kmonad_vocabulary.go`, a table generated from KMonad's
@@ -179,7 +199,7 @@ in v1 of the catalog.
 4. **Trait metadata** on `Template` and a traits test so detection candidates
    stay distinguishable per class.
 
-## 7. Tracking
+## 8. Tracking
 
 - [x] **GEOMETRY-03 — layout-first catalog expansion (seed + foundations):**
   the four seed additions (ISO 60/TKL, 100% ANSI/ISO), the laptop conventions
@@ -190,7 +210,7 @@ in v1 of the catalog.
     `iso-75-v1`, `us-ansi-96-v1`);
   - ortholinear entries (`ortho-40-v1`, `ortho-60-v1`);
   - split-ergo entries (`split-76-v1`, `split-72-v1`);
-  - parametric position builder (§6.2) — preferred before hand-writing the
+  - parametric position builder (§7.2) — preferred before hand-writing the
     grid/ergo rows;
-  - `split-94-v1` rename + legacy alias + store migration (§5).
+  - completed `split-94-v1` rename + legacy alias + store migration (§6).
 - Detection work remains tracked under **GEOMETRY-02** / **MGR-06**.
