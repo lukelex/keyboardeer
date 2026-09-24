@@ -70,8 +70,14 @@ func TestAppCompilesVerifiedSplitGeometryProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(compiled.SourceMap) != len(draft.Geometry.SourceKeys) {
-		t.Fatalf("source map = %d, source keys = %d", len(compiled.SourceMap), len(draft.Geometry.SourceKeys))
+	// Repeated physical codes (two space keys, three home keys) share one
+	// defsrc slot, because KMonad rejects duplicate source keycodes.
+	unique := map[string]bool{}
+	for _, sourceKey := range draft.Geometry.SourceKeys {
+		unique[sourceKey] = true
+	}
+	if len(compiled.SourceMap) != len(unique) || len(unique) == len(draft.Geometry.SourceKeys) {
+		t.Fatalf("source map = %d, unique source keys = %d, physical keys = %d", len(compiled.SourceMap), len(unique), len(draft.Geometry.SourceKeys))
 	}
 }
 

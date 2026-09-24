@@ -185,6 +185,19 @@ func List() []Template {
 	return []Template{clone(ANSI60US), clone(ANSIUSTKL), clone(KinesisFreestyle2)}
 }
 
+// KnownSourceKeys is the union of KMonad key names used by verified layouts.
+// The compiler accepts only these names, so the editor never emits an
+// unverified keycode that KMonad would reject at preview time.
+func KnownSourceKeys() map[string]bool {
+	known := map[string]bool{}
+	for _, template := range List() {
+		for _, key := range template.Keys {
+			known[key.SourceKey] = true
+		}
+	}
+	return known
+}
+
 func Lookup(id string) (Template, bool) {
 	switch id {
 	case ANSI60USID:

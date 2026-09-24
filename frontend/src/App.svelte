@@ -801,7 +801,13 @@
     behaviorDialog = null;
   }
   async function assignTapHold() {
-    if (!tapKey || !holdKey || tapHoldTimeoutMS <= 0) return;
+    if (
+      !tapKey ||
+      !holdKey ||
+      tapHoldTimeoutMS <= 0 ||
+      tapHoldTimeoutMS > 10_000
+    )
+      return;
     const hold: ProfileBehavior =
       tapHoldMode === "layer"
         ? { kind: "hold_layer", target: tapHoldLayerID }
@@ -2007,6 +2013,7 @@
               type="number"
               bind:value={tapHoldTimeoutMS}
               min="1"
+              max="10000"
               required
             />
             <div class="behavior-form-actions">

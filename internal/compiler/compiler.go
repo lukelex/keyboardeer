@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/lukelex/keyboardeer/internal/geometry"
 	"github.com/lukelex/keyboardeer/internal/profile"
 )
 
@@ -47,17 +48,29 @@ func Compile(input profile.Profile) (Result, error) {
 	if err := validateDeclarationCycles(input); err != nil {
 		return Result{}, err
 	}
+	// KMonad starts on the first deflayer, and unassigned first-layer keys
+	// default to their source key. Base must therefore be first.
+	if input.Layers[0].ID != "base" {
+		return Result{}, fmt.Errorf("the base layer must be the first layer")
+	}
+	if err := validateBehaviorShapes(input); err != nil {
+		return Result{}, err
+	}
 	assignments := make(map[string]profile.Behavior, len(input.Assignments))
 	for _, assignment := range input.Assignments {
 		assignments[address(assignment.LayerID, assignment.SourceKey)] = assignment.Behavior
 	}
+	// Physical keys that emit the same code share one binding. KMonad rejects a
+	// keycode that appears more than once in defsrc, so each is emitted once.
+	sourceKeys := uniqueSourceKeys(input.Geometry.SourceKeys)
 	writer := &textWriter{line: 1, column: 1}
 	writer.linef("(defsrc")
-	for _, sourceKey := range input.Geometry.SourceKeys {
-		if err := validateKeyAtom(sourceKey); err != nil {
+	for _, sourceKey := range sourceKeys {
+		value, err := renderKey(sourceKey)
+		if err != nil {
 			return Result{}, fmt.Errorf("invalid source key %q: %w", sourceKey, err)
 		}
-		writer.linef("  %s", sourceKey)
+		writer.linef("  %s", value)
 	}
 	writer.linef(")")
 	if len(input.Aliases) != 0 || len(input.Macros) != 0 {
@@ -76,7 +89,7 @@ func Compile(input profile.Profile) (Result, error) {
 	for layerIndex, layer := range input.Layers {
 		writer.linef("")
 		writer.linef("(deflayer %s", layer.ID)
-		for _, sourceKey := range input.Geometry.SourceKeys {
+		for _, sourceKey := range sourceKeys {
 			behavior, explicit := assignments[address(layer.ID, sourceKey)]
 			if !explicit {
 				if layerIndex == 0 {
@@ -198,16 +211,115 @@ func behaviorReferences(behavior profile.Behavior) []string {
 	return result
 }
 
+// maxTapHoldTimeoutMS bounds the hold decision delay. Longer values make a
+// key feel unresponsive and are almost always a unit mistake.
+const maxTapHoldTimeoutMS = 10_000
+
+// validateBehaviorShapes rejects behavior combinations KeyboarDeer does not
+// support, before any candidate reaches the manager.
+func validateBehaviorShapes(input profile.Profile) error {
+	for _, assignment := range input.Assignments {
+		if assignment.LayerID == "base" && assignment.Behavior.Kind == "transparent" {
+			return fmt.Errorf("compile base/%s: the base layer has no lower layer to pass through to", assignment.SourceKey)
+		}
+		if err := validateShape(assignment.Behavior); err != nil {
+			return fmt.Errorf("compile %s/%s: %w", assignment.LayerID, assignment.SourceKey, err)
+		}
+	}
+	for _, name := range sortedKeys(input.Aliases) {
+		behavior := input.Aliases[name]
+		if behavior.Kind == "transparent" {
+			return fmt.Errorf("compile alias %q: an alias cannot pass through", name)
+		}
+		if err := validateShape(behavior); err != nil {
+			return fmt.Errorf("compile alias %q: %w", name, err)
+		}
+	}
+	for _, name := range sortedKeys(input.Macros) {
+		for index, step := range input.Macros[name] {
+			// KMonad tap-macros tap each step in order; only plain key taps
+			// have a well-defined meaning there.
+			if step.Kind != "key" {
+				return fmt.Errorf("compile macro %q step %d: macros support key presses only, not %q", name, index+1, step.Kind)
+			}
+			if err := validateShape(step); err != nil {
+				return fmt.Errorf("compile macro %q step %d: %w", name, index+1, err)
+			}
+		}
+	}
+	return nil
+}
+
+func validateShape(behavior profile.Behavior) error {
+	switch behavior.Kind {
+	case "key":
+		_, err := renderKey(behavior.Key)
+		return err
+	case "tap_hold":
+		if behavior.TimeoutMS > maxTapHoldTimeoutMS {
+			return fmt.Errorf("tap/hold timeout %d ms exceeds %d ms", behavior.TimeoutMS, maxTapHoldTimeoutMS)
+		}
+		switch behavior.Tap.Kind {
+		case "key", "alias", "macro", "switch_layer", "disabled":
+		default:
+			return fmt.Errorf("tap/hold cannot tap %q", behavior.Tap.Kind)
+		}
+		switch behavior.Hold.Kind {
+		case "key", "hold_layer", "alias":
+		default:
+			return fmt.Errorf("tap/hold cannot hold %q", behavior.Hold.Kind)
+		}
+		if err := validateShape(*behavior.Tap); err != nil {
+			return err
+		}
+		return validateShape(*behavior.Hold)
+	}
+	return nil
+}
+
+func sortedKeys[V any](values map[string]V) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func uniqueSourceKeys(sourceKeys []string) []string {
+	seen := make(map[string]bool, len(sourceKeys))
+	result := make([]string, 0, len(sourceKeys))
+	for _, sourceKey := range sourceKeys {
+		if !seen[sourceKey] {
+			seen[sourceKey] = true
+			result = append(result, sourceKey)
+		}
+	}
+	return result
+}
+
+var knownKeys = geometry.KnownSourceKeys()
+
+// renderKey is the single place a key name becomes KMonad text, so defsrc
+// and deflayer spell every key identically. A bare backslash would escape
+// the following character in KMonad's lexer and must be written as `\\`.
+func renderKey(value string) (string, error) {
+	if err := validateKeyAtom(value); err != nil {
+		return "", err
+	}
+	if !knownKeys[value] {
+		return "", fmt.Errorf("unsupported KMonad key %q; only keys from verified layouts are supported", value)
+	}
+	if value == "\\" {
+		return "\\\\", nil
+	}
+	return value, nil
+}
+
 func renderBehavior(behavior profile.Behavior) (string, error) {
 	switch behavior.Kind {
 	case "key":
-		if err := validateKeyAtom(behavior.Key); err != nil {
-			return "", err
-		}
-		if behavior.Key == "\\" {
-			return "\\\\", nil
-		}
-		return behavior.Key, nil
+		return renderKey(behavior.Key)
 	case "transparent":
 		return "_", nil
 	case "disabled":

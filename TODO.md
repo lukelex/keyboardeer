@@ -91,7 +91,7 @@ terminal, and reconnect restores an authoritative view.
   reachability, and layer-switch behaviors; previews must not change live state.
 - [x] **EDIT-03** Add tap/hold behavior with explicit timing semantics and
   defaults; explain how to reach/exit layers before applying a profile.
-- [ ] **COMPILE-01** Compile deterministically to platform-neutral behavior
+- [x] **COMPILE-01** Compile deterministically to platform-neutral behavior
   (`defsrc`, `deflayer`, supported aliases); reject invalid references, duplicate
   identifiers, inconsistent source counts, and unsupported behaviors locally.
 - [ ] **COMPILE-02** Verify representative generated behavior against KMonad;
