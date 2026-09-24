@@ -1,0 +1,28 @@
+#!/bin/sh
+# System-wide registration of the *.kbdprofile.json association during install.
+set -e
+
+mimeapps=/usr/share/applications/mimeapps.list
+
+register_default() {
+  if [ ! -f "$mimeapps" ]; then
+    printf '[Default Applications]\n' > "$mimeapps"
+  fi
+  if ! grep -q '^application/x-keyboardeer-profile=' "$mimeapps"; then
+    printf 'application/x-keyboardeer-profile=keyboardeer.desktop;\n' >> "$mimeapps"
+  fi
+}
+
+case "$1" in
+  configure)
+    # Never fail the package for optional desktop registries.
+    if command -v update-mime-database >/dev/null 2>&1; then
+      update-mime-database /usr/share/mime || true
+    fi
+    if command -v update-desktop-database >/dev/null 2>&1; then
+      update-desktop-database /usr/share/applications || true
+    fi
+    register_default
+    ;;
+esac
+exit 0

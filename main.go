@@ -3,6 +3,8 @@ package main
 import (
 	"embed"
 	"log"
+	"os"
+	"strings"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -19,6 +21,15 @@ var appIcon []byte
 
 func main() {
 	app := NewApp()
+
+	// The OS passes the file to open when KeyboarDeer is launched as the
+	// default handler for *.kbdprofile.json (see build/linux/keyboardeer.desktop).
+	for _, arg := range os.Args[1:] {
+		if strings.HasSuffix(strings.ToLower(arg), ".kbdprofile.json") {
+			app.SetPendingKbdProfileFile(arg)
+			break
+		}
+	}
 
 	err := wails.Run(&options.App{
 		Title:             "KeyboarDeer",

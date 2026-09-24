@@ -1,0 +1,18 @@
+#!/bin/sh
+# Reverse the system-wide *.kbdprofile.json registration during removal.
+set -e
+
+case "$1" in
+  remove | purge)
+    if command -v update-mime-database >/dev/null 2>&1; then
+      update-mime-database /usr/share/mime || true
+    fi
+    if command -v update-desktop-database >/dev/null 2>&1; then
+      update-desktop-database /usr/share/applications || true
+    fi
+    if [ -f /usr/share/applications/mimeapps.list ]; then
+      sed -i '/^application\/x-keyboardeer-profile=/d' /usr/share/applications/mimeapps.list || true
+    fi
+    ;;
+esac
+exit 0

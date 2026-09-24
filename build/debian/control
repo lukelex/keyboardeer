@@ -1,0 +1,14 @@
+Package: keyboardeer
+Version: 0.1.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: KeyboarDeer contributors
+Depends: libgtk-3-0, libwebkit2gtk-4.1-0
+Description: Visual keyboard configuration companion for kmonad-device-manager
+ KeyboarDeer provides a VIA-style interface for configuring keyboards through
+ KMonad. It interoperates with kmonad-device-manager for device access,
+ validation, and process supervision.
+ .
+ Installs a desktop entry registered as the default application for
+ *.kbdprofile.json profile files.

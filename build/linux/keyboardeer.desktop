@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=KeyboarDeer
+GenericName=Keyboard configurator
+Comment=Configure keyboard mappings for kmonad-device-manager
+Exec=%BINARY% %f
+TryExec=%BINARY%
+Icon=keyboardeer
+Terminal=false
+Categories=Utility;Settings;
+Keywords=keyboard;keymap;kmonad;
+MimeType=application/x-keyboardeer-profile;
+StartupNotify=false

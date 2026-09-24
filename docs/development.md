@@ -66,3 +66,38 @@ The launcher uses the pinned Wails v2.16.0 CLI through Go, so no global Wails
 installation is needed. On its first run Wails installs the locked frontend
 dependencies and then starts the desktop app. Pass Wails development arguments
 through the script, for example `./scripts/desktop.sh -debug`.
+
+## Install and the `*.kbdprofile.json` file association
+
+KeyboarDeer registers itself as the default application for KeyboarDeer profile
+files **during installation**, not from inside the running app. See
+`build/linux/keyboardeer-kbdprofile.xml` for the MIME definition and
+`build/linux/keyboardeer.desktop` for the handler entry (`%f`); the installed
+binary must handle a launch argument ending in `.kbdprofile.json`, which
+`main.go` routes to the pending import flow consumed by the editor.
+
+### Per-user install (no root)
+
+`scripts/install.sh` copies a built binary to `~/.local/bin`, installs the
+desktop entry, MIME XML, and icon under `~/.local/share`, refreshes the MIME and
+desktop databases, and sets `keyboardeer.desktop` as the default handler via
+`xdg-mime default`. `scripts/uninstall.sh` reverses all of it.
+
+```sh
+wails build
+./scripts/install.sh            # or pass the binary path explicitly
+```
+
+### Debian package
+
+`scripts/package-deb.sh` builds `build/keyboardeer_<version>_<arch>.deb` from a
+built binary (`dpkg-deb` required, run in CI or on a Debian machine). The
+package installs the binary to `/usr/bin`, and its `postinst` runs
+`update-mime-database`, `update-desktop-database`, and writes the default
+association into `/usr/share/applications/mimeapps.list`; `prerm` reverses the
+registration on removal.
+
+```sh
+wails build
+BINARY=build/bin/keyboardeer VERSION=0.1.0 scripts/package-deb.sh
+```
