@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
@@ -144,7 +145,45 @@ func (a *App) SaveProfile(draft profile.Profile) (profile.Profile, error) {
 	if current.ApplyPending != nil {
 		return profile.Profile{}, fmt.Errorf("this profile has an apply with an unknown outcome; refresh the manager and resolve it before editing")
 	}
+	// Device and geometry define what every assignment means; changing them
+	// would silently reinterpret the draft. They are fixed at creation.
+	if draft.DeviceID != current.DeviceID || draft.Geometry.ID != current.Geometry.ID || !slices.Equal(draft.Geometry.SourceKeys, current.Geometry.SourceKeys) {
+		return profile.Profile{}, fmt.Errorf("a profile's keyboard and physical layout cannot be changed after it is created")
+	}
+	// Manager references are written only by the apply workflow, never by an
+	// ordinary draft edit from the frontend.
+	draft.ManagerConfigurationID = current.ManagerConfigurationID
+	draft.ApplyPending = current.ApplyPending
 	return store.Upsert(draft)
+}
+
+// ProfileStoreStatus explains why saved drafts could not be loaded, so the UI
+// can offer recovery only when it is safe: a corrupt store may be backed up and
+// reset, but a store written by a newer KeyboarDeer must never be reset.
+type ProfileStoreStatus struct {
+	State   string `json:"state"`
+	Message string `json:"message"`
+	Path    string `json:"path,omitempty"`
+}
+
+func (a *App) ProfileStoreStatus() ProfileStoreStatus {
+	store, err := a.profileStore()
+	if err != nil {
+		return ProfileStoreStatus{State: "unavailable", Message: err.Error()}
+	}
+	_, err = store.Load()
+	var corrupt *profile.CorruptStoreError
+	var unsupported *profile.UnsupportedStoreVersionError
+	switch {
+	case err == nil:
+		return ProfileStoreStatus{State: "ok", Path: store.Path()}
+	case errors.As(err, &corrupt):
+		return ProfileStoreStatus{State: "corrupt", Path: store.Path(), Message: "Saved keyboard drafts could not be read. The file may be damaged."}
+	case errors.As(err, &unsupported):
+		return ProfileStoreStatus{State: "unsupported", Path: store.Path(), Message: "Saved keyboard drafts were written by a newer KeyboarDeer. Update KeyboarDeer to open them."}
+	default:
+		return ProfileStoreStatus{State: "unavailable", Path: store.Path(), Message: err.Error()}
+	}
 }
 
 func (a *App) DeleteProfile(id string, expectedDraftRevision uint64) error {

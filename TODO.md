@@ -76,10 +76,10 @@ terminal, and reconnect restores an authoritative view.
 
 ## P1 — Profiles, geometry, and visual editor
 
-- [ ] **PROFILE-01** Define a versioned profile schema: local profile ID,
+- [x] **PROFILE-01** Define a versioned profile schema: local profile ID,
   manager device/configuration references, geometry and source-key order,
   layers, key behaviors, aliases, macros, and compiler settings.
-- [ ] **PROFILE-02** Persist profiles and drafts atomically in application-owned
+- [x] **PROFILE-02** Persist profiles and drafts atomically in application-owned
   storage; cover migrations, corrupted files, recovery, and reopen after a crash.
 - [ ] **PROFILE-03** Add create/rename/duplicate/delete/switch workflows for
   multiple profiles and keyboards, preserving pending edits per profile.

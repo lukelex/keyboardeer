@@ -477,6 +477,55 @@ test("hides manager output devices while retaining legacy role-less inputs", asy
   await expect(page.getByText("2 known", { exact: true })).toBeVisible();
 });
 
+test("offers backup-and-reset recovery for a damaged draft file", async ({
+  page,
+}) => {
+  await page.addInitScript((fixture) => {
+    let corrupt = true;
+    window.go = {
+      main: {
+        App: {
+          Info: async () => ({ name: "KeyboarDeer", version: "test" }),
+          Workspace: async () => fixture,
+          Geometries: async () => [],
+          Profiles: async () => {
+            if (corrupt) throw new Error("profile store is corrupt");
+            return [];
+          },
+          ProfileStoreStatus: async () =>
+            corrupt
+              ? {
+                  state: "corrupt",
+                  message:
+                    "Saved keyboard drafts could not be read. The file may be damaged.",
+                  path: "/home/user/.config/keyboardeer/profiles.json",
+                }
+              : { state: "ok", message: "" },
+          RecoverCorruptProfileStore: async () => {
+            corrupt = false;
+            return "/home/user/.config/keyboardeer/profiles.json.corrupt-1";
+          },
+        },
+      },
+    };
+  }, workspace);
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Saved drafts could not be loaded" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Set up" })).toBeDisabled();
+  await page.getByRole("button", { name: "Back up and start fresh" }).click();
+  await page
+    .getByRole("button", { name: "Confirm: back up and start fresh" })
+    .click();
+  await expect(
+    page.getByText(/profiles\.json\.corrupt-1\. KeyboarDeer started a new/),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Saved drafts could not be loaded" }),
+  ).toHaveCount(0);
+});
+
 test("keeps the last snapshot visibly stale when the manager disconnects", async ({
   page,
 }) => {

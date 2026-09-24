@@ -41,6 +41,75 @@ func TestAppCreatesPersistsAndCompilesExplicitGeometryProfile(t *testing.T) {
 	}
 }
 
+func TestAppSaveProfileProtectsStoreOwnedFields(t *testing.T) {
+	store := profile.NewStore(filepath.Join(t.TempDir(), "profiles.json"))
+	app := newAppWithProfileStore(store)
+	defer app.manager.Close()
+	draft, err := app.CreateProfile("device-1", "Everyday", geometry.ANSI60USID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	linked, err := store.SetApplyState(draft.ID, draft.DraftRevision, "cfg-1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := linked
+	edited.Name = "Renamed"
+	edited.ManagerConfigurationID = "cfg-forged"
+	saved, err := app.SaveProfile(edited)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Name != "Renamed" || saved.ManagerConfigurationID != "cfg-1" {
+		t.Fatalf("frontend edit changed manager link: %#v", saved)
+	}
+	for name, mutate := range map[string]func(*profile.Profile){
+		"device":   func(p *profile.Profile) { p.DeviceID = "device-2" },
+		"geometry": func(p *profile.Profile) { p.Geometry.ID = geometry.ANSITKLUSID },
+		"order": func(p *profile.Profile) {
+			p.Geometry.SourceKeys = append([]string{p.Geometry.SourceKeys[1], p.Geometry.SourceKeys[0]}, p.Geometry.SourceKeys[2:]...)
+		},
+	} {
+		changed := saved
+		changed.Geometry.SourceKeys = append([]string(nil), saved.Geometry.SourceKeys...)
+		mutate(&changed)
+		if _, err := app.SaveProfile(changed); err == nil {
+			t.Fatalf("SaveProfile accepted a changed %s", name)
+		}
+	}
+}
+
+func TestAppReportsProfileStoreRecoveryState(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "profiles.json")
+	app := newAppWithProfileStore(profile.NewStore(path))
+	defer app.manager.Close()
+	if status := app.ProfileStoreStatus(); status.State != "ok" {
+		t.Fatalf("empty store status = %#v", status)
+	}
+	if err := os.WriteFile(path, []byte("{truncated"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if status := app.ProfileStoreStatus(); status.State != "corrupt" || status.Path != path {
+		t.Fatalf("corrupt store status = %#v", status)
+	}
+	backup, err := app.RecoverCorruptProfileStore()
+	if err != nil || backup == "" {
+		t.Fatalf("recover = %q, %v", backup, err)
+	}
+	if status := app.ProfileStoreStatus(); status.State != "ok" {
+		t.Fatalf("recovered store status = %#v", status)
+	}
+	if err := os.WriteFile(path, []byte(`{"version":99,"profiles":[]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if status := app.ProfileStoreStatus(); status.State != "unsupported" {
+		t.Fatalf("newer store status = %#v", status)
+	}
+	if _, err := app.RecoverCorruptProfileStore(); err == nil {
+		t.Fatal("a store from a newer version was reset")
+	}
+}
+
 func TestAppExposesOnlyVerifiedGeometries(t *testing.T) {
 	app := newAppWithProfileStore(profile.NewStore(filepath.Join(t.TempDir(), "profiles.json")))
 	defer app.manager.Close()

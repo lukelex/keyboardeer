@@ -227,6 +227,9 @@ h1 {
   margin: 6px 0;
   max-width: 760px;
 }
+.store-recovery {
+  margin-top: 8px;
+}
 .manager-notice small {
   color: #8b7956;
   display: block;

@@ -164,6 +164,11 @@ export interface ProfilePreview {
   };
   source_map: CompileResult["source_map"];
 }
+export interface ProfileStoreStatus {
+  state: "ok" | "corrupt" | "unsupported" | "unavailable" | string;
+  message: string;
+  path?: string;
+}
 export interface ProfileApplyResult {
   profile: Profile;
   operation: Operation;
@@ -190,6 +195,7 @@ type AppBindings = {
     enabled: boolean,
   ) => Promise<Operation>;
   RecoverCorruptProfileStore?: () => Promise<string>;
+  ProfileStoreStatus?: () => Promise<ProfileStoreStatus>;
   IdentifyStart?: (deviceID: string, timeoutMS: number) => Promise<Operation>;
   IdentifyCancel?: (operationID: string) => Promise<Operation>;
   IdentifyOperation?: (operationID: string) => Promise<Operation>;
@@ -261,6 +267,8 @@ export const SetConfigurationEnabled = (
   )(configurationID, enabled);
 export const RecoverCorruptProfileStore = () =>
   binding<() => Promise<string>>("RecoverCorruptProfileStore")();
+export const ProfileStoreStatus = () =>
+  binding<() => Promise<ProfileStoreStatus>>("ProfileStoreStatus")();
 export const IdentifyStart = (id: string, timeout: number) =>
   binding<(id: string, timeout: number) => Promise<Operation>>("IdentifyStart")(
     id,

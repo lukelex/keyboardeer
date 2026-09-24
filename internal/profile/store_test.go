@@ -137,6 +137,47 @@ func TestStoreMigratesUnversionedSchema(t *testing.T) {
 	if string(persisted) == "" || !contains(string(persisted), `"version": 1`) {
 		t.Fatalf("migration was not persisted: %s", persisted)
 	}
+	backup, err := os.ReadFile(path + ".v0-backup")
+	if err != nil || string(backup) != `{"profiles":[`+mustJSON(t, profile)+`]}` {
+		t.Fatalf("pre-migration backup = %s, %v", backup, err)
+	}
+}
+
+func TestStoreReopensAfterInterruptedWrite(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "profiles.json")
+	store := NewStore(path)
+	saved, err := store.Upsert(testProfile(t, "Survivor"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A crash between writing the temporary file and renaming it leaves an
+	// orphan beside the intact store. It must not affect the next launch.
+	if err := os.WriteFile(filepath.Join(filepath.Dir(path), ".profiles-crashed"), []byte(`{"version":1,"profiles":[`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := NewStore(path).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reopened.Profiles) != 1 || reopened.Profiles[0].ID != saved.ID || reopened.Profiles[0].DraftRevision != saved.DraftRevision {
+		t.Fatalf("reopened store = %#v", reopened)
+	}
+}
+
+func TestValidateEnforcesSchemaRules(t *testing.T) {
+	for name, mutate := range map[string]func(*Profile){
+		"base not first":     func(p *Profile) { p.Layers = []Layer{{ID: "nav", Name: "Nav"}, {ID: "base", Name: "Base"}} },
+		"invalid layer ID":   func(p *Profile) { p.Layers = append(p.Layers, Layer{ID: "nav layer", Name: "Nav"}) },
+		"invalid alias name": func(p *Profile) { p.Aliases = map[string]Behavior{"has space": {Kind: "key", Key: "a"}} },
+		"empty macro":        func(p *Profile) { p.Macros = map[string][]Behavior{"empty": {}} },
+		"long name":          func(p *Profile) { p.Name = strings.Repeat("x", 81) },
+	} {
+		value := testProfile(t, "Schema")
+		mutate(&value)
+		if err := Validate(value); err == nil {
+			t.Fatalf("Validate accepted %s", name)
+		}
+	}
 }
 
 func TestStoreRejectsInvalidAndRecoversCorruptData(t *testing.T) {

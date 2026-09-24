@@ -10,6 +10,8 @@
     Info,
     PreviewProfile,
     Profiles,
+    ProfileStoreStatus,
+    RecoverCorruptProfileStore,
     SaveProfile,
     SetConfigurationEnabled,
     Workspace,
@@ -25,6 +27,7 @@
     type ProfileApplyResult,
     type ProfileBehavior,
     type ProfilePreview,
+    type ProfileStoreStatus as ProfileStoreState,
   } from "./desktop";
 
   type View = "devices" | "setup" | "editor";
@@ -140,6 +143,9 @@
   let draftHistory: Record<string, DraftHistory> = {};
   let draftSaveState: DraftSaveState = "saved";
   let keySearch = "";
+  let profileStoreProblem: ProfileStoreState | null = null;
+  let confirmStoreReset = false;
+  let storeRecoveryMessage = "";
   let previewBusy = false;
   let previewInFlight = false;
   let profilePreview: ProfilePreview | null = null;
@@ -552,10 +558,35 @@
   }
   async function loadLocalDrafts() {
     try {
-      [profiles, geometries] = await Promise.all([Profiles(), Geometries()]);
+      geometries = await Geometries();
       selectedGeometryID ||= geometries[0]?.id ?? "";
     } catch {
       // Browser preview deliberately has no desktop persistence bindings.
+    }
+    try {
+      profiles = await Profiles();
+      profileStoreProblem = null;
+    } catch {
+      // Explain a damaged or newer draft file instead of silently showing
+      // every keyboard as "not set up".
+      if (hasDesktopBinding("ProfileStoreStatus")) {
+        const status = await ProfileStoreStatus().catch(() => null);
+        profileStoreProblem = status && status.state !== "ok" ? status : null;
+      }
+    }
+  }
+  async function recoverProfileStore() {
+    if (!confirmStoreReset) {
+      confirmStoreReset = true;
+      return;
+    }
+    confirmStoreReset = false;
+    try {
+      const backup = await RecoverCorruptProfileStore();
+      storeRecoveryMessage = `The damaged draft file was kept at ${backup}. KeyboarDeer started a new, empty draft list.`;
+      await loadLocalDrafts();
+    } catch (error) {
+      storeRecoveryMessage = explain(error);
     }
   }
 
@@ -1296,6 +1327,44 @@
           </section>
         {/if}
 
+        {#if profileStoreProblem}
+          <section
+            class="manager-notice"
+            data-state="profile-store"
+            aria-labelledby="profile-store-title"
+          >
+            <span class="notice-symbol" aria-hidden="true">!</span>
+            <div>
+              <p class="eyebrow">SAVED DRAFTS</p>
+              <h2 id="profile-store-title">
+                {profileStoreProblem.state === "unsupported"
+                  ? "Drafts need a newer KeyboarDeer"
+                  : "Saved drafts could not be loaded"}
+              </h2>
+              <p>{profileStoreProblem.message}</p>
+              {#if profileStoreProblem.path}<small
+                  >File: {profileStoreProblem.path}</small
+                >{/if}
+              {#if profileStoreProblem.state === "corrupt"}
+                <p>
+                  Running mappings are unaffected. You can keep the damaged file
+                  as a backup and start with an empty draft list.
+                </p>
+                <button
+                  class="button primary store-recovery"
+                  type="button"
+                  on:click={recoverProfileStore}
+                  >{confirmStoreReset
+                    ? "Confirm: back up and start fresh"
+                    : "Back up and start fresh"}</button
+                >
+              {/if}
+            </div>
+          </section>
+        {/if}
+        {#if storeRecoveryMessage}<p class="inline-feedback" role="status">
+            {storeRecoveryMessage}
+          </p>{/if}
         <div class="list-caption">
           <span>YOUR KEYBOARDS</span><span
             >{canShowDevices
@@ -1399,8 +1468,11 @@
                     on:click={() => openDraft(device)}
                     disabled={!workspaceLive ||
                       !isConfigurable(device) ||
-                      geometries.length === 0}
-                    title={geometries.length === 0
+                      geometries.length === 0 ||
+                      !!profileStoreProblem}
+                    title={profileStoreProblem
+                      ? "Saved drafts must be recovered before editing."
+                      : geometries.length === 0
                       ? "Loading verified keyboard geometries."
                       : profileForDevice(device)
                         ? "Open this local keyboard draft"

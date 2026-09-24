@@ -6,12 +6,21 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
 )
 
 const StoreVersion = 1
+
+// maxNameLength bounds user-visible names. Longer names cannot be displayed
+// usefully and are rejected rather than silently truncated.
+const maxNameLength = 80
+
+// identifier is the portable form for layer IDs and alias/macro names, which
+// are emitted verbatim as KMonad identifiers.
+var identifier = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9-]*$`)
 
 type StoreData struct {
 	Version  int       `json:"version"`
@@ -113,6 +122,9 @@ func Validate(profile Profile) error {
 	if profile.ID == "" || profile.DeviceID == "" || strings.TrimSpace(profile.Name) == "" {
 		return fmt.Errorf("profile ID, device ID, and name are required")
 	}
+	if len([]rune(profile.Name)) > maxNameLength {
+		return fmt.Errorf("profile name is longer than %d characters", maxNameLength)
+	}
 	if pending := profile.ApplyPending; pending != nil && (pending.ManagerServerID == "" || pending.StartedAt.IsZero()) {
 		return fmt.Errorf("pending apply is incomplete")
 	}
@@ -144,6 +156,17 @@ func Validate(profile Profile) error {
 	if !layers["base"] {
 		return fmt.Errorf("a base layer is required")
 	}
+	if profile.Layers[0].ID != "base" {
+		return fmt.Errorf("the base layer must be the first layer")
+	}
+	for _, layer := range profile.Layers {
+		if !identifier.MatchString(layer.ID) {
+			return fmt.Errorf("invalid layer ID %q", layer.ID)
+		}
+		if len([]rune(layer.Name)) > maxNameLength {
+			return fmt.Errorf("layer name %q is longer than %d characters", layer.Name, maxNameLength)
+		}
+	}
 	assigned := map[string]bool{}
 	for _, assignment := range profile.Assignments {
 		if !layers[assignment.LayerID] || !sources[assignment.SourceKey] {
@@ -159,16 +182,16 @@ func Validate(profile Profile) error {
 		}
 	}
 	for name, behavior := range profile.Aliases {
-		if name == "" {
-			return fmt.Errorf("alias has an empty name")
+		if !identifier.MatchString(name) {
+			return fmt.Errorf("invalid alias name %q", name)
 		}
 		if err := validateBehavior(behavior, layers, profile.Aliases, profile.Macros); err != nil {
 			return fmt.Errorf("alias %q: %w", name, err)
 		}
 	}
 	for name, macro := range profile.Macros {
-		if name == "" || len(macro) == 0 {
-			return fmt.Errorf("macro has an empty name or body")
+		if !identifier.MatchString(name) || len(macro) == 0 {
+			return fmt.Errorf("macro %q needs a valid name and at least one step", name)
 		}
 		if _, exists := profile.Aliases[name]; exists {
 			return fmt.Errorf("alias and macro share the name %q", name)

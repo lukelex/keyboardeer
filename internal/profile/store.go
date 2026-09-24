@@ -69,49 +69,78 @@ func (s *Store) load() (StoreData, error) {
 	if err := json.Unmarshal(data, &store); err != nil {
 		return StoreData{}, &CorruptStoreError{Path: s.path, Err: err}
 	}
-	migrated := store.Version == 0
-	if migrated {
-		store.Version = StoreVersion
-		for index := range store.Profiles {
-			if store.Profiles[index].DraftRevision == 0 {
-				store.Profiles[index].DraftRevision = 1
-			}
-		}
-	}
-	if store.Version != StoreVersion {
+	if store.Version > StoreVersion || store.Version < 0 {
 		return StoreData{}, &UnsupportedStoreVersionError{Path: s.path, Version: store.Version}
+	}
+	original := store.Version
+	for store.Version < StoreVersion {
+		migrate := migrations[store.Version]
+		if migrate == nil {
+			return StoreData{}, &UnsupportedStoreVersionError{Path: s.path, Version: original}
+		}
+		migrate(&store)
+		store.Version++
+	}
+	if store.Profiles == nil {
+		store.Profiles = []Profile{}
 	}
 	if err := ValidateStore(store); err != nil {
 		return StoreData{}, &CorruptStoreError{Path: s.path, Err: err}
 	}
-	if migrated {
+	if original != StoreVersion {
+		// Keep the exact pre-migration bytes: an older KeyboarDeer can still
+		// read them, and a migration bug never destroys the only copy.
+		backup := fmt.Sprintf("%s.v%d-backup", s.path, original)
+		if err := writeFileAtomic(backup, data); err != nil {
+			return StoreData{}, fmt.Errorf("back up profile store before migration: %w", err)
+		}
 		if err := s.save(store); err != nil {
 			return StoreData{}, err
 		}
 	}
 	return store, nil
 }
+
+// migrations upgrade a store from the keyed version to the next one. Each step
+// must be deterministic and must not drop user data.
+var migrations = map[int]func(*StoreData){
+	// Version 0 predates the explicit version field and draft revisions.
+	0: func(store *StoreData) {
+		for index := range store.Profiles {
+			if store.Profiles[index].DraftRevision == 0 {
+				store.Profiles[index].DraftRevision = 1
+			}
+		}
+	},
+}
+
 func (s *Store) Save(data StoreData) error { s.mu.Lock(); defer s.mu.Unlock(); return s.save(data) }
 func (s *Store) save(data StoreData) error {
 	if err := ValidateStore(data); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
 		return err
 	}
 	encoded, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return err
 	}
-	encoded = append(encoded, '\n')
-	temporary, err := os.CreateTemp(filepath.Dir(s.path), ".profiles-*")
+	return writeFileAtomic(s.path, append(encoded, '\n'))
+}
+
+// writeFileAtomic writes a private temporary file, syncs it, and renames it
+// over the destination. A crash leaves either the old or the new complete
+// file, never a torn one; an orphaned temporary file is ignored by Load.
+func writeFileAtomic(path string, contents []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".profiles-*")
 	if err != nil {
 		return err
 	}
 	name := temporary.Name()
 	defer os.Remove(name)
 	if err = temporary.Chmod(0o600); err == nil {
-		_, err = temporary.Write(encoded)
+		_, err = temporary.Write(contents)
 	}
 	if err == nil {
 		err = temporary.Sync()
@@ -122,10 +151,10 @@ func (s *Store) save(data StoreData) error {
 	if err != nil {
 		return err
 	}
-	if err := os.Rename(name, s.path); err != nil {
+	if err := os.Rename(name, path); err != nil {
 		return err
 	}
-	dir, err := os.Open(filepath.Dir(s.path))
+	dir, err := os.Open(filepath.Dir(path))
 	if err != nil {
 		return err
 	}
