@@ -83,7 +83,7 @@ model, or a required runtime capability is unavailable.
 | Create and reopen an editor draft | None; application-owned persistence | N/A | Partial | The UI explicitly selects a verified US ANSI 60%, US ANSI TKL, or split Kinesis Freestyle 2 geometry, creates/reopens a local draft, and persists Base-layer key assignments. Repeated physical source codes in the Freestyle layout share a binding. Multiple-profile management, layers, undo/redo, and more behaviors remain. |
 | Compile behavior and live preview | `validation.preview` | Yes | Partial | The editor compiles and previews its complete saved draft after a Base-layer edit, coalescing rapid edits for 250 ms and discarding mismatched draft revisions. Successful behavior-only preview is proven on deployed `41b32c7`; add bounded preview concurrency, diagnostics adapter, and broader editor UI. |
 | Receive device/runtime changes | `snapshot.get`, `events.subscribe` | Yes | Partial | The app performs a snapshot-to-subscription handoff, persists replay cursors, and resyncs after stream loss, gaps, or manager restart. An end-to-end desktop smoke test against the deployed manager remains useful. |
-| Apply a managed profile | `configuration.create` / `update`, then snapshot/events | Mostly | Partial | The editor requires a current valid preview, connected device, and manager capability. Create/update performs manager-owned validation and activation. A transport failure after dispatch is persisted as an unknown outcome and deliberately blocks retry because manager-side idempotency is not evidenced. |
+| Apply a managed profile | `configuration.create` / `update`, then snapshot/events | Mostly | Partial | The editor requires a current valid preview, connected device, and manager capability. Create/update performs manager-owned validation and activation. The request and its idempotency key are persisted before dispatch; an unconfirmed apply is replayed with the same key, and `stale_revision` triggers refresh-and-review. |
 | Enable or disable managed runtime config | `configuration.set_enabled` / `configuration.delete` | Yes | Partial | Keyboard cards use a fresh snapshot revision and direct checkbox state. Removal is a separate, confirmed action; it clears only the removed configuration's profile link. |
 | Show external runtime configuration | `snapshot.get` / `configuration.list` | Yes | Partial | Snapshot-backed device cards expose associated configuration state; a dedicated read-only external screen remains. |
 | Show external raw `.kbd` source | No supported API | **No** | No | A manager-owned, access-controlled content-read/export API. Do not read manager files directly. |
@@ -99,15 +99,19 @@ its normal capability-gated Devices and Identify flow against a manager built
 from this source. It must still negotiate at runtime and treat unavailable
 capabilities as disabled; this source audit is not a released-binary guarantee.
 
-### 2. Durable idempotency is not yet evidenced in the lifecycle source
+### 2. Durable idempotency — implemented in manager `v1.1.0`
 
-The wire request includes `idempotency_key`, and API prose requires it for
-durable mutations. The reviewed lifecycle handlers consume expected revisions
-but do not take or persist the request idempotency key. Therefore KeyboarDeer
-may build create/update/apply UI against this source, but must not automatically
-retry an uncertain mutation or claim complete lost-response recovery until the
-manager documents and implements idempotency correlation. Refreshing a snapshot
-can show current state, but cannot reliably identify an unknown accepted request.
+Manager `v1.1.0` (`712f4aa`) requires a 1–128-byte `idempotency_key` on
+`configuration.create`, `update`, `apply`, `set_enabled`, `delete`, and
+`adopt`, binds it durably to a fingerprint of the method and parameters, and
+replays the original operation (running or finished) for the same key and
+parameters, including after a manager restart. Reusing a key with different
+parameters fails with `idempotency_conflict`.
+
+KeyboarDeer sends a fresh key with every mutation. For Apply it persists the
+key and the exact request before sending, automatically replays an
+unconfirmed request a bounded number of times, and otherwise keeps it for an
+explicit, safe "Check apply outcome" replay. Older managers ignore the field.
 
 ### 3. External content/export remains unavailable
 

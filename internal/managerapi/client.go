@@ -67,6 +67,8 @@ type request struct {
 	Method     string `json:"method"`
 	Params     any    `json:"params"`
 	DeadlineMS int    `json:"deadline_ms,omitempty"`
+	// IdempotencyKey is required by the manager for durable mutations.
+	IdempotencyKey string `json:"idempotency_key,omitempty"`
 }
 
 type response struct {
@@ -291,17 +293,17 @@ func (c *APIClient) rawCall(ctx context.Context, method string, params any) (jso
 	if err != nil {
 		return nil, err
 	}
-	return c.rawCallOnConnection(ctx, connection, method, params)
+	return c.rawCallOnConnection(ctx, connection, method, params, "")
 }
 
-func (c *APIClient) rawCallOnConnection(ctx context.Context, connection *ClientConnection, method string, params any) (json.RawMessage, error) {
+func (c *APIClient) rawCallOnConnection(ctx context.Context, connection *ClientConnection, method string, params any, idempotencyKey string) (json.RawMessage, error) {
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, c.deadline)
 		defer cancel()
 	}
 	id := requestID()
-	wire := request{Type: "request", ID: id, Method: method, Params: params, DeadlineMS: deadlineMilliseconds(ctx, c.deadline)}
+	wire := request{Type: "request", ID: id, Method: method, Params: params, DeadlineMS: deadlineMilliseconds(ctx, c.deadline), IdempotencyKey: idempotencyKey}
 	payload, err := json.Marshal(wire)
 	if err != nil {
 		return nil, fmt.Errorf("encode %s: %w", method, err)
@@ -372,7 +374,7 @@ func (c *APIClient) ensureHello(ctx context.Context) (*ClientConnection, error) 
 	if connection.hello != nil {
 		return connection, nil
 	}
-	result, err := c.rawCallOnConnection(ctx, connection, "session.hello", HelloParams{SupportedVersions: []int{APIVersion}, Client: c.identity})
+	result, err := c.rawCallOnConnection(ctx, connection, "session.hello", HelloParams{SupportedVersions: []int{APIVersion}, Client: c.identity}, "")
 	if err != nil {
 		return nil, err
 	}
@@ -388,11 +390,18 @@ func (c *APIClient) ensureHello(ctx context.Context) (*ClientConnection, error) 
 }
 
 func (c *APIClient) call(ctx context.Context, method string, params any, output any) error {
+	return c.mutate(ctx, method, params, "", output)
+}
+
+// mutate sends a request with a durable idempotency key. The manager returns
+// the original operation when the same key and parameters are sent again, so a
+// lost response can be recovered without running the mutation twice.
+func (c *APIClient) mutate(ctx context.Context, method string, params any, idempotencyKey string, output any) error {
 	connection, err := c.ensureHello(ctx)
 	if err != nil {
 		return err
 	}
-	result, err := c.rawCallOnConnection(ctx, connection, method, params)
+	result, err := c.rawCallOnConnection(ctx, connection, method, params, idempotencyKey)
 	if err != nil {
 		return err
 	}
@@ -446,23 +455,28 @@ func (c *APIClient) Preview(ctx context.Context, params PreviewParams) (PreviewR
 	var result PreviewResult
 	return result, c.call(ctx, "validation.preview", params, &result)
 }
-func (c *APIClient) ConfigurationCreate(ctx context.Context, params ConfigurationWriteParams) (Operation, error) {
+func (c *APIClient) ConfigurationCreate(ctx context.Context, params ConfigurationWriteParams, idempotencyKey string) (Operation, error) {
 	var result ConfigurationWriteResult
-	err := c.call(ctx, "configuration.create", params, &result)
+	err := c.mutate(ctx, "configuration.create", params, idempotencyKey, &result)
 	return result.Operation, err
 }
-func (c *APIClient) ConfigurationUpdate(ctx context.Context, params ConfigurationWriteParams) (Operation, error) {
+func (c *APIClient) ConfigurationUpdate(ctx context.Context, params ConfigurationWriteParams, idempotencyKey string) (Operation, error) {
 	var result ConfigurationWriteResult
-	err := c.call(ctx, "configuration.update", params, &result)
+	err := c.mutate(ctx, "configuration.update", params, idempotencyKey, &result)
 	return result.Operation, err
 }
-func (c *APIClient) ConfigurationSetEnabled(ctx context.Context, params ConfigurationSetEnabledParams) (Operation, error) {
+func (c *APIClient) ConfigurationSetEnabled(ctx context.Context, params ConfigurationSetEnabledParams, idempotencyKey string) (Operation, error) {
 	var result ConfigurationSetEnabledResult
-	err := c.call(ctx, "configuration.set_enabled", params, &result)
+	err := c.mutate(ctx, "configuration.set_enabled", params, idempotencyKey, &result)
 	return result.Operation, err
 }
-func (c *APIClient) ConfigurationDelete(ctx context.Context, params ConfigurationDeleteParams) (Operation, error) {
+func (c *APIClient) ConfigurationDelete(ctx context.Context, params ConfigurationDeleteParams, idempotencyKey string) (Operation, error) {
 	var result ConfigurationSetEnabledResult
-	err := c.call(ctx, "configuration.delete", params, &result)
+	err := c.mutate(ctx, "configuration.delete", params, idempotencyKey, &result)
 	return result.Operation, err
+}
+
+// NewIdempotencyKey returns an opaque key within the manager's 128-byte limit.
+func NewIdempotencyKey() string {
+	return "keyboardeer-" + requestID()
 }

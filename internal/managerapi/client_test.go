@@ -18,6 +18,8 @@ type capturedRequest struct {
 	ID     string          `json:"id"`
 	Method string          `json:"method"`
 	Params json.RawMessage `json:"params"`
+	// IdempotencyKey is present on durable mutation requests.
+	IdempotencyKey string `json:"idempotency_key"`
 }
 
 type shortWriteConn struct {
@@ -187,11 +189,16 @@ func TestClientReturnsContextDeadlineForAnUnresponsiveRequest(t *testing.T) {
 
 func TestConfigurationWritesUseExplicitCreateAndRevisionCheckedUpdate(t *testing.T) {
 	var writes []ConfigurationWriteParams
+	var keys []string
 	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
 		switch request.Method {
 		case "session.hello":
+			if request.IdempotencyKey != "" {
+				t.Errorf("read-only request carried an idempotency key: %q", request.IdempotencyKey)
+			}
 			writeResult(t, rw, request.ID, `{"selected_version":1,"server_id":"server","manager_version":"test"}`)
 		case "configuration.create", "configuration.update":
+			keys = append(keys, request.IdempotencyKey)
 			var params ConfigurationWriteParams
 			if err := json.Unmarshal(request.Params, &params); err != nil {
 				t.Error(err)
@@ -206,13 +213,16 @@ func TestConfigurationWritesUseExplicitCreateAndRevisionCheckedUpdate(t *testing
 	client := New(Options{Endpoint: socket})
 	defer client.Close()
 	model := PreviewModel{DeviceID: "dev-1", Behavior: "(defsrc caps)\n(deflayer base esc)"}
-	created, err := client.ConfigurationCreate(context.Background(), ConfigurationWriteParams{Name: "My board", Model: model})
+	created, err := client.ConfigurationCreate(context.Background(), ConfigurationWriteParams{Name: "My board", Model: model}, "key-create")
 	if err != nil || created.Resource == nil || created.Resource.ID != "cfg-1" {
 		t.Fatalf("create = %#v, %v", created, err)
 	}
 	revision := uint64(4)
-	if _, err := client.ConfigurationUpdate(context.Background(), ConfigurationWriteParams{ConfigurationID: "cfg-1", Model: model, ExpectedRevision: &revision}); err != nil {
+	if _, err := client.ConfigurationUpdate(context.Background(), ConfigurationWriteParams{ConfigurationID: "cfg-1", Model: model, ExpectedRevision: &revision}, "key-update"); err != nil {
 		t.Fatal(err)
+	}
+	if len(keys) != 2 || keys[0] != "key-create" || keys[1] != "key-update" {
+		t.Fatalf("mutation keys = %v", keys)
 	}
 	if len(writes) != 2 || writes[0].ConfigurationID != "" || writes[0].ExpectedRevision != nil || writes[0].Name != "My board" {
 		t.Fatalf("unexpected create parameters: %#v", writes)
@@ -233,8 +243,8 @@ func TestConfigurationDeleteUsesTheObservedRevision(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			if params.ConfigurationID != "cfg-1" || params.ExpectedRevision != 7 {
-				t.Errorf("unexpected delete parameters: %#v", params)
+			if params.ConfigurationID != "cfg-1" || params.ExpectedRevision != 7 || request.IdempotencyKey != "key-delete" {
+				t.Errorf("unexpected delete request: %#v, key %q", params, request.IdempotencyKey)
 			}
 			writeResult(t, rw, request.ID, `{"operation":{"id":"op-2","kind":"lifecycle","state":"succeeded","resource":{"kind":"configuration","id":"cfg-1"},"reason_code":"operation_succeeded","reason":"configuration deleted and its KMonad process stopped","configuration_revision":0}}`)
 		default:
@@ -243,7 +253,7 @@ func TestConfigurationDeleteUsesTheObservedRevision(t *testing.T) {
 	})
 	client := New(Options{Endpoint: socket})
 	defer client.Close()
-	operation, err := client.ConfigurationDelete(context.Background(), ConfigurationDeleteParams{ConfigurationID: "cfg-1", ExpectedRevision: 7})
+	operation, err := client.ConfigurationDelete(context.Background(), ConfigurationDeleteParams{ConfigurationID: "cfg-1", ExpectedRevision: 7}, "key-delete")
 	if err != nil || operation.State != "succeeded" || operation.Reason == "" {
 		t.Fatalf("delete = %#v, %v", operation, err)
 	}
@@ -260,8 +270,8 @@ func TestConfigurationSetEnabledUsesTheObservedRevision(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			if params.ConfigurationID != "cfg-1" || params.ExpectedRevision != 7 || params.Enabled {
-				t.Errorf("unexpected lifecycle parameters: %#v", params)
+			if params.ConfigurationID != "cfg-1" || params.ExpectedRevision != 7 || params.Enabled || request.IdempotencyKey != "key-enable" {
+				t.Errorf("unexpected lifecycle request: %#v, key %q", params, request.IdempotencyKey)
 			}
 			writeResult(t, rw, request.ID, `{"operation":{"id":"op-1","kind":"lifecycle","state":"succeeded","resource":{"kind":"configuration","id":"cfg-1"},"reason_code":"operation_succeeded","reason":"configuration disabled and its KMonad process stopped","configuration_revision":8}}`)
 		default:
@@ -270,7 +280,7 @@ func TestConfigurationSetEnabledUsesTheObservedRevision(t *testing.T) {
 	})
 	client := New(Options{Endpoint: socket})
 	defer client.Close()
-	operation, err := client.ConfigurationSetEnabled(context.Background(), ConfigurationSetEnabledParams{ConfigurationID: "cfg-1", ExpectedRevision: 7, Enabled: false})
+	operation, err := client.ConfigurationSetEnabled(context.Background(), ConfigurationSetEnabledParams{ConfigurationID: "cfg-1", ExpectedRevision: 7, Enabled: false}, "key-enable")
 	if err != nil || operation.State != "succeeded" || operation.ConfigurationRevision != 8 {
 		t.Fatalf("set enabled = %#v, %v", operation, err)
 	}

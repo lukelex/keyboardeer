@@ -310,19 +310,29 @@ func (a *App) PreviewProfile(id string) (ProfilePreview, error) {
 	return ProfilePreview{ProfileID: draft.ID, DraftRevision: draft.DraftRevision, DeviceID: draft.DeviceID, ManagerServerID: after.ServerID, StateRevision: after.StateRevision, Validation: preview.Validation, SourceMap: compiled.SourceMap}, nil
 }
 
-// ProfileApplyResult links the accepted manager operation to the local draft.
-// The operation is terminal when returned by the reviewed manager, but the UI
-// still displays its manager-owned lifecycle outcome rather than assuming that
-// a successful validation means activation.
+// ProfileApplyResult links a manager operation to the local draft. The UI
+// displays the manager-owned outcome rather than assuming that a successful
+// validation means activation.
 type ProfileApplyResult struct {
 	Profile   profile.Profile      `json:"profile"`
 	Operation managerapi.Operation `json:"operation"`
+	// Stale reports that the keyboard's configuration changed on the manager
+	// between review and apply. Nothing was applied; the user should review
+	// the refreshed state and apply again.
+	Stale bool `json:"stale,omitempty"`
+	// Uncertain reports that the manager did not confirm the request. The
+	// exact request is kept and can be replayed safely with ResumeApply.
+	Uncertain bool `json:"uncertain,omitempty"`
 }
+
+// applyRetryDelays bounds automatic replays of an unconfirmed mutation. Each
+// replay reuses the same idempotency key, so the manager never applies twice.
+var applyRetryDelays = []time.Duration{250 * time.Millisecond, time.Second}
 
 // ApplyProfile creates or updates the manager-owned configuration associated
 // with this local profile. It never accesses a device or writes a .kbd file.
-// In particular, a transport failure after dispatch remains recorded locally:
-// retrying a mutation without manager-side idempotency could duplicate it.
+// The request and its idempotency key are persisted before sending, so a lost
+// response or GUI restart is recovered by replaying the identical request.
 func (a *App) ApplyProfile(id string) (ProfileApplyResult, error) {
 	store, err := a.profileStore()
 	if err != nil {
@@ -333,6 +343,9 @@ func (a *App) ApplyProfile(id string) (ProfileApplyResult, error) {
 		return ProfileApplyResult{}, err
 	}
 	if draft.ApplyPending != nil {
+		if draft.ApplyPending.Replayable() {
+			return a.ResumeApply(id)
+		}
 		return ProfileApplyResult{}, fmt.Errorf("the previous apply outcome is unknown since %s; KeyboarDeer will not retry it", draft.ApplyPending.StartedAt.Format(time.RFC3339))
 	}
 	compiled, err := compiler.Compile(draft)
@@ -391,30 +404,110 @@ func (a *App) ApplyProfile(id string) (ProfileApplyResult, error) {
 		revision := configuration.DesiredRevision
 		expected = &revision
 	}
-	pending, err := store.SetApplyState(draft.ID, draft.DraftRevision, "", &profile.PendingApply{ManagerServerID: info.ServerID, StartedAt: time.Now().UTC()})
-	if err != nil {
-		return ProfileApplyResult{}, err
-	}
 	params := managerapi.ConfigurationWriteParams{
 		ConfigurationID:  configurationID,
-		Name:             pending.Name,
-		Model:            managerapi.PreviewModel{DeviceID: pending.DeviceID, Behavior: compiled.Behavior},
+		Name:             draft.Name,
+		Model:            managerapi.PreviewModel{DeviceID: draft.DeviceID, Behavior: compiled.Behavior},
 		ExpectedRevision: expected,
 	}
+	method := "configuration.create"
+	if configurationID != "" {
+		method = "configuration.update"
+	}
+	request, err := json.Marshal(params)
+	if err != nil {
+		return ProfileApplyResult{}, err
+	}
+	pending, err := store.SetApplyState(draft.ID, draft.DraftRevision, "", &profile.PendingApply{
+		ManagerServerID: info.ServerID,
+		StartedAt:       time.Now().UTC(),
+		IdempotencyKey:  managerapi.NewIdempotencyKey(),
+		Method:          method,
+		Request:         request,
+	})
+	if err != nil {
+		return ProfileApplyResult{}, err
+	}
+	return a.sendPendingApply(ctx, store, pending)
+}
+
+// ResumeApply replays a profile's unconfirmed apply with its original request
+// and idempotency key. The manager returns the original operation (running or
+// finished) instead of performing the mutation again.
+func (a *App) ResumeApply(id string) (ProfileApplyResult, error) {
+	store, err := a.profileStore()
+	if err != nil {
+		return ProfileApplyResult{}, err
+	}
+	draft, err := a.profileByID(id)
+	if err != nil {
+		return ProfileApplyResult{}, err
+	}
+	if draft.ApplyPending == nil {
+		return ProfileApplyResult{Profile: draft}, nil
+	}
+	if !draft.ApplyPending.Replayable() {
+		return ProfileApplyResult{}, fmt.Errorf("this apply was sent by an older KeyboarDeer without a recovery key and cannot be replayed")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return a.sendPendingApply(ctx, store, draft)
+}
+
+func (a *App) sendPendingApply(ctx context.Context, store *profile.Store, pending profile.Profile) (ProfileApplyResult, error) {
+	record := pending.ApplyPending
+	var params managerapi.ConfigurationWriteParams
+	if err := json.Unmarshal(record.Request, &params); err != nil {
+		return ProfileApplyResult{}, fmt.Errorf("decode pending apply request: %w", err)
+	}
 	var operation managerapi.Operation
-	if configurationID == "" {
-		operation, err = a.manager.ConfigurationCreate(ctx, params)
-	} else {
-		operation, err = a.manager.ConfigurationUpdate(ctx, params)
+	var err error
+	for attempt := 0; ; attempt++ {
+		if record.Method == "configuration.create" {
+			operation, err = a.manager.ConfigurationCreate(ctx, params, record.IdempotencyKey)
+		} else {
+			operation, err = a.manager.ConfigurationUpdate(ctx, params, record.IdempotencyKey)
+		}
+		if err == nil || !uncertainMutationError(err) || attempt >= len(applyRetryDelays) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+		case <-time.After(applyRetryDelays[attempt]):
+		}
+		if ctx.Err() != nil {
+			break
+		}
 	}
 	if err != nil {
+		if uncertainMutationError(err) {
+			// Keep the exact request: replaying it later is safe.
+			return ProfileApplyResult{Profile: pending, Uncertain: true}, nil
+		}
+		cleared, saveErr := store.SetApplyState(pending.ID, pending.DraftRevision, "", nil)
+		if saveErr != nil {
+			return ProfileApplyResult{}, fmt.Errorf("apply was not performed (%w); also could not clear the local pending state: %v", err, saveErr)
+		}
 		var managerError *managerapi.Error
-		if errors.As(err, &managerError) && managerError.Code != "transport" {
-			if _, saveErr := store.SetApplyState(pending.ID, pending.DraftRevision, "", nil); saveErr != nil {
-				return ProfileApplyResult{}, fmt.Errorf("apply was rejected (%w); also could not clear the local pending state: %v", err, saveErr)
-			}
+		if errors.As(err, &managerError) && managerError.Code == "stale_revision" {
+			return ProfileApplyResult{Profile: cleared, Stale: true}, nil
 		}
 		return ProfileApplyResult{}, err
+	}
+	return a.recordApplyOperation(store, pending, operation)
+}
+
+// recordApplyOperation stores the manager's answer. A running operation keeps
+// the pending record (with its operation ID) so it can be followed later.
+func (a *App) recordApplyOperation(store *profile.Store, pending profile.Profile, operation managerapi.Operation) (ProfileApplyResult, error) {
+	if !terminalOperation(operation.State) {
+		record := *pending.ApplyPending
+		record.OperationID = operation.ID
+		updated, err := store.SetApplyState(pending.ID, pending.DraftRevision, "", &record)
+		if err != nil {
+			return ProfileApplyResult{}, err
+		}
+		return ProfileApplyResult{Profile: updated, Operation: operation}, nil
 	}
 	// A rejected create is never persisted by the manager. Successful,
 	// rolled-back, and failed lifecycle outcomes still identify a managed
@@ -423,11 +516,46 @@ func (a *App) ApplyProfile(id string) (ProfileApplyResult, error) {
 	if operation.State != "rejected" && operation.Resource != nil && operation.Resource.Kind == "configuration" && operation.Resource.ID != "" {
 		linkedID = operation.Resource.ID
 	}
-	linked, saveErr := store.SetApplyState(pending.ID, pending.DraftRevision, linkedID, nil)
-	if saveErr != nil {
-		return ProfileApplyResult{}, fmt.Errorf("manager apply completed but KeyboarDeer could not save its configuration link: %w", saveErr)
+	linked, err := store.SetApplyState(pending.ID, pending.DraftRevision, linkedID, nil)
+	if err != nil {
+		return ProfileApplyResult{}, fmt.Errorf("manager apply finished but KeyboarDeer could not save its configuration link: %w", err)
 	}
 	return ProfileApplyResult{Profile: linked, Operation: operation}, nil
+}
+
+// uncertainMutationError reports whether a mutation may or may not have
+// reached the manager. Structured manager errors are definite answers.
+func uncertainMutationError(err error) bool {
+	var managerError *managerapi.Error
+	if errors.As(err, &managerError) {
+		return managerError.Code == "transport" || managerError.Code == "temporary_unavailable"
+	}
+	return true
+}
+
+func terminalOperation(state string) bool {
+	switch state {
+	case "succeeded", "rejected", "failed", "rolled_back", "cancelled":
+		return true
+	}
+	return false
+}
+
+// mutationWithRetry sends a single-shot lifecycle mutation with one key,
+// replaying it if the response is lost.
+func (a *App) mutationWithRetry(ctx context.Context, send func(key string) (managerapi.Operation, error)) (managerapi.Operation, error) {
+	key := managerapi.NewIdempotencyKey()
+	for attempt := 0; ; attempt++ {
+		operation, err := send(key)
+		if err == nil || !uncertainMutationError(err) || attempt >= len(applyRetryDelays) {
+			return operation, err
+		}
+		select {
+		case <-ctx.Done():
+			return operation, err
+		case <-time.After(applyRetryDelays[attempt]):
+		}
+	}
 }
 
 // SetConfigurationEnabled starts or stops a manager-owned binding. External
@@ -450,10 +578,13 @@ func (a *App) SetConfigurationEnabled(configurationID string, enabled bool) (man
 		if configuration.Ownership != "managed" {
 			return managerapi.Operation{}, fmt.Errorf("external configurations are read-only in KeyboarDeer")
 		}
-		return a.manager.ConfigurationSetEnabled(ctx, managerapi.ConfigurationSetEnabledParams{
+		params := managerapi.ConfigurationSetEnabledParams{
 			ConfigurationID:  configuration.ID,
 			ExpectedRevision: configuration.DesiredRevision,
 			Enabled:          enabled,
+		}
+		return a.mutationWithRetry(ctx, func(key string) (managerapi.Operation, error) {
+			return a.manager.ConfigurationSetEnabled(ctx, params, key)
 		})
 	}
 	return managerapi.Operation{}, fmt.Errorf("manager configuration %q does not exist", configurationID)
@@ -493,9 +624,12 @@ func (a *App) DeleteConfiguration(configurationID string) (managerapi.Operation,
 		if configuration.Ownership != "managed" {
 			return managerapi.Operation{}, fmt.Errorf("external configurations are read-only in KeyboarDeer")
 		}
-		operation, err := a.manager.ConfigurationDelete(ctx, managerapi.ConfigurationDeleteParams{
+		params := managerapi.ConfigurationDeleteParams{
 			ConfigurationID:  configuration.ID,
 			ExpectedRevision: configuration.DesiredRevision,
+		}
+		operation, err := a.mutationWithRetry(ctx, func(key string) (managerapi.Operation, error) {
+			return a.manager.ConfigurationDelete(ctx, params, key)
 		})
 		if err != nil {
 			return managerapi.Operation{}, err

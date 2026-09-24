@@ -228,6 +228,9 @@ func TestValidateEnforcesSchemaRules(t *testing.T) {
 		"invalid alias name": func(p *Profile) { p.Aliases = map[string]Behavior{"has space": {Kind: "key", Key: "a"}} },
 		"empty macro":        func(p *Profile) { p.Macros = map[string][]Behavior{"empty": {}} },
 		"long name":          func(p *Profile) { p.Name = strings.Repeat("x", 81) },
+		"unreplayable pending apply": func(p *Profile) {
+			p.ApplyPending = &PendingApply{ManagerServerID: "server-1", StartedAt: time.Now(), IdempotencyKey: "key"}
+		},
 	} {
 		value := testProfile(t, "Schema")
 		mutate(&value)

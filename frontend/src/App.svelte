@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from "svelte";
   import {
     ApplyProfile,
+    ResumeApply,
     CreateProfile,
     DeleteConfiguration,
     DeleteProfile,
@@ -163,6 +164,7 @@
   let pendingPreview: { draft: Profile; generation: number } | null = null;
   let applyBusy = false;
   let applyReviewOpen = false;
+  let applyReviewNotice = "";
   let applyOperation: Operation | null = null;
   let lifecycleBusyID = "";
   let confirmConfigurationDeleteID = "";
@@ -823,6 +825,8 @@
       selectedSourceKey = "";
       selectedLayerID = "base";
       view = "editor";
+      // A reopened draft is validated right away, not only after an edit.
+      schedulePreview(draft);
       return;
     }
     activeProfile = null;
@@ -1197,17 +1201,42 @@
     }
     void previewDraft(draft, generation);
   }
+  function acceptApplyResult(result: ProfileApplyResult) {
+    activeProfile = result.profile;
+    profiles = profiles.map((profile) =>
+      profile.id === result.profile.id ? result.profile : profile,
+    );
+    applyOperation = result.uncertain || result.stale ? null : result.operation;
+  }
   async function applyDraft() {
     if (!activeProfile || !canApply || applyBusy) return;
     applyBusy = true;
     feedback = "";
     try {
       const result: ProfileApplyResult = await ApplyProfile(activeProfile.id);
-      activeProfile = result.profile;
-      profiles = profiles.map((profile) =>
-        profile.id === result.profile.id ? result.profile : profile,
-      );
-      applyOperation = result.operation;
+      acceptApplyResult(result);
+      await refresh();
+      if (result.stale) {
+        // Another client changed this keyboard's configuration after review.
+        // Nothing was applied; show the refreshed state and ask again.
+        applyReviewNotice =
+          "This keyboard's mapping was changed on the manager since you reviewed it. KeyboarDeer refreshed the keyboard state and applied nothing. Review your draft and apply again.";
+        applyReviewOpen = true;
+      }
+    } catch (error) {
+      feedback = explain(error);
+    } finally {
+      applyBusy = false;
+    }
+  }
+  // Replays the stored request with its idempotency key: the manager returns
+  // the original outcome instead of applying a second time.
+  async function checkPendingApply() {
+    if (!activeProfile?.apply_pending || applyBusy) return;
+    applyBusy = true;
+    feedback = "";
+    try {
+      acceptApplyResult(await ResumeApply(activeProfile.id));
       await refresh();
     } catch (error) {
       feedback = explain(error);
@@ -1217,6 +1246,7 @@
   }
   function openApplyReview() {
     if (!canApply || applyBusy) return;
+    applyReviewNotice = "";
     applyReviewOpen = true;
   }
   async function confirmApply() {
@@ -2007,12 +2037,29 @@
                 {/each}
               </section>
             {/if}
-            {#if activeProfile.apply_pending}
+            {#if activeProfile.apply_pending?.idempotency_key}
+              <div class="apply-status apply-pending" role="status">
+                <p>
+                  The manager has not confirmed the Apply sent at {new Date(
+                    activeProfile.apply_pending.started_at,
+                  ).toLocaleString()}. KeyboarDeer kept the exact request, so
+                  checking again cannot apply it twice.
+                </p>
+                <button
+                  class="button secondary"
+                  type="button"
+                  on:click={checkPendingApply}
+                  disabled={applyBusy}
+                  >{applyBusy ? "Checking…" : "Check apply outcome"}</button
+                >
+              </div>
+            {:else if activeProfile.apply_pending}
               <p class="apply-status">
                 An Apply sent at {new Date(
                   activeProfile.apply_pending.started_at,
-                ).toLocaleString()} has an unknown outcome. To prevent a duplicate
-                configuration, KeyboarDeer will not retry it automatically.
+                ).toLocaleString()} by an older KeyboarDeer has an unknown outcome.
+                To prevent a duplicate configuration, KeyboarDeer will not retry it
+                automatically.
               </p>
             {:else if applyOperation}
               <p class="apply-status">
@@ -2554,6 +2601,9 @@
         >
         <p class="eyebrow">REVIEW &amp; APPLY</p>
         <h2 id="apply-review-title">Ready to send this draft?</h2>
+        {#if applyReviewNotice}
+          <p class="apply-review-notice" role="alert">{applyReviewNotice}</p>
+        {/if}
         <p class="dialog-intro">
           The manager will render, validate, persist, and supervise this profile.
           Nothing changes until you confirm.
@@ -2574,7 +2624,14 @@
             type="button"
             on:click={() => (applyReviewOpen = false)}>Keep editing</button
           >
-          <button class="button primary" type="button" on:click={confirmApply}
+          <button
+            class="button primary"
+            type="button"
+            on:click={confirmApply}
+            disabled={!canApply || applyBusy}
+            title={canApply
+              ? "Send this draft to the keyboard"
+              : "Waiting for a current valid preview of the refreshed keyboard state."}
             >Apply to keyboard</button
           >
         </div>

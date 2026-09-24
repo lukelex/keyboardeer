@@ -1597,3 +1597,28 @@ footer {
     letter-spacing: -2.4px;
   }
 }
+.apply-pending {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+.apply-pending p {
+  flex: 1 1 320px;
+  margin: 0;
+}
+.apply-pending .button {
+  color: #35604c;
+  min-height: 30px;
+  padding: 4px 10px;
+}
+.apply-review-notice {
+  background: #fcf6e8;
+  border: 1px solid #dfcea4;
+  border-radius: 8px;
+  color: #796239;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 10px 0 0;
+  padding: 9px 11px;
+}

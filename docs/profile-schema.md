@@ -39,7 +39,7 @@ moves the link, rather than creating a second configuration for the device.
 | `name` | Display name, 1–80 characters. |
 | `device_id` | Opaque manager device ID the profile is for. Fixed at creation. |
 | `manager_configuration_id` | Opaque manager configuration linked by Apply. Written only by the apply workflow. |
-| `apply_pending` | Set while an Apply outcome is unknown; blocks editing and another Apply. |
+| `apply_pending` | Set while an Apply outcome is unconfirmed; blocks editing and another Apply. Holds the manager server ID, start time, and — for replayable records — the idempotency key, method, exact request parameters, and any running operation ID. |
 | `draft_revision` | Positive, incremented by every draft edit. |
 | `geometry.id` | Verified layout ID. Fixed at creation. |
 | `geometry.source_keys` | KMonad source keys in physical order. Repeated codes are shared physical keys. Fixed at creation. |

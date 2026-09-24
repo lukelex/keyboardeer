@@ -5,6 +5,7 @@ package profile
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"sort"
@@ -47,12 +48,24 @@ type Profile struct {
 	UpdatedAt              time.Time             `json:"updated_at"`
 }
 
-// PendingApply is written before a manager mutation. The manager revision
-// reviewed by KeyboarDeer does not offer durable idempotency correlation, so a
-// lost response must block another apply instead of guessing whether it ran.
+// PendingApply is written before a manager mutation is sent. It records the
+// exact request and its idempotency key, so a lost response (or a GUI restart)
+// is recovered by replaying the identical request: the manager then returns
+// the original operation instead of applying twice. Records written before
+// idempotency support have no key and cannot be replayed.
 type PendingApply struct {
-	ManagerServerID string    `json:"manager_server_id"`
-	StartedAt       time.Time `json:"started_at"`
+	ManagerServerID string          `json:"manager_server_id"`
+	StartedAt       time.Time       `json:"started_at"`
+	IdempotencyKey  string          `json:"idempotency_key,omitempty"`
+	Method          string          `json:"method,omitempty"`
+	Request         json.RawMessage `json:"request,omitempty"`
+	OperationID     string          `json:"operation_id,omitempty"`
+}
+
+// Replayable reports whether the pending apply can be recovered safely.
+func (p PendingApply) Replayable() bool {
+	return p.IdempotencyKey != "" && len(p.Request) != 0 &&
+		(p.Method == "configuration.create" || p.Method == "configuration.update")
 }
 
 type Geometry struct {
@@ -154,8 +167,13 @@ func Validate(profile Profile) error {
 	if len([]rune(profile.Name)) > maxNameLength {
 		return fmt.Errorf("profile name is longer than %d characters", maxNameLength)
 	}
-	if pending := profile.ApplyPending; pending != nil && (pending.ManagerServerID == "" || pending.StartedAt.IsZero()) {
-		return fmt.Errorf("pending apply is incomplete")
+	if pending := profile.ApplyPending; pending != nil {
+		if pending.ManagerServerID == "" || pending.StartedAt.IsZero() {
+			return fmt.Errorf("pending apply is incomplete")
+		}
+		if pending.IdempotencyKey != "" && !pending.Replayable() {
+			return fmt.Errorf("pending apply has an idempotency key but no replayable request")
+		}
 	}
 	if profile.Settings.Version != 1 {
 		return fmt.Errorf("unsupported compiler settings version %d", profile.Settings.Version)

@@ -635,6 +635,149 @@ test("switches, renames, duplicates, and deletes profiles per keyboard", async (
   expect(errors).toEqual([]);
 });
 
+test("re-reviews a stale apply and safely rechecks an unconfirmed one", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.addInitScript((fixture) => {
+    const state = JSON.parse(JSON.stringify(fixture)) as ManagerWorkspace;
+    let draft: Profile = {
+      id: "profile-1",
+      name: "Typing",
+      device_id: "device-1",
+      draft_revision: 3,
+      geometry: { id: "fixture", source_keys: ["caps"] },
+      layers: [{ id: "base", name: "Base" }],
+      assignments: null,
+      settings: { version: 1 },
+      created_at: "2026-09-24T08:00:00Z",
+      updated_at: "2026-09-24T08:00:00Z",
+    };
+    let applyCalls = 0;
+    window.go = {
+      main: {
+        App: {
+          Info: async () => ({ name: "KeyboarDeer", version: "test" }),
+          Workspace: async () => JSON.parse(JSON.stringify(state)),
+          Geometries: async () => [
+            {
+              id: "fixture",
+              name: "Fixture layout",
+              description: "Explicit test geometry",
+              keys: [
+                {
+                  id: "caps",
+                  label: "Caps",
+                  source_key: "caps",
+                  row: 0,
+                  width: 1,
+                },
+              ],
+            },
+          ],
+          Profiles: async () => [draft],
+          PreviewProfile: async (id) => ({
+            profile_id: id,
+            draft_revision: draft.draft_revision,
+            device_id: "device-1",
+            manager_server_id: "server-1",
+            state_revision: state.snapshot!.state_revision,
+            validation: {
+              outcome: "valid",
+              reason_code: "validation_succeeded",
+              reason: "Valid",
+              diagnostics: null,
+            },
+            source_map: [],
+          }),
+          ApplyProfile: async () => {
+            applyCalls += 1;
+            if (applyCalls === 1) {
+              // Another client changed the configuration after review.
+              state.snapshot!.state_revision += 1;
+              return {
+                profile: draft,
+                operation: {
+                  id: "",
+                  kind: "",
+                  state: "",
+                  reason_code: "",
+                  reason: "",
+                },
+                stale: true,
+              };
+            }
+            draft = {
+              ...draft,
+              apply_pending: {
+                manager_server_id: "server-1",
+                started_at: "2026-09-24T09:00:00Z",
+                idempotency_key: "keyboardeer-abc",
+                method: "configuration.update",
+              },
+            };
+            return {
+              profile: draft,
+              operation: {
+                id: "",
+                kind: "",
+                state: "",
+                reason_code: "",
+                reason: "",
+              },
+              uncertain: true,
+            };
+          },
+          ResumeApply: async () => {
+            draft = {
+              ...draft,
+              apply_pending: null,
+              manager_configuration_id: "cfg-1",
+            };
+            return {
+              profile: draft,
+              operation: {
+                id: "op-1",
+                kind: "apply",
+                state: "succeeded",
+                resource: { kind: "configuration", id: "cfg-1" },
+                reason_code: "operation_succeeded",
+                reason: "configuration persisted and activation confirmed",
+              },
+            };
+          },
+        },
+      },
+    };
+  }, workspace);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Edit draft", exact: true }).click();
+  const apply = page.locator(".editor-apply");
+  await expect(apply).toBeEnabled();
+  await apply.click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "Apply to keyboard" }).click();
+  await expect(dialog.getByRole("alert")).toContainText(
+    "changed on the manager since you reviewed it",
+  );
+  await expect(
+    dialog.getByRole("button", { name: "Apply to keyboard" }),
+  ).toBeEnabled();
+  await dialog.getByRole("button", { name: "Apply to keyboard" }).click();
+  await expect(
+    page.getByText(/KeyboarDeer kept the exact request/),
+  ).toBeVisible();
+  await expect(apply).toBeDisabled();
+  await page.getByRole("button", { name: "Check apply outcome" }).click();
+  await expect(
+    page.getByText(
+      "Manager Apply: Succeeded — configuration persisted and activation confirmed",
+    ),
+  ).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test("removes a managed mapping from the keyboard with confirmation", async ({
   page,
 }) => {

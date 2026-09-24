@@ -118,7 +118,14 @@ export interface Profile {
   name: string;
   device_id: string;
   manager_configuration_id?: string;
-  apply_pending?: { manager_server_id: string; started_at: string } | null;
+  apply_pending?: {
+    manager_server_id: string;
+    started_at: string;
+    /** Present when the exact request can be replayed safely. */
+    idempotency_key?: string;
+    method?: string;
+    operation_id?: string;
+  } | null;
   draft_revision: number;
   geometry: ProfileGeometry;
   layers: ProfileLayer[];
@@ -172,6 +179,10 @@ export interface ProfileStoreStatus {
 export interface ProfileApplyResult {
   profile: Profile;
   operation: Operation;
+  /** The keyboard's configuration changed on the manager; nothing applied. */
+  stale?: boolean;
+  /** The manager did not confirm; the request can be replayed safely. */
+  uncertain?: boolean;
 }
 
 type AppBindings = {
@@ -193,6 +204,7 @@ type AppBindings = {
   CompileProfile?: (id: string) => Promise<CompileResult>;
   PreviewProfile?: (id: string) => Promise<ProfilePreview>;
   ApplyProfile?: (id: string) => Promise<ProfileApplyResult>;
+  ResumeApply?: (id: string) => Promise<ProfileApplyResult>;
   SetConfigurationEnabled?: (
     configurationID: string,
     enabled: boolean,
@@ -273,6 +285,8 @@ export const PreviewProfile = (id: string) =>
   binding<(id: string) => Promise<ProfilePreview>>("PreviewProfile")(id);
 export const ApplyProfile = (id: string) =>
   binding<(id: string) => Promise<ProfileApplyResult>>("ApplyProfile")(id);
+export const ResumeApply = (id: string) =>
+  binding<(id: string) => Promise<ProfileApplyResult>>("ResumeApply")(id);
 export const SetConfigurationEnabled = (
   configurationID: string,
   enabled: boolean,

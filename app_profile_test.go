@@ -7,8 +7,10 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/lukelex/keyboardeer/internal/geometry"
 	"github.com/lukelex/keyboardeer/internal/managerapi"
@@ -308,47 +310,197 @@ func TestAppDeletesManagedConfigurationButKeepsProfiles(t *testing.T) {
 	}
 }
 
-// testManager serves one JSON Lines connection, answering each request with
-// the result returned by respond.
+const managedCapabilityReply = `{"server_id":"server-1","capabilities":[{"name":"managed_configurations","available":true,"reason_code":"capability_available","reason":"ready"}]}`
+const emptySnapshotReply = `{"state_revision":4,"event_cursor":{"server_id":"server-1","event_id":2,"state_revision":4},"devices":[],"configurations":[],"operations":[],"health":{"healthy":true,"reason_code":"manager_healthy","reason":"ok"}}`
+const linkedSnapshotReply = `{"state_revision":4,"event_cursor":{"server_id":"server-1","event_id":2,"state_revision":4},"devices":[],"configurations":[{"id":"cfg-1","name":"Typing","ownership":"managed","enabled":true,"device_id":"device-1","desired_revision":3,"active_revision":3,"runtime":{"phase":"running","reason_code":"runtime_running","reason":"running","connected":true,"healthy":true,"failure_count":0}}],"operations":[],"health":{"healthy":true,"reason_code":"manager_healthy","reason":"ok"}}`
+const createdOperationReply = `{"operation":{"id":"op-1","kind":"apply","state":"succeeded","resource":{"kind":"configuration","id":"cfg-1"},"reason_code":"operation_succeeded","reason":"configuration persisted and activation confirmed","configuration_revision":1}}`
+
+func newApplyTestApp(t *testing.T, endpoint string) (*App, *profile.Store, profile.Profile) {
+	t.Helper()
+	client := managerapi.New(managerapi.Options{Endpoint: endpoint, ClientName: "keyboardeer-test", ClientVersion: "test", ReconnectInitial: time.Millisecond, ReconnectMaximum: time.Millisecond})
+	store := profile.NewStore(filepath.Join(t.TempDir(), "profiles.json"))
+	app := &App{manager: client, profiles: store}
+	t.Cleanup(func() { _ = app.manager.Close() })
+	draft, err := app.CreateProfile("device-1", "Typing", geometry.ANSI60USID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return app, store, draft
+}
+
+func TestAppReplaysUnconfirmedApplyWithTheSameIdempotencyKey(t *testing.T) {
+	var keys []string
+	var bodies []string
+	endpoint := testManagerWithKeys(t, func(method string, params json.RawMessage, key string) string {
+		switch method {
+		case "session.hello":
+			return `{"selected_version":1,"server_id":"server-1","manager_version":"test"}`
+		case "manager.get":
+			return managedCapabilityReply
+		case "snapshot.get":
+			return emptySnapshotReply
+		case "configuration.create":
+			keys = append(keys, key)
+			bodies = append(bodies, string(params))
+			if len(keys) == 1 {
+				// The first response is lost: the manager may or may not have
+				// accepted the mutation.
+				return "ERROR temporary_unavailable"
+			}
+			return createdOperationReply
+		}
+		t.Errorf("unexpected manager method %q", method)
+		return `{}`
+	})
+	app, _, draft := newApplyTestApp(t, endpoint)
+	result, err := app.ApplyProfile(draft.ID)
+	if err != nil || result.Uncertain || result.Operation.State != "succeeded" {
+		t.Fatalf("apply = %#v, %v", result, err)
+	}
+	if len(keys) != 2 || keys[0] == "" || keys[0] != keys[1] || bodies[0] != bodies[1] {
+		t.Fatalf("replay did not reuse the exact request: keys %v", keys)
+	}
+	if result.Profile.ApplyPending != nil || result.Profile.ManagerConfigurationID != "cfg-1" {
+		t.Fatalf("applied profile = %#v", result.Profile)
+	}
+}
+
+func TestAppKeepsUnconfirmedApplyAndResumesItLater(t *testing.T) {
+	managerDown := true
+	var keys []string
+	endpoint := testManagerWithKeys(t, func(method string, _ json.RawMessage, key string) string {
+		switch method {
+		case "session.hello":
+			return `{"selected_version":1,"server_id":"server-1","manager_version":"test"}`
+		case "manager.get":
+			return managedCapabilityReply
+		case "snapshot.get":
+			return emptySnapshotReply
+		case "configuration.create":
+			keys = append(keys, key)
+			if managerDown {
+				return "ERROR temporary_unavailable"
+			}
+			return createdOperationReply
+		}
+		t.Errorf("unexpected manager method %q", method)
+		return `{}`
+	})
+	app, store, draft := newApplyTestApp(t, endpoint)
+	result, err := app.ApplyProfile(draft.ID)
+	if err != nil || !result.Uncertain {
+		t.Fatalf("unconfirmed apply = %#v, %v", result, err)
+	}
+	// Simulate a GUI restart: a new App reads the persisted pending request.
+	restarted := &App{manager: app.manager, profiles: profile.NewStore(store.Path())}
+	pending, err := restarted.profileByID(draft.ID)
+	if err != nil || pending.ApplyPending == nil || !pending.ApplyPending.Replayable() {
+		t.Fatalf("pending apply was not persisted: %#v, %v", pending.ApplyPending, err)
+	}
+	if _, err := restarted.SaveProfile(pending); err == nil {
+		t.Fatal("a draft with an unconfirmed apply was editable")
+	}
+	managerDown = false
+	resumed, err := restarted.ResumeApply(draft.ID)
+	if err != nil || resumed.Uncertain || resumed.Profile.ManagerConfigurationID != "cfg-1" || resumed.Profile.ApplyPending != nil {
+		t.Fatalf("resume = %#v, %v", resumed, err)
+	}
+	for _, key := range keys {
+		if key != keys[0] {
+			t.Fatalf("resume used a different idempotency key: %v", keys)
+		}
+	}
+}
+
+func TestAppReportsStaleRevisionForReview(t *testing.T) {
+	endpoint := testManagerWithKeys(t, func(method string, _ json.RawMessage, _ string) string {
+		switch method {
+		case "session.hello":
+			return `{"selected_version":1,"server_id":"server-1","manager_version":"test"}`
+		case "manager.get":
+			return managedCapabilityReply
+		case "snapshot.get":
+			return linkedSnapshotReply
+		case "configuration.update":
+			return "ERROR stale_revision"
+		}
+		t.Errorf("unexpected manager method %q", method)
+		return `{}`
+	})
+	app, store, draft := newApplyTestApp(t, endpoint)
+	if _, err := store.SetApplyState(draft.ID, draft.DraftRevision, "cfg-1", nil); err != nil {
+		t.Fatal(err)
+	}
+	result, err := app.ApplyProfile(draft.ID)
+	if err != nil || !result.Stale || result.Profile.ApplyPending != nil || result.Profile.ManagerConfigurationID != "cfg-1" {
+		t.Fatalf("stale apply = %#v, %v", result, err)
+	}
+}
+
+// testManager serves JSON Lines connections, answering each request with the
+// result returned by respond. A reply of the form "ERROR code" is sent as a
+// structured manager error instead of a result.
 func testManager(t *testing.T, respond func(method string, params json.RawMessage) string) string {
+	return testManagerWithKeys(t, func(method string, params json.RawMessage, _ string) string {
+		return respond(method, params)
+	})
+}
+
+func testManagerWithKeys(t *testing.T, respond func(method string, params json.RawMessage, idempotencyKey string) string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "api.sock")
 	listener, err := net.Listen("unix", path)
 	if err != nil {
 		t.Fatal(err)
 	}
+	var mu sync.Mutex
+	var connections sync.WaitGroup
 	t.Cleanup(func() {
 		_ = listener.Close()
 		_ = os.Remove(path)
+		connections.Wait()
 	})
-	var connections sync.WaitGroup
 	connections.Add(1)
 	go func() {
 		defer connections.Done()
-		connection, err := listener.Accept()
-		if err != nil {
-			return
-		}
-		defer connection.Close()
-		scanner := bufio.NewScanner(connection)
-		scanner.Buffer(make([]byte, 0, 64*1024), 1<<20)
-		for scanner.Scan() {
-			var request struct {
-				ID     string          `json:"id"`
-				Method string          `json:"method"`
-				Params json.RawMessage `json:"params"`
-			}
-			if err := json.Unmarshal(scanner.Bytes(), &request); err != nil {
-				t.Error(err)
+		for {
+			connection, err := listener.Accept()
+			if err != nil {
 				return
 			}
-			if _, err := fmt.Fprintf(connection, `{"type":"response","id":%q,"result":%s}`+"\n", request.ID, respond(request.Method, request.Params)); err != nil {
-				t.Error(err)
-				return
-			}
+			connections.Add(1)
+			go func() {
+				defer connections.Done()
+				defer connection.Close()
+				scanner := bufio.NewScanner(connection)
+				scanner.Buffer(make([]byte, 0, 64*1024), 1<<20)
+				for scanner.Scan() {
+					var request struct {
+						ID             string          `json:"id"`
+						Method         string          `json:"method"`
+						Params         json.RawMessage `json:"params"`
+						IdempotencyKey string          `json:"idempotency_key"`
+					}
+					if err := json.Unmarshal(scanner.Bytes(), &request); err != nil {
+						t.Error(err)
+						return
+					}
+					mu.Lock()
+					reply := respond(request.Method, request.Params, request.IdempotencyKey)
+					mu.Unlock()
+					var frame string
+					if code, isError := strings.CutPrefix(reply, "ERROR "); isError {
+						frame = fmt.Sprintf(`{"type":"response","id":%q,"error":{"code":%q,"message":"test error"}}`, request.ID, code)
+					} else {
+						frame = fmt.Sprintf(`{"type":"response","id":%q,"result":%s}`, request.ID, reply)
+					}
+					if _, err := fmt.Fprintln(connection, frame); err != nil {
+						return
+					}
+				}
+			}()
 		}
 	}()
-	t.Cleanup(connections.Wait)
 	return path
 }
 
