@@ -26,7 +26,13 @@ const modifiers = ['Ctrl','Shift','Alt','Super','RCtrl','RShift','RAlt','RSuper'
 const entry = (key) => Array.isArray(key) ? key : [key,1];
 const physicalKeys = physicalRows.flatMap((row) => row.map((key) => entry(key)[0]));
 const keyName = (key) => names[key] || key;
-const drafts = new Map();
+const STORAGE_KEY = 'keyboardeer-workspace-prototype';
+function loadSavedState() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+  catch { return {}; }
+}
+const savedState = loadSavedState();
+const drafts = new Map(Object.entries(savedState.drafts || {}));
 let device = 'q1';
 let currentPage = '';
 let selected = 'Caps';
@@ -44,6 +50,11 @@ function state() {
   return drafts.get(device);
 }
 function runtimeKnown() { return managerOnline && $('#diagnostic-scenario').value!=='incomplete'; }
+function persistState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ page: currentPage, drafts: Object.fromEntries(drafts), selected, layer, layerDetail, category }));
+  } catch { /* Storage may be unavailable in restricted preview contexts. */ }
+}
 function remember() { const s=state(); s.history.push(structuredClone({ assignments:s.assignments, layers:s.layers, recovery:s.recovery })); }
 function layerName(id) { return state().layers.find((item) => item.id === id)?.name || 'Unknown layer'; }
 function address(key=selected, id=layer) { return `${id}|${key}`; }
@@ -329,6 +340,8 @@ function route(){
   const title=$(`#${next}-title`);title.focus({preventScroll:true});document.title=`KeyboarDeer · ${title.textContent}`;
   window.scrollTo({top:0,behavior:'instant'});
 }
+  persistState();
 $('#preview-page').addEventListener('change',()=>location.hash=$('#preview-page').value);
 window.addEventListener('hashchange',route);
 miniBoards();buildActions();initializeValidation();route();
+window.addEventListener('beforeunload',persistState);

@@ -121,6 +121,25 @@
   let view: View = "devices";
   let selectedDevice: Device | null = null;
   let profiles: Profile[] = [];
+  const uiStateStorageKey = "keyboardeer-ui-state";
+  type PersistedUIState = {
+    view?: View;
+    deviceID?: string;
+    profileID?: string;
+    geometryID?: string;
+    layerID?: string;
+    sourceKey?: string;
+  };
+  function readPersistedUIState(): PersistedUIState {
+    try {
+      const value: unknown = JSON.parse(localStorage.getItem(uiStateStorageKey) ?? "{}");
+      return typeof value === "object" && value !== null ? value as PersistedUIState : {};
+    } catch {
+      return {};
+    }
+  }
+  const persistedUIState = readPersistedUIState();
+  let uiStateRestored = false;
   let geometries: GeometryTemplate[] = [];
   let selectedGeometryID = "";
   let profileName = "";
@@ -290,6 +309,20 @@
           configuration.id === activeProfile?.manager_configuration_id,
       )
     : undefined;
+  $: if (uiStateRestored) {
+    try {
+      localStorage.setItem(uiStateStorageKey, JSON.stringify({
+        view,
+        deviceID: selectedDevice?.id,
+        profileID: activeProfile?.id,
+        geometryID: selectedGeometryID,
+        layerID: selectedLayerID,
+        sourceKey: selectedSourceKey,
+      } satisfies PersistedUIState));
+    } catch {
+      // The application remains usable when browser storage is unavailable.
+    }
+  }
   $: shownApplyOperation =
     (applyOperationProfileID === activeProfile?.id ? applyOperation : null) ??
     activeProfile?.last_apply_operation ??
@@ -805,6 +838,7 @@
   function handleHistoryKeydown(event: KeyboardEvent) {
     if (
       !editorOpen ||
+      restorePersistedUIState();
       behaviorDialog ||
       profilesOpen ||
       applyReviewOpen ||
@@ -815,6 +849,39 @@
       event.target instanceof HTMLInputElement ||
       event.target instanceof HTMLSelectElement ||
       event.target instanceof HTMLTextAreaElement
+  function restorePersistedUIState() {
+    if (uiStateRestored) return;
+    uiStateRestored = true;
+    const saved = persistedUIState;
+    const device = workspace.snapshot?.devices?.find(
+      (item) => item.id === saved.deviceID && isConfigurable(item),
+    );
+    if (!device) return;
+    selectedDevice = device;
+    if (saved.geometryID && geometries.some((item) => item.id === saved.geometryID)) {
+      selectedGeometryID = saved.geometryID;
+    }
+    if (saved.view === "setup") {
+      profileName = device.display_name ? `${device.display_name} draft` : "Keyboard draft";
+      view = "setup";
+      return;
+    }
+    if (saved.view !== "editor") return;
+    const profile = profiles.find(
+      (item) => item.id === saved.profileID && item.device_id === device.id,
+    ) ?? profiles.find((item) => item.id === selectedProfiles[device.id] && item.device_id === device.id);
+    if (!profile) return;
+    activeProfile = profile;
+    selectedProfiles = { ...selectedProfiles, [device.id]: profile.id };
+    selectedLayerID = profile.layers.some((item) => item.id === saved.layerID)
+      ? saved.layerID!
+      : "base";
+    selectedSourceKey = profile.geometry.source_keys.includes(saved.sourceKey ?? "")
+      ? saved.sourceKey ?? ""
+      : "";
+    view = "editor";
+    schedulePreview(profile);
+  }
     )
       return;
     const key = event.key.toLowerCase();
