@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import Button from "./components/Button.svelte";
+  import { formatKMonad } from "./kmonadFormat";
   import {
     applyAssignmentRecovery,
     assignmentMatchesIssue,
@@ -11,6 +12,7 @@
   } from "./validationRecovery";
   import {
     ApplyProfile,
+    ChooseProfileSyncFolder,
     DiscardPendingApply,
     ResumeApply,
     CreateProfile,
@@ -24,12 +26,17 @@
     IdentifyOperation,
     IdentifyStart,
     ImportProfile,
+    ImportProfileFromPath,
     Info,
+    PendingKbdProfileFile,
+    ClearPendingKbdProfileFile,
     PreviewProfile,
     Profiles,
     ProfileStoreStatus,
+    Preferences,
     RecoverCorruptProfileStore,
     SaveProfile,
+    SavePreferences,
     SelectedProfiles,
     SelectProfile,
     SetConfigurationEnabled,
@@ -48,6 +55,7 @@
     type ProfileBehavior,
     type ProfilePreview,
     type ProfileStoreStatus as ProfileStoreState,
+    type Preferences as PreferencesState,
   } from "./desktop";
 
   type View = "devices" | "setup" | "editor";
@@ -64,6 +72,31 @@
   const draftHistoryLimit = 100;
   const defaultTapHoldTimeoutMS = 200;
   const compactPaletteHeight = 720;
+  const paletteIcons: Record<string, string> = {
+    bspc: "⌫",
+    tab: "⇥",
+    ret: "↵",
+    spc: "␣",
+    del: "⌦",
+    left: "←",
+    rght: "→",
+    up: "↑",
+    down: "↓",
+    prnt: "⎙",
+    mute: "🔇",
+    volu: "🔊",
+    voldwn: "🔉",
+    pp: "⏯",
+    next: "⏭",
+    prev: "⏮",
+    stopcd: "⏹",
+    eject: "⏏",
+    brup: "☀+",
+    brdown: "☀−",
+    kbdillumtoggle: "⌨☼",
+    blup: "⌨↑",
+    bldn: "⌨↓",
+  };
   const paletteCategories: { id: PaletteCategory; label: string }[] = [
     { id: "all", label: "All" },
     { id: "0", label: "Numbers" },
@@ -179,6 +212,13 @@
   };
 
   let info: AppInfo = { name: "KeyboarDeer", version: "starting…" };
+  let preferencesOpen = false;
+  let profileSyncEnabled = false;
+  let profileSyncFolder = "";
+  let preferencesNotice = "";
+  let preferencesBusy = false;
+  // A *.kbdprofile.json path passed to a desktop launch as the default handler.
+  let pendingProfileFile = "";
   let workspace: ManagerWorkspace = { status: initialStatus, stale: false };
   const uiStateStorageKey = "keyboardeer-ui-state";
   type PersistedUIState = {
@@ -553,6 +593,17 @@
     };
     return compactLabels[key.source_key] ?? key.label;
   }
+  function paletteIcon(sourceKey: string) {
+    return paletteIcons[sourceKey];
+  }
+  function scrollPaletteWithWheel(event: WheelEvent) {
+    if (!compactPalette || Math.abs(event.deltaY) <= Math.abs(event.deltaX))
+      return;
+    const palette = event.currentTarget as HTMLElement;
+    if (palette.scrollWidth <= palette.clientWidth) return;
+    event.preventDefault();
+    palette.scrollLeft += event.deltaY;
+  }
   function terminal(state: string) {
     return [
       "succeeded",
@@ -795,17 +846,21 @@
       rawConfigurationBusy = false;
     }
   }
-  async function importProfileForDevice() {
+  async function importProfileForDevice(filePath = "") {
     if (!selectedDevice || profileBusy) return;
     profileBusy = true;
     try {
-      const imported = await ImportProfile(selectedDevice.id);
+      const imported = pendingProfileFile
+        ? await ImportProfileFromPath(pendingProfileFile, selectedDevice.id)
+        : await ImportProfile(selectedDevice.id);
       profiles = [...profiles, imported];
       selectedProfiles = {
         ...selectedProfiles,
         [selectedDevice.id]: imported.id,
       };
       profileBusy = false;
+      pendingProfileFile = "";
+      await ClearPendingKbdProfileFile().catch(() => {});
       await switchProfile(imported);
       feedback = `Imported “${imported.name}” as a new draft for this keyboard.`;
     } catch (error) {
@@ -813,6 +868,13 @@
     } finally {
       profileBusy = false;
     }
+  }
+  async function dismissPendingProfileFile() {
+    pendingProfileFile = "";
+    await ClearPendingKbdProfileFile().catch(() => {});
+  }
+  function profileFileName(path: string) {
+    return path.split(/[\\/]/).pop() ?? path;
   }
   async function renameActiveProfile() {
     if (!activeProfile || !profileRename.trim()) return;
@@ -1121,8 +1183,89 @@
     clearPolling();
     identifyOpen = false;
   }
-  function handleIdentifyKeydown(event: KeyboardEvent) {
-    if (event.key === "Escape" && identifyOpen) closeIdentify();
+  function manageDialog(node: HTMLDialogElement) {
+    const opener =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const shell = node.closest<HTMLElement>(".app-shell");
+    const background = shell
+      ? Array.from(shell.children).filter(
+          (element): element is HTMLElement => element !== node.parentElement,
+        )
+      : [];
+    const previousInert = background.map((element) => element.inert);
+    for (const element of background) element.inert = true;
+    node.tabIndex = -1;
+
+    const focusableSelector =
+      'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
+    const focusableElements = () =>
+      Array.from(node.querySelectorAll<HTMLElement>(focusableSelector)).filter(
+        (element) =>
+          element.getAttribute("aria-hidden") !== "true" &&
+          element.getClientRects().length > 0,
+      );
+    const initialFocusFrame = requestAnimationFrame(() => {
+      (node.querySelector<HTMLElement>("[autofocus]") ??
+        focusableElements()[0] ??
+        node).focus({ preventScroll: true });
+    });
+    const keepFocusInside = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const elements = focusableElements();
+      if (elements.length === 0) {
+        event.preventDefault();
+        node.focus();
+        return;
+      }
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !node.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || !node.contains(active))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    node.addEventListener("keydown", keepFocusInside);
+    return {
+      destroy() {
+        cancelAnimationFrame(initialFocusFrame);
+        node.removeEventListener("keydown", keepFocusInside);
+        background.forEach((element, index) => {
+          element.inert = previousInert[index];
+        });
+        if (opener?.isConnected) {
+          requestAnimationFrame(() => {
+            if (opener.isConnected && !opener.closest("[inert]")) opener.focus();
+          });
+        }
+      },
+    };
+  }
+  function handleTabListKeydown(event: KeyboardEvent) {
+    const offset =
+      event.key === "ArrowRight" || event.key === "ArrowDown"
+        ? 1
+        : event.key === "ArrowLeft" || event.key === "ArrowUp"
+          ? -1
+          : 0;
+    if (!offset) return;
+    const tabList = event.currentTarget;
+    if (!(tabList instanceof HTMLElement)) return;
+    const tabs = Array.from(
+      tabList.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+    );
+    if (tabs.length < 2) return;
+    const current = tabs.indexOf(event.target as HTMLButtonElement);
+    if (current < 0) return;
+    event.preventDefault();
+    const next = tabs[(current + offset + tabs.length) % tabs.length];
+    next.focus();
+    next.click();
   }
   function handleEditorKeydown(event: KeyboardEvent) {
     if (
@@ -1175,7 +1318,18 @@
     }
   }
   function handleGlobalKeydown(event: KeyboardEvent) {
-    handleIdentifyKeydown(event);
+    if (event.key === "Escape") {
+      if (rawConfigurationOpen) rawConfigurationOpen = false;
+      else if (externalOpen) externalOpen = false;
+      else if (profilesOpen) closeProfiles();
+      else if (applyReviewOpen) applyReviewOpen = false;
+      else if (behaviorDialog) closeBehaviorDialog();
+      else if (preferencesOpen) preferencesOpen = false;
+      else if (identifyOpen) closeIdentify();
+      else return;
+      event.preventDefault();
+      return;
+    }
     handleHistoryKeydown(event);
     handleEditorKeydown(event);
   }
@@ -1871,12 +2025,30 @@
   }
 
   onMount(() => {
+    if (hasDesktopBinding("Preferences")) {
+      void Preferences()
+        .then((value) => {
+          profileSyncEnabled = value.profile_sync_enabled;
+          profileSyncFolder = value.profile_sync_folder;
+        })
+        .catch(() => {
+          preferencesNotice = "Preferences could not be loaded.";
+        });
+    }
     void (async () => {
       try {
         await waitForDesktopBinding("Info");
         info = await Info();
       } catch {
         info = { name: "KeyboarDeer", version: "browser development" };
+      }
+    })();
+    void (async () => {
+      if (!(await waitForDesktopBinding("PendingKbdProfileFile"))) return;
+      try {
+        pendingProfileFile = await PendingKbdProfileFile();
+      } catch {
+        pendingProfileFile = "";
       }
     })();
     stopWorkspaceEvents = window.runtime?.EventsOn?.(
@@ -1890,6 +2062,31 @@
     // leave the device workspace indefinitely stuck in its initial state.
     void refresh();
   });
+  async function chooseProfileSyncFolder() {
+    preferencesNotice = "";
+    try {
+      const folder = await ChooseProfileSyncFolder();
+      if (folder) profileSyncFolder = folder;
+    } catch (error) {
+      preferencesNotice = String(error);
+    }
+  }
+  async function savePreferences() {
+    preferencesBusy = true;
+    preferencesNotice = "";
+    try {
+      const value: PreferencesState = {
+        profile_sync_enabled: profileSyncEnabled,
+        profile_sync_folder: profileSyncFolder,
+      };
+      await SavePreferences(value);
+      preferencesOpen = false;
+    } catch (error) {
+      preferencesNotice = String(error);
+    } finally {
+      preferencesBusy = false;
+    }
+  }
   onDestroy(() => {
     clearPolling();
     if (previewTimer) clearTimeout(previewTimer);
@@ -1916,6 +2113,21 @@
       >
     </div>
     <div class="header-actions">
+      <Button
+        variant="secondary"
+        className="preferences-button"
+        aria-label="Preferences"
+        title="Preferences"
+        on:click={() => {
+          preferencesNotice = "";
+          preferencesOpen = true;
+        }}
+        ><svg viewBox="0 0 24 24" aria-hidden="true"
+          ><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" /><path
+            d="m19.4 15 .1.1a1.8 1.8 0 1 1-2.5 2.5l-.1-.1a1.8 1.8 0 0 0-3.1 1.3v.2a1.8 1.8 0 1 1-3.6 0v-.2a1.8 1.8 0 0 0-3.1-1.3l-.1.1a1.8 1.8 0 1 1-2.5-2.5l.1-.1a1.8 1.8 0 0 0-1.3-3.1h-.2a1.8 1.8 0 1 1 0-3.6h.2a1.8 1.8 0 0 0 1.3-3.1l-.1-.1a1.8 1.8 0 1 1 2.5-2.5l.1.1a1.8 1.8 0 0 0 3.1-1.3v-.2a1.8 1.8 0 1 1 3.6 0v.2a1.8 1.8 0 0 0 3.1 1.3l.1-.1a1.8 1.8 0 1 1 2.5 2.5l-.1.1a1.8 1.8 0 0 0 1.3 3.1h.2a1.8 1.8 0 1 1 0 3.6h-.2a1.8 1.8 0 0 0-1.3 3.1Z"
+          /></svg
+        ></Button
+      >
       <span
         class:ready={workspace.status.state === "ready"}
         class:attention={workspace.status.state !== "ready" || workspace.stale}
@@ -2020,6 +2232,30 @@
           </section>
         {/if}
 
+        {#if pendingProfileFile}
+          <section
+            class="manager-notice"
+            data-state="open-profile"
+            aria-labelledby="open-profile-title"
+          >
+            <span class="notice-symbol" aria-hidden="true">↗</span>
+            <div>
+              <p class="eyebrow">PROFILE FILE</p>
+              <h2 id="open-profile-title">A keyboard profile was opened</h2>
+              <p>
+                KeyboarDeer was started with {profileFileName(pendingProfileFile)}.
+                Open a keyboard in the editor and choose Import to load it into
+                that keyboard.
+              </p>
+              <Button
+                variant="secondary"
+                type="button"
+                on:click={dismissPendingProfileFile}
+                >Dismiss</Button
+              >
+            </div>
+          </section>
+        {/if}
         {#if profileStoreProblem}
           <section
             class="manager-notice"
@@ -2438,6 +2674,23 @@
                 ? ` (${profilesForDevice(selectedDevice.id).length})`
                 : ""}</Button
             >
+            <Button
+              variant="secondary"
+              className="profiles-trigger"
+              type="button"
+              on:click={viewRawConfiguration}
+              disabled={rawConfigurationBusy ||
+                !activeProfile.manager_configuration_id ||
+                !workspaceLive ||
+                !configurationExport.available ||
+                !hasDesktopBinding("ExportConfiguration")}
+              title={!activeProfile.manager_configuration_id
+                ? "Apply this profile before viewing its manager-rendered KMonad configuration."
+                : !configurationExport.available
+                  ? configurationExport.reason
+                  : "View the manager-rendered KMonad configuration for this keyboard."}
+              >{rawConfigurationBusy ? "Loading .kbd…" : "View .kbd"}</Button
+            >
           </nav>
           <div class="editor-title">
             <h1 id="editor-title">{activeProfile.name}</h1>
@@ -2485,26 +2738,16 @@
               : "Apply requires a current valid manager preview, a connected keyboard, and the managed-configurations capability."}
             >{applyBusy ? "Applying…" : "Apply to keyboard"}</Button
           >
-          <Button
-            variant="secondary"
-            type="button"
-            on:click={viewRawConfiguration}
-            disabled={rawConfigurationBusy ||
-              !activeProfile.manager_configuration_id ||
-              !workspaceLive ||
-              !configurationExport.available ||
-              !hasDesktopBinding("ExportConfiguration")}
-            title={!activeProfile.manager_configuration_id
-              ? "Apply this profile before viewing its manager-rendered KMonad configuration."
-              : !configurationExport.available
-                ? configurationExport.reason
-                : "View the manager-rendered KMonad configuration for this keyboard."}
-            >{rawConfigurationBusy ? "Loading .kbd…" : "View .kbd"}</Button
-          >
         </div>
         {#if activeGeometry}
           <div class="editor-scroll-region">
-            <div class="keyboard-editor" aria-label={activeGeometry.name}>
+              <div
+                class="keyboard-editor"
+                id="keyboard-layer-panel"
+                role="tabpanel"
+                aria-labelledby={`layer-tab-${selectedLayerID}`}
+                aria-label={activeGeometry.name}
+              >
               {#if currentPreview && currentPreview.validation.outcome !== "valid"}
                 <aside
                   class:blocked={currentPreview.validation.outcome ===
@@ -2708,7 +2951,11 @@
           </div>
           <section class="key-palette" aria-label="Basic key assignments">
             <div class="palette-toolbar">
-              <div class="selected-key-context">
+              <div
+                class="selected-key-context"
+                aria-live="polite"
+                aria-atomic="true"
+              >
                 <strong>{selectedSourceKey || "Select a key"}</strong>
                 <span
                   >{activeLayer
@@ -2719,13 +2966,22 @@
                   <em>Needs an entry action</em>
                 {/if}
               </div>
-              <div class="layer-tabs" role="tablist" aria-label="Keymap layers">
+              <div
+                class="layer-tabs"
+                role="tablist"
+                aria-label="Keymap layers"
+                tabindex="-1"
+                on:keydown={handleTabListKeydown}
+              >
                 {#each activeProfile.layers as layer (layer.id)}
                   <Button
                     variant="secondary"
                     className={`layer-tab${selectedLayerID === layer.id ? " active" : ""}${!layerIsReachable(layer.id) ? " unreachable" : ""}`}
                     role="tab"
+                    id={`layer-tab-${layer.id}`}
+                    aria-controls="keyboard-layer-panel"
                     aria-selected={selectedLayerID === layer.id}
+                    tabindex={selectedLayerID === layer.id ? 0 : -1}
                     on:click={() => (selectedLayerID = layer.id)}
                     title={layerIsReachable(layer.id)
                       ? `${layer.name} layer`
@@ -2733,13 +2989,13 @@
                     >{layer.name}</Button
                   >
                 {/each}
-                <Button
-                  variant="secondary"
-                  className="layer-tab"
-                  on:click={() => openBehaviorDialog("layers")}
-                  title="Manage layers">Manage</Button
-                >
               </div>
+              <Button
+                variant="secondary"
+                className="layer-tab"
+                on:click={() => openBehaviorDialog("layers")}
+                title="Manage layers">Manage</Button
+              >
               <div class="complex-actions">
                 <Button
                   variant="secondary"
@@ -2802,20 +3058,32 @@
               class="palette-categories"
               role="tablist"
               aria-label="Key categories"
+              tabindex="-1"
+              on:keydown={handleTabListKeydown}
             >
               {#each paletteCategories as category (category.id)}
                 <Button
                   variant="secondary"
                   className={`palette-category${activePaletteCategory === category.id ? " active" : ""}`}
                   role="tab"
+                  id={`palette-category-${category.id}`}
+                  aria-controls="palette-category-panel"
                   aria-selected={activePaletteCategory === category.id}
+                  tabindex={activePaletteCategory === category.id ? 0 : -1}
                   on:click={() => (activePaletteCategory = category.id)}
                   >{category.label}</Button
                 >
               {/each}
             </div>
-            <div class="palette-buttons">
+            <div
+              class="palette-buttons"
+              id="palette-category-panel"
+              role="tabpanel"
+              aria-labelledby={`palette-category-${activePaletteCategory}`}
+              on:wheel|nonpassive={scrollPaletteWithWheel}
+            >
               {#each renderedPaletteKeys as key, index (key.source_key)}
+                {@const icon = paletteIcon(key.source_key)}
                 {#if !compactPalette && !normalizedKeySearch && (index === 0 || paletteKeyGroup(renderedPaletteKeys[index - 1]) !== paletteKeyGroup(key)) && paletteKeyGroup(key) >= 3}
                   <h3 class="palette-group-heading">
                     {paletteGroupLabel(paletteKeyGroup(key))}
@@ -2829,10 +3097,11 @@
                       key: key.source_key,
                     })}
                   disabled={profileBusy || !selectedSourceKey}
-                  title={`Assign ${key.label} (${key.source_key})`}
-                  ><span>{paletteLabel(key)}</span><small
-                    >{key.source_key}</small
-                  ></Button
+                  aria-label={`Assign ${key.label} (${key.source_key})`}
+                  title={`${key.label} (${key.source_key})`}
+                  ><span class:palette-symbol={!!icon}
+                    >{icon ?? paletteLabel(key)}</span
+                  ><small>{key.source_key}</small></Button
                 >
               {:else}
                 <p class="palette-empty">
@@ -2889,11 +3158,90 @@
       </section>
     {/if}
   </main>
+  {#if preferencesOpen}
+    <div
+      class="behavior-dialog-backdrop"
+      role="presentation"
+      on:click={(event) => {
+        if (event.target === event.currentTarget) preferencesOpen = false;
+      }}
+    >
+      <dialog
+        class="behavior-dialog preferences-dialog"
+        open
+        use:manageDialog
+        aria-modal="true"
+        aria-labelledby="preferences-title"
+      >
+        <Button
+          variant="icon"
+          className="behavior-dialog-close"
+          on:click={() => (preferencesOpen = false)}
+          aria-label="Close preferences"
+          title="Close">×</Button
+        >
+        <p class="eyebrow">MAKE IT YOURS</p>
+        <h2 id="preferences-title">Preferences</h2>
+        <p class="dialog-intro">
+          Choose where KeyboarDeer keeps your editable keyboard profiles.
+        </p>
+        <div class="preference-setting">
+          <label class="preference-toggle"
+            ><input type="checkbox" bind:checked={profileSyncEnabled} /><span
+              ><strong>Sync profiles to a folder</strong><small
+                >Save editable profile JSON here so your existing sync service
+                or Git can keep it in sync.</small
+              ></span
+            ></label
+          >
+          {#if profileSyncEnabled}
+            <div class="preference-folder">
+              <label for="profile-sync-folder">Profile folder</label>
+              <div class="preference-folder-row">
+                <input
+                  id="profile-sync-folder"
+                  bind:value={profileSyncFolder}
+                  readonly
+                  placeholder="Choose a folder"
+                /><Button variant="secondary" on:click={chooseProfileSyncFolder}
+                  >Choose folder</Button
+                >
+              </div>
+              <p>
+                Profile JSON is kept here. Generated .kbd files are separate.
+              </p>
+            </div>
+          {/if}
+        </div>
+        <div class="preference-note">
+          <strong>Your files stay yours.</strong><span
+            >KeyboarDeer writes profile files in this folder; it does not
+            interact with Git.</span
+          >
+        </div>
+        {#if preferencesNotice}<p class="preference-error" role="alert">
+            {preferencesNotice}
+          </p>{/if}
+        <div class="dialog-actions">
+          <Button variant="secondary" on:click={() => (preferencesOpen = false)}
+            >Cancel</Button
+          ><Button
+            variant="primary"
+            disabled={preferencesBusy}
+            on:click={savePreferences}
+            >{preferencesBusy ? "Saving…" : "Save preferences"}</Button
+          >
+        </div>
+      </dialog>
+    </div>
+  {/if}
   {#if behaviorDialog && activeProfile}
     <div class="behavior-dialog-backdrop">
       <dialog
         class="behavior-dialog"
         open
+        use:manageDialog
+        aria-modal="true"
         aria-labelledby="behavior-dialog-title"
       >
         <Button
@@ -3228,7 +3576,13 @@
   {/if}
   {#if profilesOpen && activeProfile && selectedDevice}
     <div class="behavior-dialog-backdrop">
-      <dialog class="behavior-dialog" open aria-labelledby="profiles-title">
+      <dialog
+        class="behavior-dialog"
+        open
+        use:manageDialog
+        aria-modal="true"
+        aria-labelledby="profiles-title"
+      >
         <Button
           variant="icon"
           className="behavior-dialog-close"
@@ -3303,9 +3657,12 @@
           <Button
             variant="secondary"
             type="button"
-            on:click={importProfileForDevice}
-            disabled={profileBusy || !hasDesktopBinding("ImportProfile")}
-            >Import</Button
+            on:click={() => void importProfileForDevice()}
+            disabled={profileBusy ||
+              (pendingProfileFile
+                ? !hasDesktopBinding("ImportProfileFromPath")
+                : !hasDesktopBinding("ImportProfile"))}
+            >{pendingProfileFile ? "Import opened file" : "Import"}</Button
           >
           <Button
             variant="secondary"
@@ -3342,7 +3699,13 @@
   {/if}
   {#if applyReviewOpen && activeProfile}
     <div class="behavior-dialog-backdrop">
-      <dialog class="behavior-dialog" open aria-labelledby="apply-review-title">
+      <dialog
+        class="behavior-dialog"
+        open
+        use:manageDialog
+        aria-modal="true"
+        aria-labelledby="apply-review-title"
+      >
         <Button
           variant="icon"
           className="behavior-dialog-close"
@@ -3401,6 +3764,8 @@
       <dialog
         class="behavior-dialog external-dialog"
         open
+        use:manageDialog
+        aria-modal="true"
         aria-labelledby="external-dialog-title"
       >
         <Button
@@ -3444,6 +3809,8 @@
       <dialog
         class="behavior-dialog raw-configuration-dialog"
         open
+        use:manageDialog
+        aria-modal="true"
         aria-labelledby="raw-configuration-title"
       >
         <Button
@@ -3459,19 +3826,21 @@
           This is the runnable configuration rendered by the manager for this
           keyboard. Device-specific input/output settings are manager-owned.
         </p>
-        <p class="raw-configuration-meta">
-          Revision {rawConfiguration.revision} · {rawConfiguration.format} ·
-          {rawConfiguration.digest}
-        </p>
         <pre class="raw-configuration-content"><code
-            >{rawConfiguration.content}</code
+            >{formatKMonad(rawConfiguration.content)}</code
           ></pre>
       </dialog>
     </div>
   {/if}
   {#if identifyOpen && selectedDevice}
     <div class="identify-dialog-backdrop">
-      <dialog class="identify-dialog" open aria-labelledby="identify-title">
+      <dialog
+        class="identify-dialog"
+        open
+        use:manageDialog
+        aria-modal="true"
+        aria-labelledby="identify-title"
+      >
         <Button
           variant="icon"
           className="identify-close"

@@ -10,8 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/lukelex/keyboardeer/internal/compiler"
 	"github.com/lukelex/keyboardeer/internal/geometry"
@@ -35,6 +37,7 @@ type App struct {
 	profiles          *profile.Store
 	eventCursors      *managerapi.EventCursorStore
 	profileStoreError error
+	preferencesPath   string
 	monitorMu         sync.Mutex
 	monitor           *managerapi.EventSubscription
 	monitorGeneration uint64
@@ -44,6 +47,26 @@ type App struct {
 	refreshTimer      *time.Timer
 	refreshDue        time.Time
 	shuttingDown      bool
+	// pendingProfileFile is the *.kbdprofile.json path passed as a launch
+	// argument when the OS opened KeyboarDeer as the default file handler. It
+	// is set once before startup and consumed (cleared) by the frontend.
+	pendingProfileFile string
+}
+
+func (a *App) SetPendingKbdProfileFile(path string) {
+	a.pendingProfileFile = path
+}
+
+// PendingKbdProfileFile returns the profile file the OS asked KeyboarDeer to
+// open, or "" when the app was launched normally.
+func (a *App) PendingKbdProfileFile() string {
+	return a.pendingProfileFile
+}
+
+// ClearPendingKbdProfileFile dismisses a launch-time profile file without
+// importing it (for example when the user closes the open-file notice).
+func (a *App) ClearPendingKbdProfileFile() {
+	a.pendingProfileFile = ""
 }
 
 type AppInfo struct {
@@ -57,6 +80,9 @@ func NewApp() *App {
 		ClientName:    "keyboardeer",
 		ClientVersion: appVersion,
 	}), profileStoreError: err}
+	if configDir, configErr := os.UserConfigDir(); configErr == nil {
+		app.preferencesPath = filepath.Join(configDir, "KeyboarDeer", "preferences.json")
+	}
 	if err == nil {
 		app.profiles = profile.NewStore(path)
 		app.eventCursors = managerapi.NewEventCursorStore(filepath.Join(filepath.Dir(path), "event-cursor.json"))
@@ -64,11 +90,170 @@ func NewApp() *App {
 	return app
 }
 
+type Preferences struct {
+	ProfileSyncEnabled bool   `json:"profile_sync_enabled"`
+	ProfileSyncFolder  string `json:"profile_sync_folder"`
+}
+
+func (a *App) Preferences() (Preferences, error) {
+	if a.preferencesPath == "" {
+		return Preferences{}, fmt.Errorf("user preferences directory is unavailable")
+	}
+	data, err := os.ReadFile(a.preferencesPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return Preferences{}, nil
+	}
+	if err != nil {
+		return Preferences{}, err
+	}
+	var preferences Preferences
+	if err := json.Unmarshal(data, &preferences); err != nil {
+		return Preferences{}, fmt.Errorf("read preferences: %w", err)
+	}
+	return preferences, nil
+}
+
+func (a *App) ChooseProfileSyncFolder() (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("desktop folder dialog is unavailable")
+	}
+	return runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{Title: "Choose profile sync folder"})
+}
+
+func (a *App) SavePreferences(preferences Preferences) error {
+	if a.preferencesPath == "" {
+		return fmt.Errorf("user preferences directory is unavailable")
+	}
+	if preferences.ProfileSyncEnabled {
+		if strings.TrimSpace(preferences.ProfileSyncFolder) == "" {
+			return fmt.Errorf("choose a folder for profile syncing")
+		}
+		info, err := os.Stat(preferences.ProfileSyncFolder)
+		if err != nil {
+			return fmt.Errorf("open profile sync folder: %w", err)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("profile sync location must be a folder")
+		}
+	}
+	data, err := json.MarshalIndent(preferences, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(a.preferencesPath), 0o700); err != nil {
+		return err
+	}
+	tmp := a.preferencesPath + ".tmp"
+	if err := os.WriteFile(tmp, append(data, '\n'), 0o600); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, a.preferencesPath); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	if preferences.ProfileSyncEnabled {
+		store, err := a.profileStore()
+		if err != nil {
+			return err
+		}
+		data, err := store.Load()
+		if err != nil {
+			return err
+		}
+		for _, draft := range data.Profiles {
+			if err := a.writeSyncedProfile(preferences.ProfileSyncFolder, draft); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (a *App) syncProfileExport(draft profile.Profile) error {
+	preferences, err := a.Preferences()
+	if err != nil || !preferences.ProfileSyncEnabled {
+		return err
+	}
+	return a.writeSyncedProfile(preferences.ProfileSyncFolder, draft)
+}
+
+func (a *App) writeSyncedProfile(folder string, draft profile.Profile) error {
+	name, err := a.syncedProfileFileName(draft)
+	if err != nil {
+		return err
+	}
+	data, err := profile.Export(draft)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(folder, name)
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
+// syncedProfileFileName names the synced copy after the keyboard the profile
+// belongs to, so the folder reads like the user's keyboards instead of opaque
+// IDs. A keyboard with several profiles appends the profile name to keep files
+// distinct. The manager snapshot supplies the display name when available;
+// offline, the profile name is used as a stable fallback.
+func (a *App) syncedProfileFileName(draft profile.Profile) (string, error) {
+	store, err := a.profileStore()
+	if err != nil {
+		return "", err
+	}
+	data, err := store.Load()
+	if err != nil {
+		return "", err
+	}
+	base := draft.Name
+	a.workspaceMu.Lock()
+	if workspace := a.lastWorkspace; workspace != nil && workspace.Snapshot != nil {
+		for _, device := range workspace.Snapshot.Devices {
+			if device.ID == draft.DeviceID && strings.TrimSpace(device.DisplayName) != "" {
+				base = device.DisplayName
+				break
+			}
+		}
+	}
+	a.workspaceMu.Unlock()
+	if len(data.ProfilesForDevice(draft.DeviceID)) > 1 {
+		base = base + " - " + draft.Name
+	}
+	return sanitizeFileName(base) + ".kbdprofile.json", nil
+}
+
+// sanitizeFileName keeps names readable while making them safe as file names
+// across the platforms Wails can run on.
+func sanitizeFileName(name string) string {
+	var builder strings.Builder
+	for _, r := range strings.TrimSpace(name) {
+		switch {
+		case r == '/' || r == '\\' || r == ':' || r == '*' || r == '?' || r == '"' || r == '<' || r == '>' || r == '|' || unicode.IsControl(r):
+			builder.WriteRune('-')
+		default:
+			builder.WriteRune(r)
+		}
+	}
+	cleaned := strings.Trim(builder.String(), " .-")
+	if cleaned == "" {
+		return "keyboard-profile"
+	}
+	return cleaned
+}
+
 func newAppWithProfileStore(store *profile.Store) *App {
 	return &App{
-		manager:      managerapi.New(managerapi.Options{ClientName: "keyboardeer", ClientVersion: appVersion}),
-		profiles:     store,
-		eventCursors: managerapi.NewEventCursorStore(filepath.Join(filepath.Dir(store.Path()), "event-cursor.json")),
+		manager:         managerapi.New(managerapi.Options{ClientName: "keyboardeer", ClientVersion: appVersion}),
+		profiles:        store,
+		eventCursors:    managerapi.NewEventCursorStore(filepath.Join(filepath.Dir(store.Path()), "event-cursor.json")),
+		preferencesPath: filepath.Join(filepath.Dir(store.Path()), "preferences.json"),
 	}
 }
 
@@ -142,7 +327,14 @@ func (a *App) CreateProfile(deviceID, name, geometryID string) (profile.Profile,
 	if err != nil {
 		return profile.Profile{}, err
 	}
-	return store.Upsert(draft)
+	saved, err := store.Upsert(draft)
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	if err := a.syncProfileExport(saved); err != nil {
+		return saved, err
+	}
+	return saved, nil
 }
 
 func (a *App) SaveProfile(draft profile.Profile) (profile.Profile, error) {
@@ -166,7 +358,14 @@ func (a *App) SaveProfile(draft profile.Profile) (profile.Profile, error) {
 	// ordinary draft edit from the frontend.
 	draft.ManagerConfigurationID = current.ManagerConfigurationID
 	draft.ApplyPending = current.ApplyPending
-	return store.Upsert(draft)
+	saved, err := store.Upsert(draft)
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	if err := a.syncProfileExport(saved); err != nil {
+		return saved, err
+	}
+	return saved, nil
 }
 
 // ProfileStoreStatus explains why saved drafts could not be loaded, so the UI
@@ -256,7 +455,14 @@ func (a *App) DuplicateProfile(id, name string) (profile.Profile, error) {
 		return profile.Profile{}, err
 	}
 	copied.Settings = source.Settings
-	return store.Upsert(copied)
+	saved, err := store.Upsert(copied)
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	if err := a.syncProfileExport(saved); err != nil {
+		return saved, err
+	}
+	return saved, nil
 }
 
 // ExportProfile writes a portable behavior-only profile file. It never emits
@@ -301,6 +507,27 @@ func (a *App) ImportProfile(deviceID string) (profile.Profile, error) {
 	if err != nil || path == "" {
 		return profile.Profile{}, err
 	}
+	return a.importProfileFile(path, deviceID)
+}
+
+// ImportProfileFromPath imports a portable profile already on disk. It is the
+// open-with entry point used when the OS launches KeyboarDeer with a
+// *.kbdprofile.json argument. The pending launch file is cleared on success.
+func (a *App) ImportProfileFromPath(path, deviceID string) (profile.Profile, error) {
+	draft, err := a.importProfileFile(path, deviceID)
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	a.ClearPendingKbdProfileFile()
+	return draft, nil
+}
+
+// importProfileFile validates and stores a portable profile from path. It is
+// shared by the ImportProfile dialog flow and the open-with flow.
+func (a *App) importProfileFile(path, deviceID string) (profile.Profile, error) {
+	if !strings.HasSuffix(strings.ToLower(path), ".kbdprofile.json") {
+		return profile.Profile{}, fmt.Errorf("not a KeyboarDeer profile file")
+	}
 	info, err := os.Stat(path)
 	if err != nil {
 		return profile.Profile{}, err
@@ -312,6 +539,11 @@ func (a *App) ImportProfile(deviceID string) (profile.Profile, error) {
 	if err != nil {
 		return profile.Profile{}, err
 	}
+	return a.importProfileData(data, deviceID)
+}
+
+// importProfileData validates, links, and stores portable profile bytes.
+func (a *App) importProfileData(data []byte, deviceID string) (profile.Profile, error) {
 	draft, err := profile.Import(data, deviceID)
 	if err != nil {
 		return profile.Profile{}, err
@@ -343,7 +575,14 @@ func (a *App) ImportProfile(deviceID string) (profile.Profile, error) {
 	if !compatible {
 		return profile.Profile{}, fmt.Errorf("imported layout does not match a profile already associated with this keyboard")
 	}
-	return store.Upsert(draft)
+	saved, err := store.Upsert(draft)
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	if err := a.syncProfileExport(saved); err != nil {
+		return saved, err
+	}
+	return saved, nil
 }
 
 func (a *App) DeleteProfile(id string, expectedDraftRevision uint64) error {
@@ -351,7 +590,33 @@ func (a *App) DeleteProfile(id string, expectedDraftRevision uint64) error {
 	if err != nil {
 		return err
 	}
-	return store.Delete(id, expectedDraftRevision)
+	draft, err := a.profileByID(id)
+	if err != nil {
+		return err
+	}
+	preferences, err := a.Preferences()
+	if err != nil {
+		return err
+	}
+	syncedPath := ""
+	if preferences.ProfileSyncEnabled {
+		name, err := a.syncedProfileFileName(draft)
+		if err != nil {
+			return err
+		}
+		syncedPath = filepath.Join(preferences.ProfileSyncFolder, name)
+	}
+	if err := store.Delete(id, expectedDraftRevision); err != nil {
+		return err
+	}
+	if syncedPath != "" {
+		err = os.Remove(syncedPath)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func (a *App) CompileProfile(id string) (compiler.Result, error) {

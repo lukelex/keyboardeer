@@ -19,6 +19,10 @@ button:focus-visible {
   outline: 3px solid #b58c44;
   outline-offset: 3px;
 }
+:where(a[href], input, select, textarea, [role="tab"]):focus-visible {
+  outline: 3px solid #b58c44;
+  outline-offset: 3px;
+}
 .app-shell {
   min-height: 100vh;
   display: grid;
@@ -124,6 +128,30 @@ button:focus-visible {
   display: block;
   height: 7px;
   width: 7px;
+}
+.preferences-button {
+  align-items: center;
+  background: transparent;
+  border-color: transparent;
+  color: #eaf1dd;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 42px;
+  padding: 8px;
+  width: 42px;
+}
+.preferences-button:hover:not(:disabled) {
+  background: rgb(255 255 255 / 9%);
+  border-color: transparent;
+}
+.preferences-button svg {
+  fill: none;
+  height: 25px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+  width: 25px;
 }
 .connection-status.ready i {
   background: #8fbd79;
@@ -550,11 +578,6 @@ h1 {
 .raw-configuration-dialog {
   max-width: min(1100px, 96vw);
 }
-.raw-configuration-meta {
-  color: #718076;
-  font-size: 11px;
-  overflow-wrap: anywhere;
-}
 .raw-configuration-content {
   background: #17382f;
   border: 1px solid #345c4c;
@@ -659,6 +682,7 @@ h1 {
 }
 .editor-page {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100%;
   min-height: 0;
@@ -669,7 +693,9 @@ h1 {
   background: #f7f5ed;
   border-bottom: 1px solid #dfe5d6;
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
+  row-gap: 8px;
   min-height: 54px;
   padding: 8px clamp(22px, 6vw, 88px);
   position: relative;
@@ -772,12 +798,18 @@ h1 {
   background: #c2412d;
 }
 @media (prefers-reduced-motion: reduce) {
-  .configuration-indicator i {
-    transition: none;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }
 .editor-scroll-region {
   min-height: 0;
+  min-width: 0;
   overflow: auto;
   overscroll-behavior: contain;
   padding: 0 clamp(22px, 6vw, 88px) 32px;
@@ -1213,6 +1245,7 @@ h1 {
   border-width: 1px 0 0;
   box-shadow: 0 -7px 20px rgb(31 60 43 / 8%);
   margin: 0;
+  min-width: 0;
   padding: 12px clamp(22px, 6vw, 88px);
   width: 100%;
 }
@@ -1333,6 +1366,11 @@ h1 {
 .palette-buttons .palette-key:hover {
   background: #d9ecd1;
   border-color: #608b61;
+}
+.palette-buttons .palette-key .palette-symbol {
+  font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", sans-serif;
+  font-size: 22px;
+  line-height: 1;
 }
 .palette-buttons .palette-key small {
   color: #4f6256;
@@ -1467,6 +1505,103 @@ h1 {
 }
 .behavior-dialog-close:hover {
   background: #e5eee0;
+}
+.preferences-dialog .eyebrow {
+  color: #718b68;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 1.4px;
+}
+.preference-setting {
+  background: #fffefa;
+  border: 1px solid #d6e1cc;
+  border-radius: 10px;
+  margin-top: 22px;
+  padding: 17px;
+}
+.preference-toggle {
+  align-items: flex-start;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+}
+.preference-toggle input {
+  accent-color: #446b50;
+  height: 17px;
+  margin: 2px 0 0;
+  width: 17px;
+}
+.preference-toggle strong,
+.preference-toggle small {
+  display: block;
+}
+.preference-toggle strong {
+  font-size: 13px;
+}
+.preference-toggle small {
+  color: #677a6b;
+  font-size: 11px;
+  line-height: 1.55;
+  margin-top: 5px;
+}
+.preference-folder {
+  margin: 19px 0 0 29px;
+}
+.preference-folder > label {
+  color: #486453;
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 7px;
+}
+.preference-folder-row {
+  align-items: center;
+  display: flex;
+  gap: 9px;
+}
+.preference-folder-row input {
+  background: white;
+  border: 1px solid #cbd8c4;
+  border-radius: 8px;
+  color: #3c5544;
+  flex: 1;
+  font: inherit;
+  min-width: 0;
+  padding: 10px;
+}
+.preference-folder-row .button {
+  flex-shrink: 0;
+}
+.preference-folder p {
+  color: #718173;
+  font-size: 10px;
+  line-height: 1.5;
+  margin: 8px 0 0;
+}
+.preference-note {
+  background: #edf3e8;
+  border-radius: 8px;
+  color: #566e5c;
+  display: grid;
+  font-size: 11px;
+  gap: 4px;
+  line-height: 1.5;
+  margin-top: 14px;
+  padding: 13px 15px;
+}
+.preference-note strong {
+  color: #355440;
+}
+.preference-error {
+  color: #9a4138;
+  font-size: 12px;
+  margin-top: 12px;
+}
+.preferences-dialog .dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 23px;
 }
 .dialog-intro {
   color: #647669;

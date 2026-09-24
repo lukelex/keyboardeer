@@ -128,7 +128,7 @@ Implementation handover for the remaining recovery work:
   pre-edit fallback. Revert only an identified offending assignment with current
   revision/value guards, preserve unrelated edits, protect missing dependencies,
   record undo, and revalidate the complete draft. Do not silently auto-revert.
-- [ ] **VALIDATE-06** Verify rapid edit races, device switching, reconnect,
+- [x] **VALIDATE-06** Verify rapid edit races, device switching, reconnect,
   capability changes, cross-layer/multiple issues, partial recovery, repeated bad
   edits, revert/undo, unavailable checkpoints, and unmapped diagnostics.
 
@@ -161,7 +161,7 @@ another, and failed changes do not falsely appear as active.
 
 ## P2 — Usability and release quality
 
-- [ ] **UX-01** Complete keyboard navigation, useful accessible names, focus
+- [x] **UX-01** Complete keyboard navigation, useful accessible names, focus
   restoration, screen-reader announcements, contrast, scalable type, 200% zoom,
   small-window behavior, and reduced motion.
 - [ ] **UX-02** Provide first-run setup, missing-manager guidance, structured

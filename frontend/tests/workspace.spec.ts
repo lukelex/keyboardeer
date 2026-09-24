@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+import { formatKMonad } from "../src/kmonadFormat";
 import type { ManagerWorkspace, Profile, ProfilePreview } from "../src/desktop";
 import {
   applyAssignmentRecovery,
@@ -70,6 +71,12 @@ const workspace: ManagerWorkspace = {
     },
   },
 };
+
+test("pretty-prints KMonad forms without splitting quoted delimiters", () => {
+  expect(formatKMonad('(defcfg input (device-file "keyboard (left)"))')).toBe(
+    '(defcfg\n  input\n  (device-file\n    "keyboard (left)"\n  )\n)',
+  );
+});
 
 test("null Go slices support editing, previewing, and explicitly applying a draft", async ({
   page,
@@ -328,6 +335,9 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
     });
   expect(editorTextContrasts.every((ratio) => ratio >= 4.5)).toBe(true);
   await expect(page.locator(".configuration-indicator i")).toBeVisible();
+  await expect(page.locator(".editor-heading > button").last()).toHaveText(
+    "Apply to keyboard",
+  );
   const firstEditorKey = await page
     .locator(".editor-key")
     .first()
@@ -352,13 +362,7 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
     await paletteKeys.evaluateAll((keys) =>
       keys.slice(0, 5).map((key) => key.getAttribute("title")),
     ),
-  ).toEqual([
-    "Assign 2 (2)",
-    "Assign A (a)",
-    "Assign Z (z)",
-    "Assign Caps (caps)",
-    "Assign Ctrl (lctl)",
-  ]);
+  ).toEqual(["2 (2)", "A (a)", "Z (z)", "Caps (caps)", "Ctrl (lctl)"]);
   expect(
     await paletteKeys.evaluateAll((keys) =>
       keys
@@ -390,7 +394,28 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
     .getByRole("tab", { name: "Navigation" })
     .click();
   await visualizedKey.click();
-  await page.locator('.palette-key[title="Assign A (a)"]').click();
+  await expect(
+    page.locator(
+      '.palette-key[aria-label="Assign Next track (next)"] .palette-symbol',
+    ),
+  ).toHaveText("⏭");
+  await expect(
+    page.locator('.palette-key[aria-label="Assign Next track (next)"]'),
+  ).toHaveAttribute("title", "Next track (next)");
+  await expect(
+    page.locator('.palette-key[aria-label="Assign Brightness up (brup)"]'),
+  ).toHaveAttribute("title", "Brightness up (brup)");
+  await expect(
+    page.locator(
+      '.palette-key[aria-label="Assign Brightness up (brup)"] .palette-symbol',
+    ),
+  ).toHaveText("☀+");
+  await expect(
+    page.locator(
+      '.palette-key[aria-label="Assign Keyboard backlight toggle (kbdillumtoggle)"] .palette-symbol',
+    ),
+  ).toHaveText("⌨☼");
+  await page.locator('.palette-key[aria-label="Assign A (a)"]').click();
   await expect(visualizedKey.locator("small")).toHaveText("a");
   await page.locator(".layer-tabs").getByRole("tab", { name: "Base" }).click();
   await expect(visualizedKey.locator("small")).toHaveText(baseLayerMapping);
@@ -456,7 +481,7 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
     .getByRole("button", { name: "Close complex action dialog" })
     .click();
   await page
-    .locator('.palette-buttons button[title="Assign Caps (caps)"]')
+    .locator('.palette-buttons button[aria-label="Assign Caps (caps)"]')
     .click();
   await expect(
     page.getByRole("heading", { name: "Unconfigured keyboard draft" }),
@@ -497,21 +522,15 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   const keySearch = page.getByLabel("Search keys");
   await keySearch.fill("ctr");
   await expect(paletteKeys).toHaveCount(1);
-  await expect(paletteKeys.first()).toHaveAttribute(
-    "title",
-    "Assign Ctrl (lctl)",
-  );
+  await expect(paletteKeys.first()).toHaveAttribute("title", "Ctrl (lctl)");
   await keySearch.fill("f24");
   await expect(paletteKeys).toHaveCount(1);
-  await expect(paletteKeys.first()).toHaveAttribute(
-    "title",
-    "Assign F24 (f24)",
-  );
+  await expect(paletteKeys.first()).toHaveAttribute("title", "F24 (f24)");
   await keySearch.fill("scrlck");
   await expect(paletteKeys).toHaveCount(1);
   await expect(paletteKeys.first()).toHaveAttribute(
     "title",
-    "Assign Scroll Lock (scrlck)",
+    "Scroll Lock (scrlck)",
   );
   await keySearch.fill("volu");
   await expect(paletteKeys).toHaveCount(2);
@@ -519,7 +538,7 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
     await paletteKeys.evaluateAll((keys) =>
       keys.map((key) => key.getAttribute("title")),
     ),
-  ).toEqual(["Assign Volume down (voldwn)", "Assign Volume up (volu)"]);
+  ).toEqual(["Volume down (voldwn)", "Volume up (volu)"]);
   await keySearch.fill("zzz");
   await expect(paletteKeys).toHaveCount(0);
   await expect(page.getByText("No keys match “zzz”.")).toBeVisible();
@@ -547,6 +566,12 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   expect(await paletteScroll.evaluate((element) => element.scrollLeft)).toBe(
     160,
   );
+  await paletteScroll.evaluate((element) => (element.scrollLeft = 0));
+  await paletteScroll.hover();
+  await page.mouse.wheel(0, 160);
+  await expect
+    .poll(() => paletteScroll.evaluate((element) => element.scrollLeft))
+    .toBeGreaterThan(0);
   await categories.getByRole("tab", { name: "Function" }).click();
   await expect(paletteKeys).toHaveCount(24);
   const functionKeyRows = await paletteKeys.evaluateAll((keys) =>
@@ -592,8 +617,11 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   await expect(
     page.getByRole("heading", { name: "KMonad configuration" }),
   ).toBeVisible();
-  await expect(page.locator(".raw-configuration-content")).toContainText(
-    '(defcfg\n  input (device-file "/dev/input/event0"))',
+  await expect(page.locator(".raw-configuration-content")).toHaveText(
+    '(defcfg\n  input\n  (device-file\n    "/dev/input/event0"\n  )\n)',
+  );
+  await expect(page.getByText(/Revision 1 · manager_rendered_kbd/)).toHaveCount(
+    0,
   );
   await page
     .getByRole("button", { name: "Close KMonad configuration" })
@@ -847,6 +875,7 @@ test("reverts only an exactly mapped bad assignment to its persisted validated v
   }, state);
 
   await page.goto("/");
+  await expect(page.getByText("Manager ready", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Set up", exact: true }).click();
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
   await expect(page.locator(".configuration-indicator")).toHaveAttribute(
@@ -854,7 +883,7 @@ test("reverts only an exactly mapped bad assignment to its persisted validated v
     "valid",
   );
   await page.locator('.editor-key[data-source-key="caps"]').click();
-  await page.locator('.palette-key[title="Assign A (a)"]').click();
+  await page.locator('.palette-key[aria-label="Assign A (a)"]').click();
   await expect(page.locator(".preview-message")).toContainText(
     "The manager rejected the Caps assignment.",
   );
@@ -891,8 +920,20 @@ test("reverts only an exactly mapped bad assignment to its persisted validated v
     "valid",
   );
 
+  // A fresh bad edit after revalidation gets a new checkpoint and can be
+  // safely recovered again.
+  await page.evaluate(() => (window as any).__setValidationMode("mapped"));
+  await page.locator('.palette-key[aria-label="Assign A (a)"]').click();
+  await expect(invalidKey).toHaveClass(/invalid-key/);
+  await page.getByRole("button", { name: "Revert caps" }).click();
+  await expect(invalidKey.locator("small")).toHaveText("esc");
+  await expect(page.locator(".configuration-indicator")).toHaveAttribute(
+    "data-state",
+    "valid",
+  );
+
   await page.evaluate(() => (window as any).__setValidationMode("unmapped"));
-  await page.locator('.palette-key[title="Assign A (a)"]').click();
+  await page.locator('.palette-key[aria-label="Assign A (a)"]').click();
   await expect(page.locator(".preview-message")).toContainText(
     "No exact manager location matched one assignment",
   );
@@ -905,7 +946,7 @@ test("reverts only an exactly mapped bad assignment to its persisted validated v
   );
 
   await page.evaluate(() => (window as any).__setValidationMode("blocked"));
-  await page.locator('.palette-key[title="Assign A (a)"]').click();
+  await page.locator('.palette-key[aria-label="Assign A (a)"]').click();
   await expect(page.locator(".preview-message.blocked")).toContainText(
     "The keyboard disconnected during validation.",
   );
@@ -1138,6 +1179,31 @@ test("uses safe pre-edit fallback without a checkpoint and protects removed depe
     profile.validation_recovery.pre_edit![0].behavior = behavior;
     expect(assignmentRecovery(profile, issue!, "server").available).toBe(false);
   }
+
+  const withoutProvenance = {
+    ...profile,
+    validation_recovery: undefined,
+  };
+  expect(
+    assignmentRecovery(withoutProvenance, issue!, "server").available,
+  ).toBe(false);
+  const staleCheckpoint = {
+    ...profile,
+    validation_recovery: {
+      checkpoint: {
+        draft_revision: 1,
+        manager_server_id: "old-server",
+        candidate_digest: `sha256:${"a".repeat(64)}`,
+        geometry: profile.geometry,
+        layers: profile.layers,
+        assignments: profile.assignments,
+      },
+      pre_edit: [],
+    },
+  };
+  expect(assignmentRecovery(staleCheckpoint, issue!, "server").available).toBe(
+    false,
+  );
 });
 
 test("maps the manager JSON Lines validation fixture through one compiler span", () => {
@@ -1310,7 +1376,13 @@ test("discards previews from older environment and draft generations", async ({
               name: "Race layout",
               description: "Preview race fixture",
               keys: [
-                { id: "caps", label: "Caps", source_key: "caps", row: 0, width: 1 },
+                {
+                  id: "caps",
+                  label: "Caps",
+                  source_key: "caps",
+                  row: 0,
+                  width: 1,
+                },
                 { id: "a", label: "A", source_key: "a", row: 0, width: 1 },
                 { id: "z", label: "Z", source_key: "z", row: 0, width: 1 },
               ],
@@ -1391,12 +1463,16 @@ test("discards previews from older environment and draft generations", async ({
 
   // Two quick edits while one request is active keep only the newest candidate.
   await page.locator('.editor-key[data-source-key="caps"]').click();
-  await page.locator('.palette-key[title="Assign A (a)"]').click();
-  await expect(page.locator('.editor-key[data-source-key="caps"] small')).toHaveText("a");
+  await page.locator('.palette-key[aria-label="Assign A (a)"]').click();
+  await expect(
+    page.locator('.editor-key[data-source-key="caps"] small'),
+  ).toHaveText("a");
   await expect.poll(callCount).toBe(4);
   await page.locator('.editor-key[data-source-key="z"]').click();
-  await page.locator('.palette-key[title="Assign A (a)"]').click();
-  await expect(page.locator('.editor-key[data-source-key="z"] small')).toHaveText("a");
+  await page.locator('.palette-key[aria-label="Assign A (a)"]').click();
+  await expect(
+    page.locator('.editor-key[data-source-key="z"] small'),
+  ).toHaveText("a");
   await resolvePreview(3, 2);
   await expect.poll(callCount).toBe(5);
   await expect(indicator).toHaveAttribute("data-state", "checking");
@@ -1554,21 +1630,31 @@ test("does not let an in-flight preview paint a newly selected profile", async (
   const switchingWorkspace: ManagerWorkspace = structuredClone(workspace);
   switchingWorkspace.snapshot!.configurations = [];
   switchingWorkspace.snapshot!.devices = [
-    { ...workspace.snapshot!.devices![0], id: "device-1", display_name: "Keyboard One" },
-    { ...workspace.snapshot!.devices![0], id: "device-2", display_name: "Keyboard Two" },
+    {
+      ...workspace.snapshot!.devices![0],
+      id: "device-1",
+      display_name: "Keyboard One",
+    },
+    {
+      ...workspace.snapshot!.devices![0],
+      id: "device-2",
+      display_name: "Keyboard Two",
+    },
   ];
-  const profiles: Profile[] = ["device-1", "device-2"].map((deviceID, index) => ({
-    id: `switch-profile-${index + 1}`,
-    name: `Keyboard ${index + 1} profile`,
-    device_id: deviceID,
-    draft_revision: 1,
-    geometry: { id: "switch-layout", source_keys: ["a"] },
-    layers: [{ id: "base", name: "Base" }],
-    assignments: null,
-    settings: { version: 1 },
-    created_at: `2026-09-24T10:00:0${index}Z`,
-    updated_at: "2026-09-24T10:00:00Z",
-  }));
+  const profiles: Profile[] = ["device-1", "device-2"].map(
+    (deviceID, index) => ({
+      id: `switch-profile-${index + 1}`,
+      name: `Keyboard ${index + 1} profile`,
+      device_id: deviceID,
+      draft_revision: 1,
+      geometry: { id: "switch-layout", source_keys: ["a"] },
+      layers: [{ id: "base", name: "Base" }],
+      assignments: null,
+      settings: { version: 1 },
+      created_at: `2026-09-24T10:00:0${index}Z`,
+      updated_at: "2026-09-24T10:00:00Z",
+    }),
+  );
   await page.addInitScript(
     ({ initial, savedProfiles }) => {
       const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
@@ -1609,7 +1695,9 @@ test("does not let an in-flight preview paint a newly selected profile", async (
             ],
             SelectProfile: async () => undefined,
             PreviewProfile: async (id) => {
-              const selected = clone(savedProfiles.find((item) => item.id === id)!);
+              const selected = clone(
+                savedProfiles.find((item) => item.id === id)!,
+              );
               return await new Promise<ProfilePreview>((resolve) => {
                 pending.push((revision) => {
                   const digest = `sha256:${"e".repeat(64)}`;
@@ -1640,15 +1728,25 @@ test("does not let an in-flight preview paint a newly selected profile", async (
   );
 
   await page.goto("/");
-  const firstCard = page.locator(".device-card").filter({ hasText: "Keyboard One" });
-  await firstCard.getByRole("button", { name: "Edit draft", exact: true }).click();
+  const firstCard = page
+    .locator(".device-card")
+    .filter({ hasText: "Keyboard One" });
+  await firstCard
+    .getByRole("button", { name: "Edit draft", exact: true })
+    .click();
   const callCount = () =>
     page.evaluate(() => (window as any).__switchHarness.count());
   await expect.poll(callCount).toBe(1);
   await page.getByRole("button", { name: "← All keyboards" }).click();
-  const secondCard = page.locator(".device-card").filter({ hasText: "Keyboard Two" });
-  await secondCard.getByRole("button", { name: "Edit draft", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Keyboard 2 profile" })).toBeVisible();
+  const secondCard = page
+    .locator(".device-card")
+    .filter({ hasText: "Keyboard Two" });
+  await secondCard
+    .getByRole("button", { name: "Edit draft", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Keyboard 2 profile" }),
+  ).toBeVisible();
   await page.evaluate(() => (window as any).__switchHarness.resolve(0, 1));
   await expect.poll(callCount).toBe(2);
   await expect(page.locator(".configuration-indicator")).toHaveAttribute(
@@ -1660,6 +1758,282 @@ test("does not let an in-flight preview paint a newly selected profile", async (
     "data-state",
     "valid",
   );
+});
+
+test("partially recovers multiple diagnostics across layers", async ({
+  page,
+}) => {
+  const state: ManagerWorkspace = structuredClone(workspace);
+  state.snapshot!.configurations = [];
+  await page.addInitScript((fixture) => {
+    const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
+    const now = "2026-09-24T10:00:00Z";
+    let draft: Profile | undefined;
+    const sourceMap = [
+      {
+        layer_id: "base",
+        source_key: "caps",
+        explicit: true,
+        span: { start_line: 4, start_column: 3, end_line: 4, end_column: 8 },
+      },
+      {
+        layer_id: "navigation",
+        source_key: "z",
+        explicit: true,
+        span: { start_line: 9, start_column: 3, end_line: 9, end_column: 8 },
+      },
+    ];
+    const validPreview = (): ProfilePreview => {
+      if (!draft) throw new Error("multi-issue profile is missing");
+      const candidateDigest = `sha256:${draft.draft_revision
+        .toString(16)
+        .padStart(64, "0")}`;
+      const validationRecovery = {
+        checkpoint: {
+          draft_revision: draft.draft_revision,
+          manager_server_id: "server-1",
+          candidate_digest: candidateDigest,
+          geometry: clone(draft.geometry),
+          layers: clone(draft.layers),
+          assignments: clone(draft.assignments),
+          aliases: draft.aliases,
+          macros: draft.macros,
+        },
+        pre_edit: [],
+      };
+      return {
+        profile_id: draft.id,
+        draft_revision: draft.draft_revision,
+        device_id: draft.device_id,
+        manager_server_id: "server-1",
+        state_revision: 1,
+        candidate_digest: candidateDigest,
+        validation_recovery: validationRecovery,
+        validation: {
+          outcome: "valid",
+          reason_code: "validation_succeeded",
+          reason: "The whole draft is valid.",
+          candidate_digest: candidateDigest,
+          diagnostics: [],
+        },
+        source_map: sourceMap,
+      };
+    };
+    const rejectedPreview = (
+      badCaps: boolean,
+      badNavigation: boolean,
+    ): ProfilePreview => {
+      if (!draft) throw new Error("multi-issue profile is missing");
+      const candidateDigest = `sha256:${"f".repeat(64)}`;
+      const diagnostics = [];
+      if (badCaps) {
+        diagnostics.push({
+          id: "bad-base-caps",
+          severity: "error",
+          reason_code: "validation_failed",
+          summary: "Base Caps is invalid.",
+          remediation: "Restore the last validated assignment.",
+          location: {
+            scope: "submitted_behavior",
+            start_line: 4,
+            start_column: 3,
+            end_line: 4,
+            end_column: 4,
+          },
+        });
+      }
+      if (badNavigation) {
+        diagnostics.push({
+          id: "bad-navigation-z",
+          severity: "error",
+          reason_code: "validation_failed",
+          summary: "Navigation Z is invalid.",
+          remediation: "Restore the last validated assignment.",
+          location: {
+            scope: "submitted_behavior",
+            start_line: 9,
+            start_column: 3,
+            end_line: 9,
+            end_column: 4,
+          },
+        });
+      }
+      return {
+        profile_id: draft.id,
+        draft_revision: draft.draft_revision,
+        device_id: draft.device_id,
+        manager_server_id: "server-1",
+        state_revision: 1,
+        candidate_digest: candidateDigest,
+        validation: {
+          outcome: "rejected",
+          reason_code: "validation_failed",
+          reason: "Two assignments need attention.",
+          candidate_digest: candidateDigest,
+          diagnostics,
+        },
+        source_map: sourceMap,
+      };
+    };
+    (window as any).__multiRecoveryDraft = () => clone(draft);
+    window.go = {
+      main: {
+        App: {
+          Info: async () => ({ name: "KeyboarDeer", version: "test" }),
+          Workspace: async () => fixture,
+          Profiles: async () => (draft ? [clone(draft)] : []),
+          SelectedProfiles: async () =>
+            draft ? { [draft.device_id]: draft.id } : {},
+          Geometries: async () => [
+            {
+              id: "multi-layout",
+              name: "Multi-layer layout",
+              description: "Cross-layer recovery fixture",
+              keys: [
+                {
+                  id: "caps",
+                  label: "Caps",
+                  source_key: "caps",
+                  row: 0,
+                  width: 1,
+                },
+                { id: "a", label: "A", source_key: "a", row: 0, width: 1 },
+                { id: "z", label: "Z", source_key: "z", row: 0, width: 1 },
+              ],
+            },
+          ],
+          CreateProfile: async (deviceID, name, geometryID) => {
+            draft = {
+              id: "multi-profile",
+              name,
+              device_id: deviceID,
+              draft_revision: 1,
+              geometry: { id: geometryID, source_keys: ["caps", "a", "z"] },
+              layers: [
+                { id: "base", name: "Base" },
+                { id: "navigation", name: "Navigation" },
+              ],
+              assignments: [
+                {
+                  layer_id: "base",
+                  source_key: "caps",
+                  behavior: { kind: "key", key: "esc" },
+                },
+                {
+                  layer_id: "base",
+                  source_key: "a",
+                  behavior: { kind: "key", key: "b" },
+                },
+                {
+                  layer_id: "navigation",
+                  source_key: "z",
+                  behavior: { kind: "key", key: "d" },
+                },
+              ],
+              settings: { version: 1 },
+              created_at: now,
+              updated_at: now,
+            };
+            return clone(draft);
+          },
+          SaveProfile: async (value) => {
+            if (!draft) throw new Error("multi-issue profile is missing");
+            draft = {
+              ...clone(value),
+              draft_revision: draft.draft_revision + 1,
+              updated_at: new Date().toISOString(),
+            };
+            return clone(draft);
+          },
+          PreviewProfile: async () => {
+            if (!draft) throw new Error("multi-issue profile is missing");
+            const badCaps = draft.assignments?.some(
+              (assignment) =>
+                assignment.layer_id === "base" &&
+                assignment.source_key === "caps" &&
+                assignment.behavior.key === "a",
+            );
+            const badNavigation = draft.assignments?.some(
+              (assignment) =>
+                assignment.layer_id === "navigation" &&
+                assignment.source_key === "z" &&
+                assignment.behavior.key === "a",
+            );
+            return badCaps || badNavigation
+              ? rejectedPreview(!!badCaps, !!badNavigation)
+              : validPreview();
+          },
+        },
+      },
+    };
+  }, state);
+
+  await page.goto("/");
+  await expect(page.getByText("Manager ready", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Set up", exact: true }).click();
+  await page.getByRole("button", { name: "Create draft", exact: true }).click();
+  await expect(page.locator(".configuration-indicator")).toHaveAttribute(
+    "data-state",
+    "valid",
+  );
+  const layerTabs = page.getByRole("tablist", { name: "Keymap layers" });
+  await layerTabs.getByRole("tab", { name: "Base" }).click();
+  await page.locator('.editor-key[data-source-key="caps"]').click();
+  await page.locator('.palette-key[aria-label="Assign A (a)"]').click();
+  await layerTabs.getByRole("tab", { name: "Navigation" }).click();
+  await page.locator('.editor-key[data-source-key="z"]').click();
+  await page.locator('.palette-key[aria-label="Assign A (a)"]').click();
+  await expect(page.locator(".validation-diagnostics li")).toHaveCount(2);
+  await page.getByRole("button", { name: "Show Base · caps" }).click();
+  await expect(page.locator('.editor-key[data-source-key="caps"]')).toHaveClass(
+    /invalid-key/,
+  );
+  await page.getByRole("button", { name: "Show Navigation · z" }).click();
+  await expect(page.locator('.editor-key[data-source-key="z"]')).toBeFocused();
+  await page.getByRole("button", { name: "Revert z" }).click();
+  await expect(page.locator(".validation-diagnostics li")).toHaveCount(1);
+  await expect(
+    page.locator('.editor-key[data-source-key="z"] small'),
+  ).toHaveText("d");
+  await page.getByRole("button", { name: "Show Base · caps" }).click();
+  await expect(
+    page.locator('.editor-key[data-source-key="caps"] small'),
+  ).toHaveText("a");
+  const afterFirstRecovery = await page.evaluate(() =>
+    (window as any).__multiRecoveryDraft(),
+  );
+  expect(afterFirstRecovery.assignments).toContainEqual({
+    layer_id: "navigation",
+    source_key: "z",
+    behavior: { kind: "key", key: "d" },
+  });
+  expect(
+    afterFirstRecovery.validation_recovery.checkpoint.assignments,
+  ).toContainEqual({
+    layer_id: "navigation",
+    source_key: "z",
+    behavior: { kind: "key", key: "d" },
+  });
+  await page.getByRole("button", { name: "Revert caps" }).click();
+  await expect(page.locator(".configuration-indicator")).toHaveAttribute(
+    "data-state",
+    "valid",
+  );
+  await expect(
+    page.locator('.editor-key[data-source-key="caps"] small'),
+  ).toHaveText("esc");
+  const afterSecondRecovery = await page.evaluate(() =>
+    (window as any).__multiRecoveryDraft(),
+  );
+  expect(afterSecondRecovery.assignments).toContainEqual({
+    layer_id: "navigation",
+    source_key: "z",
+    behavior: { kind: "key", key: "d" },
+  });
+  await layerTabs.getByRole("tab", { name: "Navigation" }).click();
+  await expect(
+    page.locator('.editor-key[data-source-key="z"] small'),
+  ).toHaveText("d");
 });
 
 test("switches, renames, duplicates, and deletes profiles per keyboard", async ({
@@ -2393,4 +2767,272 @@ test("explains unavailable and conflicting keyboard states", async ({
   await expect(
     page.getByText("Raw KMonad source is unavailable", { exact: true }),
   ).toBeVisible();
+});
+
+test("supports keyboard navigation, dialog focus trapping, and focus restoration", async ({
+  page,
+}) => {
+  await page.addInitScript((fixture) => {
+    let draft: Profile | undefined;
+    let receiveWorkspace: ((value: unknown) => void) | undefined;
+    window.runtime = {
+      EventsOn: (_, callback) => {
+        receiveWorkspace = callback;
+        return () => {
+          receiveWorkspace = undefined;
+        };
+      },
+    };
+    window.go = {
+      main: {
+        App: {
+          Info: async () => ({ name: "KeyboarDeer", version: "test" }),
+          Workspace: async () => fixture,
+          Profiles: async () => (draft ? [draft] : []),
+          SelectedProfiles: async () => (draft ? { "device-1": draft.id } : {}),
+          Geometries: async () => [
+            {
+              id: "fixture",
+              name: "Fixture layout",
+              description: "Explicit test geometry",
+              keys: [
+                {
+                  id: "caps",
+                  label: "Caps",
+                  source_key: "caps",
+                  row: 0,
+                  width: 1,
+                },
+                {
+                  id: "z",
+                  label: "Z",
+                  source_key: "z",
+                  row: 1,
+                  width: 1,
+                },
+                {
+                  id: "left-control",
+                  label: "Ctrl",
+                  source_key: "lctl",
+                  row: 1,
+                  width: 1.3,
+                },
+                {
+                  id: "digit-2",
+                  label: "2",
+                  source_key: "2",
+                  row: 2,
+                  width: 1,
+                },
+                {
+                  id: "a",
+                  label: "A",
+                  source_key: "a",
+                  row: 2,
+                  width: 1,
+                },
+              ],
+            },
+          ],
+          CreateProfile: async (deviceID, name, geometryID) => {
+            draft = {
+              id: "draft-1",
+              name,
+              device_id: deviceID,
+              draft_revision: 1,
+              geometry: {
+                id: geometryID,
+                source_keys: ["caps", "z", "lctl", "2", "a"],
+              },
+              layers: [{ id: "base", name: "Base" }],
+              assignments: null,
+              settings: { version: 1 },
+              created_at: "2026-09-23T00:00:00Z",
+              updated_at: "2026-09-23T00:00:00Z",
+            };
+            return draft;
+          },
+          SaveProfile: async (value) => {
+            draft = { ...value, draft_revision: value.draft_revision + 1 };
+            receiveWorkspace?.(fixture);
+            return draft;
+          },
+          PreviewProfile: async (id) => ({
+            profile_id: id,
+            draft_revision: draft!.draft_revision,
+            device_id: "device-1",
+            manager_server_id: "server-1",
+            state_revision: 1,
+            validation: {
+              outcome: "valid",
+              reason_code: "validation_succeeded",
+              reason: "Valid",
+              diagnostics: null,
+            },
+            source_map: [],
+          }),
+        },
+      },
+    };
+  }, workspace);
+  await page.goto("/");
+  await expect(page.getByText("Manager ready", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Set up", exact: true }).click();
+  await page.getByRole("button", { name: "Create draft", exact: true }).click();
+  await expect(page.locator(".editor-key")).toHaveCount(5);
+
+  // aria-live context region announces the selected key and active layer.
+  const selectedKeyContext = page.locator(".selected-key-context");
+  await expect(selectedKeyContext).toHaveAttribute("aria-live", "polite");
+  await expect(selectedKeyContext).toHaveAttribute("aria-atomic", "true");
+  await expect(selectedKeyContext.locator("strong")).toHaveText("Select a key");
+  await page.locator(".editor-key").first().click();
+  await expect(selectedKeyContext.locator("strong")).toHaveText("caps");
+  await expect(selectedKeyContext.locator("span").first()).toHaveText(
+    "Base layer",
+  );
+
+  // Tab panels are wired to their tab controls with real ids.
+  const layerPanel = page.locator("#keyboard-layer-panel");
+  await expect(layerPanel).toHaveAttribute("role", "tabpanel");
+  const baseTab = page
+    .getByRole("tablist", { name: "Keymap layers" })
+    .getByRole("tab", { name: "Base", exact: true });
+  await expect(baseTab).toHaveAttribute(
+    "aria-controls",
+    "keyboard-layer-panel",
+  );
+  await expect(layerPanel).toHaveAttribute("aria-labelledby", "layer-tab-base");
+
+  // Arrow keys roam the palette category tabs and wrap around.
+  const categoryTablist = page.getByRole("tablist", {
+    name: "Key categories",
+  });
+  const allCategory = categoryTablist.getByRole("tab", { name: "All" });
+  await allCategory.focus();
+  await expect(allCategory).toHaveAttribute("aria-selected", "true");
+  await expect(allCategory).toHaveAttribute("tabindex", "0");
+  await page.keyboard.press("ArrowRight");
+  const numbersCategory = categoryTablist.getByRole("tab", {
+    name: "Numbers",
+  });
+  await expect(numbersCategory).toBeFocused();
+  await expect(numbersCategory).toHaveAttribute("aria-selected", "true");
+  const palettePanel = page.locator("#palette-category-panel");
+  await expect(palettePanel).toHaveAttribute("role", "tabpanel");
+  await expect(palettePanel).toHaveAttribute(
+    "aria-labelledby",
+    "palette-category-0",
+  );
+  await numbersCategory.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(allCategory).toBeFocused();
+  await expect(allCategory).toHaveAttribute("aria-selected", "true");
+  await allCategory.focus();
+  await page.keyboard.press("ArrowLeft");
+  const otherCategory = categoryTablist.getByRole("tab", { name: "Other" });
+  await expect(otherCategory).toBeFocused();
+  await expect(otherCategory).toHaveAttribute("aria-selected", "true");
+
+  // Managing layers opens a modal dialog that traps focus and inerts the app.
+  const manage = page.getByRole("button", { name: "Manage", exact: true });
+  await manage.click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAttribute("aria-modal", "true");
+  const closeDialog = dialog.getByRole("button", {
+    name: "Close complex action dialog",
+  });
+  await expect(closeDialog).toBeFocused();
+  expect(
+    await page.locator(".app-header").evaluate((element) => element.inert),
+  ).toBe(true);
+  expect(await page.locator("main").evaluate((element) => element.inert)).toBe(
+    true,
+  );
+  for (let i = 0; i < 12; i++) {
+    await page.keyboard.press("Tab");
+    expect(
+      await page.evaluate(
+        () => document.activeElement?.closest("dialog") !== null,
+      ),
+    ).toBe(true);
+  }
+  await closeDialog.focus();
+  for (let i = 0; i < 12; i++) {
+    await page.keyboard.press("Shift+Tab");
+    expect(
+      await page.evaluate(
+        () => document.activeElement?.closest("dialog") !== null,
+      ),
+    ).toBe(true);
+  }
+
+  // Add a second layer while the dialog is open; Escape closes and restores
+  // focus to the Manage button that opened the dialog.
+  await page.getByLabel("Add a layer").fill("Navigation");
+  await dialog.getByRole("button", { name: "Add layer" }).click();
+  const navigationTab = page
+    .getByRole("tablist", { name: "Keymap layers" })
+    .getByRole("tab", { name: "Navigation" });
+  await expect(navigationTab).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(manage).toBeFocused();
+
+  // Arrow keys roam the layer tabs and update the panel label.
+  await baseTab.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(navigationTab).toBeFocused();
+  await expect(navigationTab).toHaveAttribute("aria-selected", "true");
+  await expect(baseTab).toHaveAttribute("aria-selected", "false");
+  await expect(baseTab).toHaveAttribute("tabindex", "-1");
+  await expect(navigationTab).toHaveAttribute("tabindex", "0");
+  const navigationTabID = await navigationTab.getAttribute("id");
+  await expect(layerPanel).toHaveAttribute("aria-labelledby", navigationTabID!);
+  await page.keyboard.press("ArrowLeft");
+  await expect(baseTab).toBeFocused();
+  await expect(baseTab).toHaveAttribute("aria-selected", "true");
+
+  // Reduced motion collapses the key-flash animation to nearly instant.
+  // Deselect any chosen key first: the flash only fires while no source key
+  // is actively selected.
+  await page.locator(".editor-key").first().click();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.keyboard.press("CapsLock");
+  await expect(page.locator(".editor-key.flashing-key")).toHaveCSS(
+    "animation-duration",
+    /0\.01ms|1e-05s/,
+  );
+
+  // Small windows (the CSS-pixel equivalent of 200% zoom at 1280 wide) switch
+  // to the compact palette: the strip and editor heading fit the window with
+  // no clipping, key rows and categories stay reachable through their own
+  // horizontal scroll, and there is no document-level horizontal overflow.
+  await page.setViewportSize({ width: 640, height: 700 });
+  const editorPage = page.locator(".editor-page");
+  await expect(editorPage).toHaveClass(/compact-palette/);
+  const smallPalette = await page.locator(".key-palette").boundingBox();
+  expect(smallPalette).not.toBeNull();
+  expect(Math.round(smallPalette!.width)).toBe(640);
+  const applyButton = page.getByRole("button", { name: "Apply to keyboard" });
+  const applyRight = await applyButton.evaluate(
+    (element) => element.getBoundingClientRect().right,
+  );
+  expect(Math.round(applyRight)).toBeLessThanOrEqual(640);
+  expect(
+    await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth <=
+        document.documentElement.clientWidth,
+    ),
+  ).toBe(true);
+  await expect(page.locator(".palette-buttons")).toHaveCSS(
+    "overflow-x",
+    "auto",
+  );
+  await expect(page.locator(".palette-categories")).toHaveCSS(
+    "overflow-x",
+    "auto",
+  );
 });

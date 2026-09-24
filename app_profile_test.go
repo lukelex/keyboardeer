@@ -157,7 +157,11 @@ func TestAppCompilesVerifiedSplitGeometryProfile(t *testing.T) {
 func TestAppPreviewsThePersistedCompiledDraft(t *testing.T) {
 	endpoint := testPreviewManager(t)
 	client := managerapi.New(managerapi.Options{Endpoint: endpoint, ClientName: "keyboardeer-test", ClientVersion: "test"})
-	app := &App{manager: client, profiles: profile.NewStore(filepath.Join(t.TempDir(), "profiles.json"))}
+	tempDir := t.TempDir()
+	app := &App{
+		manager: client, profiles: profile.NewStore(filepath.Join(tempDir, "profiles.json")),
+		preferencesPath: filepath.Join(tempDir, "preferences.json"),
+	}
 	defer app.manager.Close()
 	draft, err := app.CreateProfile("device-1", "Everyday", geometry.ANSI60USID)
 	if err != nil {
@@ -183,7 +187,11 @@ func TestAppPreviewsThePersistedCompiledDraft(t *testing.T) {
 func TestAppRejectsPreviewWithMismatchedCandidateDigest(t *testing.T) {
 	endpoint := testPreviewManagerWithDigest(t, true)
 	client := managerapi.New(managerapi.Options{Endpoint: endpoint, ClientName: "keyboardeer-test", ClientVersion: "test"})
-	app := &App{manager: client, profiles: profile.NewStore(filepath.Join(t.TempDir(), "profiles.json"))}
+	tempDir := t.TempDir()
+	app := &App{
+		manager: client, profiles: profile.NewStore(filepath.Join(tempDir, "profiles.json")),
+		preferencesPath: filepath.Join(tempDir, "preferences.json"),
+	}
 	defer app.manager.Close()
 	draft, err := app.CreateProfile("device-1", "Everyday", geometry.ANSI60USID)
 	if err != nil {
@@ -210,7 +218,11 @@ func TestAppRejectsPreviewWhenManagerEnvironmentChanges(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			endpoint := testPreviewManagerWithOptions(t, false, test.revisions, test.capabilities)
 			client := managerapi.New(managerapi.Options{Endpoint: endpoint, ClientName: "keyboardeer-test", ClientVersion: "test"})
-			app := &App{manager: client, profiles: profile.NewStore(filepath.Join(t.TempDir(), "profiles.json"))}
+			tempDir := t.TempDir()
+			app := &App{
+				manager: client, profiles: profile.NewStore(filepath.Join(tempDir, "profiles.json")),
+				preferencesPath: filepath.Join(tempDir, "preferences.json"),
+			}
 			defer app.manager.Close()
 			draft, err := app.CreateProfile("device-1", "Everyday", geometry.ANSI60USID)
 			if err != nil {
@@ -295,7 +307,7 @@ func TestAppApplyingAnotherProfileUpdatesTheKeyboardsConfiguration(t *testing.T)
 	})
 	client := managerapi.New(managerapi.Options{Endpoint: endpoint, ClientName: "keyboardeer-test", ClientVersion: "test"})
 	store := profile.NewStore(filepath.Join(t.TempDir(), "profiles.json"))
-	app := &App{manager: client, profiles: store}
+	app := &App{manager: client, profiles: store, preferencesPath: filepath.Join(filepath.Dir(store.Path()), "preferences.json")}
 	defer app.manager.Close()
 	typing, err := app.CreateProfile("device-1", "Typing", geometry.ANSI60USID)
 	if err != nil {
@@ -345,7 +357,7 @@ func TestAppDeletesManagedConfigurationButKeepsProfiles(t *testing.T) {
 	})
 	client := managerapi.New(managerapi.Options{Endpoint: endpoint, ClientName: "keyboardeer-test", ClientVersion: "test"})
 	store := profile.NewStore(filepath.Join(t.TempDir(), "profiles.json"))
-	app := &App{manager: client, profiles: store}
+	app := &App{manager: client, profiles: store, preferencesPath: filepath.Join(filepath.Dir(store.Path()), "preferences.json")}
 	defer app.manager.Close()
 	typing, err := app.CreateProfile("device-1", "Typing", geometry.ANSI60USID)
 	if err != nil {
@@ -376,7 +388,7 @@ func newApplyTestApp(t *testing.T, endpoint string) (*App, *profile.Store, profi
 	t.Helper()
 	client := managerapi.New(managerapi.Options{Endpoint: endpoint, ClientName: "keyboardeer-test", ClientVersion: "test", ReconnectInitial: time.Millisecond, ReconnectMaximum: time.Millisecond})
 	store := profile.NewStore(filepath.Join(t.TempDir(), "profiles.json"))
-	app := &App{manager: client, profiles: store}
+	app := &App{manager: client, profiles: store, preferencesPath: filepath.Join(filepath.Dir(store.Path()), "preferences.json")}
 	t.Cleanup(func() { _ = app.manager.Close() })
 	draft, err := app.CreateProfile("device-1", "Typing", geometry.ANSI60USID)
 	if err != nil {
@@ -454,7 +466,7 @@ func TestAppKeepsUnconfirmedApplyAndResumesItLater(t *testing.T) {
 		ReconnectInitial: time.Millisecond, ReconnectMaximum: time.Millisecond,
 	})
 	t.Cleanup(func() { _ = restartedManager.Close() })
-	restarted := &App{manager: restartedManager, profiles: profile.NewStore(store.Path())}
+	restarted := &App{manager: restartedManager, profiles: profile.NewStore(store.Path()), preferencesPath: filepath.Join(filepath.Dir(store.Path()), "preferences.json")}
 	pending, err := restarted.profileByID(draft.ID)
 	if err != nil || pending.ApplyPending == nil || !pending.ApplyPending.Replayable() {
 		t.Fatalf("pending apply was not persisted: %#v, %v", pending.ApplyPending, err)
@@ -547,7 +559,7 @@ func TestAppFollowsRunningApplyUntilItFinishes(t *testing.T) {
 		ReconnectInitial: time.Millisecond, ReconnectMaximum: time.Millisecond,
 	})
 	t.Cleanup(func() { _ = restartedManager.Close() })
-	restarted := &App{manager: restartedManager, profiles: profile.NewStore(store.Path())}
+	restarted := &App{manager: restartedManager, profiles: profile.NewStore(store.Path()), preferencesPath: filepath.Join(filepath.Dir(store.Path()), "preferences.json")}
 	finished, err := restarted.ResumeApply(draft.ID)
 	if err != nil || finished.Operation.State != "rolled_back" || finished.Profile.ApplyPending != nil || finished.Profile.ManagerConfigurationID != "cfg-1" {
 		t.Fatalf("finished apply = %#v, %v", finished, err)
@@ -835,6 +847,153 @@ func testPreviewManagerWithOptions(t *testing.T, mismatchDigest bool, revisions 
 			}
 		}
 	}()
-	t.Cleanup(connections.Wait)
+	t.Cleanup(func() {
+		_ = listener.Close()
+		connections.Wait()
+	})
 	return path
+}
+
+func TestSanitizeFileName(t *testing.T) {
+	cases := map[string]string{
+		"Keychron Q1":        "Keychron Q1",
+		"Slim/Split 75%":     "Slim-Split 75%",
+		"A:b*c?d\"e<f>g|h":   "A-b-c-d-e-f-g-h",
+		"  Trailing Dot. ":   "Trailing Dot",
+		"/":                  "keyboard-profile",
+		"Unicode ⌨ Keyboard": "Unicode ⌨ Keyboard",
+	}
+	for input, want := range cases {
+		if got := sanitizeFileName(input); got != want {
+			t.Errorf("sanitizeFileName(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+func TestSyncedProfileFileNameUsesKeyboardName(t *testing.T) {
+	app := newAppWithProfileStore(profile.NewStore(filepath.Join(t.TempDir(), "profiles.json")))
+	defer app.manager.Close()
+	app.lastWorkspace = &managerapi.Workspace{Snapshot: &managerapi.Snapshot{
+		Devices: []managerapi.Device{{ID: "device-1", DisplayName: "Keychron Q1"}},
+	}}
+	draft, err := app.CreateProfile("device-1", "Everyday", geometry.ANSI60USID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A keyboard with a single profile is named after the keyboard.
+	name, err := app.syncedProfileFileName(draft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name != "Keychron Q1.kbdprofile.json" {
+		t.Fatalf("single-profile name = %q", name)
+	}
+	// A second profile on the same keyboard is disambiguated by its name.
+	copied, err := app.DuplicateProfile(draft.ID, "Writing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstName, err := app.syncedProfileFileName(draft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondName, err := app.syncedProfileFileName(copied)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstName != "Keychron Q1 - Everyday.kbdprofile.json" || secondName != "Keychron Q1 - Writing.kbdprofile.json" {
+		t.Fatalf("multi-profile names = %q, %q", firstName, secondName)
+	}
+	// The fallback for an unknown device is the profile name.
+	draft.DeviceID = "unknown-device"
+	fallback, err := app.syncedProfileFileName(draft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fallback != "Everyday.kbdprofile.json" {
+		t.Fatalf("unexpected fallback name %q", fallback)
+	}
+}
+
+func TestAppImportProfileFromPathSeededByLaunchArgument(t *testing.T) {
+	app := newAppWithProfileStore(profile.NewStore(filepath.Join(t.TempDir(), "profiles.json")))
+	defer app.manager.Close()
+	original, err := app.CreateProfile("device-1", "Everyday", geometry.ANSI60USID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exported, err := profile.Export(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "Shared Everyday.kbdprofile.json")
+	if err := os.WriteFile(path, exported, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// A plain launch has no pending file.
+	if got := app.PendingKbdProfileFile(); got != "" {
+		t.Fatalf("unexpected pending file %q", got)
+	}
+
+	// The OS-launch flow seeds the pending file; importing consumes it.
+	app.SetPendingKbdProfileFile(path)
+	if got := app.PendingKbdProfileFile(); got != path {
+		t.Fatalf("pending file = %q, want %q", got, path)
+	}
+	imported, err := app.ImportProfileFromPath(path, "device-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if imported.ID == original.ID || imported.DraftRevision != 1 {
+		t.Fatalf("imported draft = %#v", imported)
+	}
+	if got := app.PendingKbdProfileFile(); got != "" {
+		t.Fatalf("pending file not cleared after import: %q", got)
+	}
+
+	// Dismissing the open-file notice clears the pending file without importing.
+	app.SetPendingKbdProfileFile(path)
+	app.ClearPendingKbdProfileFile()
+	if got := app.PendingKbdProfileFile(); got != "" {
+		t.Fatalf("pending file not cleared on dismiss: %q", got)
+	}
+
+	// A file that is not a *.kbdprofile.json cannot be imported.
+	badPath := filepath.Join(t.TempDir(), "notes.txt")
+	if err := os.WriteFile(badPath, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.ImportProfileFromPath(badPath, "device-1"); err == nil {
+		t.Fatal("ImportProfileFromPath accepted a non-profile file")
+	}
+}
+
+func TestProfileSyncWritesAndDeletesKeyboardNamedFiles(t *testing.T) {
+	folder := filepath.Join(t.TempDir(), "sync")
+	if err := os.MkdirAll(folder, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	app := newAppWithProfileStore(profile.NewStore(filepath.Join(t.TempDir(), "profiles.json")))
+	defer app.manager.Close()
+	app.lastWorkspace = &managerapi.Workspace{Snapshot: &managerapi.Snapshot{
+		Devices: []managerapi.Device{{ID: "device-1", DisplayName: "Framework keyboard"}},
+	}}
+	if err := app.SavePreferences(Preferences{ProfileSyncEnabled: true, ProfileSyncFolder: folder}); err != nil {
+		t.Fatal(err)
+	}
+	draft, err := app.CreateProfile("device-1", "Laptop", geometry.ANSI60USID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(folder, "Framework keyboard.kbdprofile.json")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("synced file not written: %v", err)
+	}
+	if err := app.DeleteProfile(draft.ID, draft.DraftRevision); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("synced file not removed after profile deletion: %v", err)
+	}
 }

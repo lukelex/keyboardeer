@@ -170,5 +170,20 @@ The KeyboarDeer VALIDATE-05 regression coverage verifies:
   produce a key marker or targeted revert; and
 - blocked results never produce a key marker or targeted revert.
 
-Broader scheduling, reconnect, profile/device-switching, and multi-issue race
-coverage remains tracked under VALIDATE-06.
+The KeyboarDeer VALIDATE-06 regression coverage also verifies:
+
+- stale preview results are discarded after manager state/capability changes,
+  newer draft generations, disconnect, or profile/device switching;
+- reconnect schedules validation for the unchanged draft, while stale responses
+  from the disconnected environment cannot restore a validity claim;
+- rapid edits during an in-flight preview retain only the latest candidate;
+- multiple mapped diagnostics can be navigated and recovered one at a time
+  across different layers, without losing the other invalid or valid edits;
+- a second invalid edit after recovery uses the refreshed valid checkpoint; and
+- missing provenance and checkpoints from another manager server do not enable
+  targeted recovery.
+
+These cases are covered in `frontend/tests/workspace.spec.ts`, alongside the
+manager JSON Lines compatibility fixture. `PreviewProfile` also rejects a
+candidate when the manager server, state revision, or capabilities change during
+validation, so an environment-raced success cannot be persisted as a checkpoint.

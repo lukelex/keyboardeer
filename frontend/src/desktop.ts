@@ -5,6 +5,10 @@ export interface AppInfo {
   name: string;
   version: string;
 }
+export interface Preferences {
+  profile_sync_enabled: boolean;
+  profile_sync_folder: string;
+}
 export interface Capability {
   name: string;
   available: boolean;
@@ -233,6 +237,9 @@ export interface ProfileApplyResult {
 
 type AppBindings = {
   Info?: () => Promise<AppInfo>;
+  Preferences?: () => Promise<Preferences>;
+  SavePreferences?: (preferences: Preferences) => Promise<void>;
+  ChooseProfileSyncFolder?: () => Promise<string>;
   ManagerStatus?: () => Promise<ManagerStatus>;
   Workspace?: () => Promise<ManagerWorkspace>;
   Geometries?: () => Promise<GeometryTemplate[]>;
@@ -247,6 +254,9 @@ type AppBindings = {
   DuplicateProfile?: (id: string, name: string) => Promise<Profile>;
   ExportProfile?: (id: string) => Promise<void>;
   ImportProfile?: (deviceID: string) => Promise<Profile>;
+  ImportProfileFromPath?: (path: string, deviceID: string) => Promise<Profile>;
+  PendingKbdProfileFile?: () => Promise<string>;
+  ClearPendingKbdProfileFile?: () => Promise<void>;
   SelectedProfiles?: () => Promise<Record<string, string>>;
   SelectProfile?: (deviceID: string, profileID: string) => Promise<void>;
   CompileProfile?: (id: string) => Promise<CompileResult>;
@@ -299,6 +309,14 @@ function binding<T>(name: keyof AppBindings): T {
 }
 
 export const Info = () => binding<() => Promise<AppInfo>>("Info")();
+export const Preferences = () =>
+  binding<() => Promise<Preferences>>("Preferences")();
+export const SavePreferences = (preferences: Preferences) =>
+  binding<(preferences: Preferences) => Promise<void>>("SavePreferences")(
+    preferences,
+  );
+export const ChooseProfileSyncFolder = () =>
+  binding<() => Promise<string>>("ChooseProfileSyncFolder")();
 export const ManagerStatus = () =>
   binding<() => Promise<ManagerStatus>>("ManagerStatus")();
 export const Workspace = () =>
@@ -329,6 +347,14 @@ export const ExportProfile = (id: string) =>
   binding<(id: string) => Promise<void>>("ExportProfile")(id);
 export const ImportProfile = (deviceID: string) =>
   binding<(deviceID: string) => Promise<Profile>>("ImportProfile")(deviceID);
+export const ImportProfileFromPath = (path: string, deviceID: string) =>
+  binding<(path: string, deviceID: string) => Promise<Profile>>(
+    "ImportProfileFromPath",
+  )(path, deviceID);
+export const PendingKbdProfileFile = () =>
+  binding<() => Promise<string>>("PendingKbdProfileFile")();
+export const ClearPendingKbdProfileFile = () =>
+  binding<() => Promise<void>>("ClearPendingKbdProfileFile")();
 export const SelectedProfiles = () =>
   binding<() => Promise<Record<string, string>>>("SelectedProfiles")();
 export const SelectProfile = (deviceID: string, profileID: string) =>
