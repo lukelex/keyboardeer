@@ -94,7 +94,7 @@ terminal, and reconnect restores an authoritative view.
 - [x] **COMPILE-01** Compile deterministically to platform-neutral behavior
   (`defsrc`, `deflayer`, supported aliases); reject invalid references, duplicate
   identifiers, inconsistent source counts, and unsupported behaviors locally.
-- [ ] **COMPILE-02** Verify representative generated behavior against KMonad;
+- [x] **COMPILE-02** Verify representative generated behavior against KMonad;
   never emit device-specific `defcfg` or parse generated output as editor state.
 
 **Exit:** a user can reopen and edit a saved profile, add a reachable layer,
