@@ -32,15 +32,15 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
         working-directory: frontend
-      - name: Verify Go
-        run: |
-          go test ./...
-          go vet ./...
       - name: Verify frontend
         run: |
           npm run check
           npm run build
         working-directory: frontend
+      - name: Verify Go
+        run: |
+          go test ./...
+          go vet ./...
 
   package:
     needs: test
