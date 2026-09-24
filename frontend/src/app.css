@@ -1386,6 +1386,80 @@ h1 {
   color: #647669;
   font-size: 12px;
 }
+.editor-heading nav {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+.profiles-trigger {
+  color: #35604c !important;
+  min-height: 30px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+.device-profile-summary {
+  color: #5f7566;
+  display: block;
+  font-size: 11px;
+  margin-top: 4px;
+}
+.profile-list {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 16px 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 0;
+}
+.profile-list li {
+  align-items: center;
+  background: #faf9f4;
+  border: 1px solid #dfe5d6;
+  border-radius: 8px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 8px 10px;
+}
+.profile-list li.active {
+  background: #edf3e8;
+  border-color: #9fbd94;
+}
+.profile-list strong,
+.profile-list small {
+  display: block;
+}
+.profile-list strong {
+  font-size: 13px;
+}
+.profile-list small {
+  color: #647669;
+  font-size: 11px;
+  margin-top: 2px;
+}
+.profile-list .button {
+  min-height: 28px;
+  padding: 4px 10px;
+}
+.profile-current {
+  color: #35604c;
+  font-size: 11px;
+  font-weight: 700;
+}
+.profile-delete-warning {
+  background: #fbefe9;
+  border: 1px solid #e3b9a8;
+  border-radius: 8px;
+  color: #8a3b24;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 12px 0 0;
+  padding: 9px 11px;
+}
+.profile-delete {
+  color: #a1462f !important;
+}
 .layer-manager-list {
   display: grid;
   gap: 6px;

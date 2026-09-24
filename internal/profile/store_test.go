@@ -134,12 +134,69 @@ func TestStoreMigratesUnversionedSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(persisted) == "" || !contains(string(persisted), `"version": 1`) {
+	if !strings.HasPrefix(string(persisted), "{\n  \"version\": 2,") {
 		t.Fatalf("migration was not persisted: %s", persisted)
+	}
+	if loaded.Selected["device-1"] != profile.ID {
+		t.Fatalf("migration did not select the only profile: %#v", loaded.Selected)
 	}
 	backup, err := os.ReadFile(path + ".v0-backup")
 	if err != nil || string(backup) != `{"profiles":[`+mustJSON(t, profile)+`]}` {
 		t.Fatalf("pre-migration backup = %s, %v", backup, err)
+	}
+}
+
+func TestStoreMigratesVersionOneSelectingTheLinkedProfile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "profiles.json")
+	older := testProfile(t, "Older")
+	older.CreatedAt = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	linked := testProfile(t, "Linked")
+	linked.CreatedAt = older.CreatedAt.Add(time.Hour)
+	linked.ManagerConfigurationID = "cfg-1"
+	other := testProfile(t, "Other keyboard")
+	other.DeviceID = "device-2"
+	document := `{"version":1,"profiles":[` + mustJSON(t, older) + `,` + mustJSON(t, linked) + `,` + mustJSON(t, other) + `]}`
+	if err := os.WriteFile(path, []byte(document), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := NewStore(path).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Version != StoreVersion || loaded.Selected["device-1"] != linked.ID || loaded.Selected["device-2"] != other.ID {
+		t.Fatalf("migrated selection = %#v", loaded.Selected)
+	}
+	if backup, err := os.ReadFile(path + ".v1-backup"); err != nil || string(backup) != document {
+		t.Fatalf("v1 backup = %s, %v", backup, err)
+	}
+}
+
+func TestStoreMovesConfigurationLinkBetweenProfiles(t *testing.T) {
+	store := NewStore(filepath.Join(t.TempDir(), "profiles.json"))
+	first, err := store.Upsert(testProfile(t, "First"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := store.Upsert(testProfile(t, "Second"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.SetApplyState(first.ID, first.DraftRevision, "cfg-1", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.SetApplyState(second.ID, second.DraftRevision, "cfg-1", nil); err != nil {
+		t.Fatal(err)
+	}
+	data, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data.find(first.ID).ManagerConfigurationID != "" || data.find(second.ID).ManagerConfigurationID != "cfg-1" {
+		t.Fatalf("link was not moved: %#v", data.Profiles)
+	}
+	data.Profiles[0].ManagerConfigurationID = "cfg-1"
+	if err := ValidateStore(data); err == nil {
+		t.Fatal("two profiles linking one configuration were accepted")
 	}
 }
 

@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const StoreVersion = 1
+const StoreVersion = 2
 
 // maxNameLength bounds user-visible names. Longer names cannot be displayed
 // usefully and are rejected rather than silently truncated.
@@ -25,6 +25,9 @@ var identifier = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9-]*$`)
 type StoreData struct {
 	Version  int       `json:"version"`
 	Profiles []Profile `json:"profiles"`
+	// Selected maps a manager device ID to the profile opened for that
+	// keyboard. A keyboard may have several profiles; one is selected.
+	Selected map[string]string `json:"selected,omitempty"`
 }
 
 type Profile struct {
@@ -105,17 +108,43 @@ func ValidateStore(data StoreData) error {
 	if data.Version != StoreVersion {
 		return fmt.Errorf("unsupported profile store version %d", data.Version)
 	}
-	ids := map[string]bool{}
+	devices := map[string]string{}
+	links := map[string]string{}
 	for _, profile := range data.Profiles {
-		if ids[profile.ID] {
+		if _, exists := devices[profile.ID]; exists {
 			return fmt.Errorf("duplicate profile ID %q", profile.ID)
 		}
-		ids[profile.ID] = true
+		devices[profile.ID] = profile.DeviceID
 		if err := Validate(profile); err != nil {
 			return fmt.Errorf("profile %q: %w", profile.ID, err)
 		}
+		// One manager configuration represents one profile at a time; Apply
+		// moves the link when a keyboard switches profiles.
+		if id := profile.ManagerConfigurationID; id != "" {
+			if other, exists := links[id]; exists {
+				return fmt.Errorf("profiles %q and %q link the same manager configuration", other, profile.ID)
+			}
+			links[id] = profile.ID
+		}
+	}
+	for deviceID, profileID := range data.Selected {
+		if owner, exists := devices[profileID]; !exists || owner != deviceID {
+			return fmt.Errorf("selected profile %q is not a profile for device %q", profileID, deviceID)
+		}
 	}
 	return nil
+}
+
+// ProfilesForDevice returns a keyboard's profiles in creation order.
+func (data StoreData) ProfilesForDevice(deviceID string) []Profile {
+	result := []Profile{}
+	for _, profile := range data.Profiles {
+		if profile.DeviceID == deviceID {
+			result = append(result, profile)
+		}
+	}
+	sort.SliceStable(result, func(i, j int) bool { return result[i].CreatedAt.Before(result[j].CreatedAt) })
+	return result
 }
 
 func Validate(profile Profile) error {

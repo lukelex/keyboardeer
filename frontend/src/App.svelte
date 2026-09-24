@@ -3,6 +3,8 @@
   import {
     ApplyProfile,
     CreateProfile,
+    DeleteProfile,
+    DuplicateProfile,
     Geometries,
     IdentifyCancel,
     IdentifyOperation,
@@ -13,6 +15,8 @@
     ProfileStoreStatus,
     RecoverCorruptProfileStore,
     SaveProfile,
+    SelectedProfiles,
+    SelectProfile,
     SetConfigurationEnabled,
     Workspace,
     type AppInfo,
@@ -143,6 +147,10 @@
   let draftHistory: Record<string, DraftHistory> = {};
   let draftSaveState: DraftSaveState = "saved";
   let keySearch = "";
+  let selectedProfiles: Record<string, string> = {};
+  let profilesOpen = false;
+  let profileRename = "";
+  let confirmProfileDelete = false;
   let profileStoreProblem: ProfileStoreState | null = null;
   let confirmStoreReset = false;
   let storeRecoveryMessage = "";
@@ -405,8 +413,126 @@
       lifecycleBusyID = "";
     }
   }
-  function profileForDevice(device: Device): Profile | undefined {
-    return profiles.find((profile) => profile.device_id === device.id);
+  // Reactive function declarations: markup that calls them re-renders when
+  // the profile list or the per-keyboard selection changes.
+  let profilesForDevice: (deviceID: string) => Profile[];
+  $: profilesForDevice = (deviceID: string) =>
+    profiles
+      .filter((profile) => profile.device_id === deviceID)
+      .sort((left, right) => left.created_at.localeCompare(right.created_at));
+  let profileForDevice: (device: Device) => Profile | undefined;
+  $: profileForDevice = (device: Device) =>
+    profiles.find(
+      (profile) =>
+        profile.id === selectedProfiles[device.id] &&
+        profile.device_id === device.id,
+    ) ?? profilesForDevice(device.id)[0];
+  function openProfiles() {
+    if (!activeProfile) return;
+    profileRename = activeProfile.name;
+    confirmProfileDelete = false;
+    profilesOpen = true;
+  }
+  function closeProfiles() {
+    profilesOpen = false;
+    confirmProfileDelete = false;
+  }
+  // Drafts are saved on every edit, so switching never loses pending changes;
+  // each profile also keeps its own undo history.
+  async function switchProfile(target: Profile) {
+    if (!selectedDevice || profileBusy || target.id === activeProfile?.id) return;
+    try {
+      await SelectProfile(selectedDevice.id, target.id);
+      selectedProfiles = { ...selectedProfiles, [selectedDevice.id]: target.id };
+      activeProfile = profiles.find((profile) => profile.id === target.id) ?? target;
+      selectedSourceKey = "";
+      selectedLayerID = "base";
+      profilePreview = null;
+      applyOperation = null;
+      draftSaveState = "saved";
+      profileRename = activeProfile.name;
+      confirmProfileDelete = false;
+      schedulePreview(activeProfile);
+    } catch (error) {
+      feedback = explain(error);
+    }
+  }
+  function uniqueProfileName(base: string) {
+    if (!selectedDevice) return base;
+    const names = new Set(
+      profilesForDevice(selectedDevice.id).map((profile) => profile.name),
+    );
+    if (!names.has(base)) return base;
+    let suffix = 2;
+    while (names.has(`${base} ${suffix}`)) suffix += 1;
+    return `${base} ${suffix}`;
+  }
+  async function duplicateActiveProfile() {
+    if (!activeProfile || !selectedDevice || profileBusy) return;
+    profileBusy = true;
+    try {
+      const copy = await DuplicateProfile(
+        activeProfile.id,
+        uniqueProfileName(`${activeProfile.name} copy`.slice(0, 80)),
+      );
+      profiles = [...profiles, copy];
+      profileBusy = false;
+      await switchProfile(copy);
+    } catch (error) {
+      feedback = explain(error);
+    } finally {
+      profileBusy = false;
+    }
+  }
+  async function renameActiveProfile() {
+    if (!activeProfile || !profileRename.trim()) return;
+    await saveDraft({ ...activeProfile, name: profileRename.trim() }, false);
+  }
+  async function deleteActiveProfile() {
+    if (!activeProfile || !selectedDevice || profileBusy) return;
+    if (!confirmProfileDelete) {
+      confirmProfileDelete = true;
+      return;
+    }
+    confirmProfileDelete = false;
+    profileBusy = true;
+    const deleted = activeProfile;
+    try {
+      await DeleteProfile(deleted.id, deleted.draft_revision);
+      profiles = profiles.filter((profile) => profile.id !== deleted.id);
+      draftHistory = Object.fromEntries(
+        Object.entries(draftHistory).filter(([id]) => id !== deleted.id),
+      );
+      selectedProfiles = hasDesktopBinding("SelectedProfiles")
+        ? await SelectedProfiles()
+        : {};
+      profileBusy = false;
+      const next = profileForDevice(selectedDevice);
+      if (next) {
+        activeProfile = null;
+        await switchProfile(next);
+      } else {
+        closeProfiles();
+        backToDevices();
+      }
+    } catch (error) {
+      feedback = explain(error);
+    } finally {
+      profileBusy = false;
+    }
+  }
+  function newProfileForDevice() {
+    if (!selectedDevice) return;
+    closeProfiles();
+    activeProfile = null;
+    profilePreview = null;
+    profileName = uniqueProfileName(
+      selectedDevice.display_name
+        ? `${selectedDevice.display_name} profile`
+        : "Keyboard profile",
+    );
+    selectedGeometryID ||= geometries[0]?.id ?? "";
+    view = "setup";
   }
   function behaviorFor(sourceKey: string): ProfileBehavior | undefined {
     return activeProfile?.assignments?.find(
@@ -565,6 +691,9 @@
     }
     try {
       profiles = await Profiles();
+      selectedProfiles = hasDesktopBinding("SelectedProfiles")
+        ? await SelectedProfiles()
+        : {};
       profileStoreProblem = null;
     } catch {
       // Explain a damaged or newer draft file instead of silently showing
@@ -635,6 +764,7 @@
     if (
       !editorOpen ||
       behaviorDialog ||
+      profilesOpen ||
       applyReviewOpen ||
       externalOpen ||
       identifyOpen ||
@@ -698,6 +828,10 @@
         selectedGeometryID,
       );
       profiles = [...profiles, activeProfile];
+      selectedProfiles = {
+        ...selectedProfiles,
+        [selectedDevice.id]: activeProfile.id,
+      };
       selectedSourceKey = "";
       selectedLayerID = "base";
       view = "editor";
@@ -1412,6 +1546,15 @@
                       >{deviceStateSummary(device)}</small
                     >
                   {/if}
+                  {#if profileForDevice(device)}
+                    {@const deviceProfiles = profilesForDevice(device.id)}
+                    <small class="device-profile-summary"
+                      >Profile: {profileForDevice(device)?.name}{deviceProfiles.length >
+                      1
+                        ? ` · ${deviceProfiles.length} profiles`
+                        : ""}</small
+                    >
+                  {/if}
                   {#each deviceConfigurations as configuration (configuration.id)}
                     {@const lastOperation = operationForConfiguration(configuration)}
                     <section
@@ -1670,6 +1813,16 @@
           <nav aria-label="Editor breadcrumb">
             <button class="back-link" on:click={backToDevices}
               >← All keyboards</button
+            >
+            <button
+              class="button secondary profiles-trigger"
+              type="button"
+              on:click={openProfiles}
+              title="Switch, rename, duplicate, or delete profiles"
+              >Profiles{selectedDevice &&
+              profilesForDevice(selectedDevice.id).length > 1
+                ? ` (${profilesForDevice(selectedDevice.id).length})`
+                : ""}</button
             >
           </nav>
           <div class="editor-title">
@@ -2240,6 +2393,97 @@
             </div>
           </form>
         {/if}
+      </dialog>
+    </div>
+  {/if}
+  {#if profilesOpen && activeProfile && selectedDevice}
+    <div class="behavior-dialog-backdrop">
+      <dialog class="behavior-dialog" open aria-labelledby="profiles-title">
+        <button
+          class="behavior-dialog-close"
+          on:click={closeProfiles}
+          aria-label="Close profiles"
+          title="Close">×</button
+        >
+        <p class="eyebrow">
+          PROFILES · {selectedDevice.display_name || "Keyboard"}
+        </p>
+        <h2 id="profiles-title">Profiles</h2>
+        <p class="dialog-intro">
+          Each profile is a separate draft for this keyboard. Switching saves
+          nothing extra and applies nothing; use Apply to send a profile to the
+          keyboard.
+        </p>
+        <ul class="profile-list" aria-label="Profiles for this keyboard">
+          {#each profilesForDevice(selectedDevice.id) as candidate (candidate.id)}
+            <li class:active={candidate.id === activeProfile.id}>
+              <div>
+                <strong>{candidate.name}</strong>
+                <small
+                  >{candidate.manager_configuration_id
+                    ? "Applied to keyboard"
+                    : "Draft only"}</small
+                >
+              </div>
+              {#if candidate.id === activeProfile.id}
+                <span class="profile-current">Editing</span>
+              {:else}
+                <button
+                  class="button secondary"
+                  type="button"
+                  on:click={() => switchProfile(candidate)}
+                  disabled={profileBusy}
+                  aria-label={`Open ${candidate.name}`}>Open</button
+                >
+              {/if}
+            </li>
+          {/each}
+        </ul>
+        <form class="behavior-form" on:submit|preventDefault={renameActiveProfile}>
+          <label for="profile-rename">Rename this profile</label>
+          <input
+            id="profile-rename"
+            bind:value={profileRename}
+            maxlength="80"
+            required
+          />
+          <button
+            class="button secondary"
+            type="submit"
+            disabled={profileBusy ||
+              !profileRename.trim() ||
+              profileRename.trim() === activeProfile.name}>Rename profile</button
+          >
+        </form>
+        {#if confirmProfileDelete}
+          <p class="profile-delete-warning" role="alert">
+            Delete “{activeProfile.name}” from KeyboarDeer?
+            {activeProfile.manager_configuration_id
+              ? "The mapping already applied to this keyboard keeps running in the manager."
+              : "This draft has not been applied."}
+          </p>
+        {/if}
+        <div class="behavior-form-actions">
+          <button
+            class="button secondary"
+            type="button"
+            on:click={newProfileForDevice}
+            disabled={profileBusy}>New profile</button
+          >
+          <button
+            class="button secondary"
+            type="button"
+            on:click={duplicateActiveProfile}
+            disabled={profileBusy}>Duplicate</button
+          >
+          <button
+            class="button secondary profile-delete"
+            type="button"
+            on:click={deleteActiveProfile}
+            disabled={profileBusy || !!activeProfile.apply_pending}
+            >{confirmProfileDelete ? "Confirm delete" : "Delete profile"}</button
+          >
+        </div>
       </dialog>
     </div>
   {/if}

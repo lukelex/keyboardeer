@@ -168,6 +168,147 @@ func TestAppPreviewsThePersistedCompiledDraft(t *testing.T) {
 	}
 }
 
+func TestAppManagesSeveralProfilesPerKeyboard(t *testing.T) {
+	app := newAppWithProfileStore(profile.NewStore(filepath.Join(t.TempDir(), "profiles.json")))
+	defer app.manager.Close()
+	first, err := app.CreateProfile("device-1", "Typing", geometry.ANSI60USID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Assignments = []profile.Assignment{{LayerID: "base", SourceKey: "caps", Behavior: profile.Behavior{Kind: "tap_hold", TimeoutMS: 200,
+		Tap: &profile.Behavior{Kind: "key", Key: "esc"}, Hold: &profile.Behavior{Kind: "key", Key: "lctl"}}}}
+	first, err = app.SaveProfile(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	copied, err := app.DuplicateProfile(first.ID, "Gaming")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if copied.ID == first.ID || copied.DraftRevision != 1 || copied.ManagerConfigurationID != "" || len(copied.Assignments) != 1 || copied.Assignments[0].Behavior.Tap == first.Assignments[0].Behavior.Tap {
+		t.Fatalf("duplicate = %#v", copied)
+	}
+	selected, err := app.SelectedProfiles()
+	if err != nil || selected["device-1"] != copied.ID {
+		t.Fatalf("new copy was not selected: %#v, %v", selected, err)
+	}
+	if err := app.SelectProfile("device-1", first.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.SelectProfile("device-2", first.ID); err == nil {
+		t.Fatal("selected a profile for another keyboard")
+	}
+	if err := app.DeleteProfile(first.ID, first.DraftRevision); err != nil {
+		t.Fatal(err)
+	}
+	selected, err = app.SelectedProfiles()
+	if err != nil || selected["device-1"] != copied.ID {
+		t.Fatalf("deleting the selected profile did not reselect a sibling: %#v, %v", selected, err)
+	}
+	if err := app.DeleteProfile(copied.ID, copied.DraftRevision); err != nil {
+		t.Fatal(err)
+	}
+	if selected, _ := app.SelectedProfiles(); len(selected) != 0 {
+		t.Fatalf("selection survived its last profile: %#v", selected)
+	}
+}
+
+func TestAppApplyingAnotherProfileUpdatesTheKeyboardsConfiguration(t *testing.T) {
+	var methods []string
+	var updateParams managerapi.ConfigurationWriteParams
+	endpoint := testManager(t, func(method string, params json.RawMessage) string {
+		methods = append(methods, method)
+		switch method {
+		case "session.hello":
+			return `{"selected_version":1,"server_id":"server-1","manager_version":"test"}`
+		case "manager.get":
+			return `{"server_id":"server-1","capabilities":[{"name":"managed_configurations","available":true,"reason_code":"capability_available","reason":"ready"}]}`
+		case "snapshot.get":
+			return `{"state_revision":4,"event_cursor":{"server_id":"server-1","event_id":2,"state_revision":4},"devices":[],"configurations":[{"id":"cfg-1","name":"Typing","ownership":"managed","enabled":true,"device_id":"device-1","desired_revision":3,"active_revision":3,"runtime":{"phase":"running","reason_code":"runtime_running","reason":"running","connected":true,"healthy":true,"failure_count":0}}],"operations":[],"health":{"healthy":true,"reason_code":"manager_healthy","reason":"ok"}}`
+		case "configuration.update":
+			if err := json.Unmarshal(params, &updateParams); err != nil {
+				t.Error(err)
+			}
+			return `{"operation":{"id":"op-1","kind":"apply","state":"succeeded","resource":{"kind":"configuration","id":"cfg-1"},"reason_code":"operation_succeeded","reason":"applied","configuration_revision":4}}`
+		}
+		t.Errorf("unexpected manager method %q", method)
+		return `{}`
+	})
+	client := managerapi.New(managerapi.Options{Endpoint: endpoint, ClientName: "keyboardeer-test", ClientVersion: "test"})
+	store := profile.NewStore(filepath.Join(t.TempDir(), "profiles.json"))
+	app := &App{manager: client, profiles: store}
+	defer app.manager.Close()
+	typing, err := app.CreateProfile("device-1", "Typing", geometry.ANSI60USID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.SetApplyState(typing.ID, typing.DraftRevision, "cfg-1", nil); err != nil {
+		t.Fatal(err)
+	}
+	gaming, err := app.DuplicateProfile(typing.ID, "Gaming")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := app.ApplyProfile(gaming.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updateParams.ConfigurationID != "cfg-1" || updateParams.ExpectedRevision == nil || *updateParams.ExpectedRevision != 3 || updateParams.Name != "Gaming" {
+		t.Fatalf("update params = %#v (methods %v)", updateParams, methods)
+	}
+	if result.Profile.ManagerConfigurationID != "cfg-1" {
+		t.Fatalf("applied profile was not linked: %#v", result.Profile)
+	}
+	previous, err := app.profileByID(typing.ID)
+	if err != nil || previous.ManagerConfigurationID != "" {
+		t.Fatalf("previous profile kept the link: %#v, %v", previous, err)
+	}
+}
+
+// testManager serves one JSON Lines connection, answering each request with
+// the result returned by respond.
+func testManager(t *testing.T, respond func(method string, params json.RawMessage) string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "api.sock")
+	listener, err := net.Listen("unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = listener.Close()
+		_ = os.Remove(path)
+	})
+	var connections sync.WaitGroup
+	connections.Add(1)
+	go func() {
+		defer connections.Done()
+		connection, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer connection.Close()
+		scanner := bufio.NewScanner(connection)
+		scanner.Buffer(make([]byte, 0, 64*1024), 1<<20)
+		for scanner.Scan() {
+			var request struct {
+				ID     string          `json:"id"`
+				Method string          `json:"method"`
+				Params json.RawMessage `json:"params"`
+			}
+			if err := json.Unmarshal(scanner.Bytes(), &request); err != nil {
+				t.Error(err)
+				return
+			}
+			if _, err := fmt.Fprintf(connection, `{"type":"response","id":%q,"result":%s}`+"\n", request.ID, respond(request.Method, request.Params)); err != nil {
+				t.Error(err)
+				return
+			}
+		}
+	}()
+	t.Cleanup(connections.Wait)
+	return path
+}
+
 func testPreviewManager(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "api.sock")

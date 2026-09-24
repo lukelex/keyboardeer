@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -186,6 +187,67 @@ func (a *App) ProfileStoreStatus() ProfileStoreStatus {
 	}
 }
 
+// SelectedProfiles maps each keyboard's manager device ID to the profile that
+// is opened for it.
+func (a *App) SelectedProfiles() (map[string]string, error) {
+	store, err := a.profileStore()
+	if err != nil {
+		return nil, err
+	}
+	data, err := store.Load()
+	if err != nil {
+		return nil, err
+	}
+	if data.Selected == nil {
+		return map[string]string{}, nil
+	}
+	return data.Selected, nil
+}
+
+// SelectProfile switches which of a keyboard's profiles is opened. Drafts are
+// saved on every edit, so switching never discards pending changes; it also
+// does not apply anything to the keyboard.
+func (a *App) SelectProfile(deviceID, profileID string) error {
+	store, err := a.profileStore()
+	if err != nil {
+		return err
+	}
+	return store.Select(deviceID, profileID)
+}
+
+// DuplicateProfile copies a profile's editable model into a new local draft
+// for the same keyboard. The copy has no manager link.
+func (a *App) DuplicateProfile(id, name string) (profile.Profile, error) {
+	store, err := a.profileStore()
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	source, err := a.profileByID(id)
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	copied, err := profile.New(source.DeviceID, name, source.Geometry)
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	// A JSON round trip deep-copies behaviors, including nested tap/hold
+	// pointers, so the two drafts never share mutable state.
+	encoded, err := json.Marshal(struct {
+		Layers      []profile.Layer               `json:"layers"`
+		Assignments []profile.Assignment          `json:"assignments"`
+		Aliases     map[string]profile.Behavior   `json:"aliases"`
+		Macros      map[string][]profile.Behavior `json:"macros"`
+	}{source.Layers, source.Assignments, source.Aliases, source.Macros})
+	if err != nil {
+		return profile.Profile{}, err
+	}
+	if err := json.Unmarshal(encoded, &copied); err != nil {
+		return profile.Profile{}, err
+	}
+	copied.Settings = source.Settings
+	return store.Upsert(copied)
+}
+
 func (a *App) DeleteProfile(id string, expectedDraftRevision uint64) error {
 	store, err := a.profileStore()
 	if err != nil {
@@ -291,12 +353,31 @@ func (a *App) ApplyProfile(id string) (ProfileApplyResult, error) {
 	if err != nil {
 		return ProfileApplyResult{}, err
 	}
+	// A keyboard has one managed configuration. Applying a different profile
+	// of the same keyboard updates that configuration and moves its link,
+	// instead of creating a second configuration that would claim the device.
+	configurationID := draft.ManagerConfigurationID
+	library, err := store.Load()
+	if err != nil {
+		return ProfileApplyResult{}, err
+	}
+	for _, sibling := range library.ProfilesForDevice(draft.DeviceID) {
+		if sibling.ID == draft.ID {
+			continue
+		}
+		if sibling.ApplyPending != nil {
+			return ProfileApplyResult{}, fmt.Errorf("profile %q has an apply with an unknown outcome for this keyboard; KeyboarDeer will not apply another profile until it is resolved", sibling.Name)
+		}
+		if configurationID == "" && sibling.ManagerConfigurationID != "" {
+			configurationID = sibling.ManagerConfigurationID
+		}
+	}
 	var expected *uint64
-	if draft.ManagerConfigurationID != "" {
+	if configurationID != "" {
 		var configuration *managerapi.Configuration
 		for index := range snapshot.Configurations {
 			candidate := &snapshot.Configurations[index]
-			if candidate.ID == draft.ManagerConfigurationID {
+			if candidate.ID == configurationID {
 				configuration = candidate
 				break
 			}
@@ -315,13 +396,13 @@ func (a *App) ApplyProfile(id string) (ProfileApplyResult, error) {
 		return ProfileApplyResult{}, err
 	}
 	params := managerapi.ConfigurationWriteParams{
-		ConfigurationID:  pending.ManagerConfigurationID,
+		ConfigurationID:  configurationID,
 		Name:             pending.Name,
 		Model:            managerapi.PreviewModel{DeviceID: pending.DeviceID, Behavior: compiled.Behavior},
 		ExpectedRevision: expected,
 	}
 	var operation managerapi.Operation
-	if pending.ManagerConfigurationID == "" {
+	if configurationID == "" {
 		operation, err = a.manager.ConfigurationCreate(ctx, params)
 	} else {
 		operation, err = a.manager.ConfigurationUpdate(ctx, params)
@@ -338,11 +419,11 @@ func (a *App) ApplyProfile(id string) (ProfileApplyResult, error) {
 	// A rejected create is never persisted by the manager. Successful,
 	// rolled-back, and failed lifecycle outcomes still identify a managed
 	// resource, so retain the opaque ID for a revision-checked next update.
-	configurationID := ""
+	linkedID := ""
 	if operation.State != "rejected" && operation.Resource != nil && operation.Resource.Kind == "configuration" && operation.Resource.ID != "" {
-		configurationID = operation.Resource.ID
+		linkedID = operation.Resource.ID
 	}
-	linked, saveErr := store.SetApplyState(pending.ID, pending.DraftRevision, configurationID, nil)
+	linked, saveErr := store.SetApplyState(pending.ID, pending.DraftRevision, linkedID, nil)
 	if saveErr != nil {
 		return ProfileApplyResult{}, fmt.Errorf("manager apply completed but KeyboarDeer could not save its configuration link: %w", saveErr)
 	}

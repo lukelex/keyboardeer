@@ -187,6 +187,9 @@ type AppBindings = {
   ) => Promise<Profile>;
   SaveProfile?: (profile: Profile) => Promise<Profile>;
   DeleteProfile?: (id: string, expectedDraftRevision: number) => Promise<void>;
+  DuplicateProfile?: (id: string, name: string) => Promise<Profile>;
+  SelectedProfiles?: () => Promise<Record<string, string>>;
+  SelectProfile?: (deviceID: string, profileID: string) => Promise<void>;
   CompileProfile?: (id: string) => Promise<CompileResult>;
   PreviewProfile?: (id: string) => Promise<ProfilePreview>;
   ApplyProfile?: (id: string) => Promise<ProfileApplyResult>;
@@ -252,6 +255,17 @@ export const DeleteProfile = (id: string, expectedDraftRevision: number) =>
   binding<(id: string, expectedDraftRevision: number) => Promise<void>>(
     "DeleteProfile",
   )(id, expectedDraftRevision);
+export const DuplicateProfile = (id: string, name: string) =>
+  binding<(id: string, name: string) => Promise<Profile>>("DuplicateProfile")(
+    id,
+    name,
+  );
+export const SelectedProfiles = () =>
+  binding<() => Promise<Record<string, string>>>("SelectedProfiles")();
+export const SelectProfile = (deviceID: string, profileID: string) =>
+  binding<(deviceID: string, profileID: string) => Promise<void>>(
+    "SelectProfile",
+  )(deviceID, profileID);
 export const CompileProfile = (id: string) =>
   binding<(id: string) => Promise<CompileResult>>("CompileProfile")(id);
 export const PreviewProfile = (id: string) =>

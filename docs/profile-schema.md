@@ -2,7 +2,7 @@
 
 KeyboarDeer profiles are the source of truth for keyboard drafts. Generated
 KMonad behavior is derived from them and is never parsed back. This document
-describes store version **1**, defined in `internal/profile/profile.go`.
+describes store version **2**, defined in `internal/profile/profile.go`.
 
 ## Storage
 
@@ -18,10 +18,20 @@ describes store version **1**, defined in `internal/profile/profile.go`.
 
 ```json
 {
-  "version": 1,
-  "profiles": [Profile]
+  "version": 2,
+  "profiles": [Profile],
+  "selected": { "<device_id>": "<profile_id>" }
 }
 ```
+
+A keyboard may have several profiles. `selected` records which one is opened
+for each keyboard and must point at a profile for that same device. Creating or
+duplicating a profile selects it; deleting the selected profile selects the
+keyboard's earliest remaining profile.
+
+A manager configuration is linked to at most one profile. Applying a different
+profile of the same keyboard updates that keyboard's existing configuration and
+moves the link, rather than creating a second configuration for the device.
 
 | Field | Meaning |
 | --- | --- |
@@ -58,6 +68,8 @@ References must resolve, and alias/macro references must not form a cycle.
 ## Versioning and migration
 
 - `version` identifies the whole document. A missing version is version 0.
+  Version 1 added draft revisions; version 2 added `selected`, choosing the
+  linked profile (or else the earliest) for each keyboard.
 - On load, older versions are upgraded one step at a time by the functions in
   `migrations` (`internal/profile/store.go`). Before the upgraded store is
   written, the exact original bytes are kept as `profiles.json.v<N>-backup`.

@@ -477,6 +477,164 @@ test("hides manager output devices while retaining legacy role-less inputs", asy
   await expect(page.getByText("2 known", { exact: true })).toBeVisible();
 });
 
+test("switches, renames, duplicates, and deletes profiles per keyboard", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.addInitScript((fixture) => {
+    const now = "2026-09-24T08:00:00Z";
+    let profiles: Profile[] = [
+      {
+        id: "profile-typing",
+        name: "Typing",
+        device_id: "device-1",
+        draft_revision: 1,
+        geometry: { id: "fixture", source_keys: ["caps", "a"] },
+        layers: [{ id: "base", name: "Base" }],
+        assignments: null,
+        settings: { version: 1 },
+        created_at: now,
+        updated_at: now,
+      },
+    ];
+    let selected: Record<string, string> = { "device-1": "profile-typing" };
+    let created = 0;
+    const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
+    window.go = {
+      main: {
+        App: {
+          Info: async () => ({ name: "KeyboarDeer", version: "test" }),
+          Workspace: async () => fixture,
+          Geometries: async () => [
+            {
+              id: "fixture",
+              name: "Fixture layout",
+              description: "Explicit test geometry",
+              keys: [
+                {
+                  id: "caps",
+                  label: "Caps",
+                  source_key: "caps",
+                  row: 0,
+                  width: 1,
+                },
+                { id: "a", label: "A", source_key: "a", row: 0, width: 1 },
+              ],
+            },
+          ],
+          Profiles: async () => clone(profiles),
+          SelectedProfiles: async () => clone(selected),
+          SelectProfile: async (deviceID, profileID) => {
+            selected[deviceID] = profileID;
+          },
+          SaveProfile: async (value) => {
+            const saved = {
+              ...clone(value),
+              draft_revision: value.draft_revision + 1,
+            };
+            profiles = profiles.map((item) =>
+              item.id === saved.id ? saved : item,
+            );
+            return clone(saved);
+          },
+          DuplicateProfile: async (id, name) => {
+            const source = profiles.find((item) => item.id === id)!;
+            created += 1;
+            const copy = {
+              ...clone(source),
+              id: `profile-copy-${created}`,
+              name,
+              draft_revision: 1,
+              manager_configuration_id: undefined,
+              created_at: `2026-09-24T09:0${created}:00Z`,
+            };
+            profiles = [...profiles, copy];
+            selected[copy.device_id] = copy.id;
+            return clone(copy);
+          },
+          DeleteProfile: async (id) => {
+            const deleted = profiles.find((item) => item.id === id)!;
+            profiles = profiles.filter((item) => item.id !== id);
+            const sibling = profiles.find(
+              (item) => item.device_id === deleted.device_id,
+            );
+            if (sibling) selected[deleted.device_id] = sibling.id;
+            else delete selected[deleted.device_id];
+          },
+          PreviewProfile: async (id) => ({
+            profile_id: id,
+            draft_revision: profiles.find((item) => item.id === id)!
+              .draft_revision,
+            device_id: "device-1",
+            manager_server_id: "server-1",
+            state_revision: 1,
+            validation: {
+              outcome: "valid",
+              reason_code: "validation_succeeded",
+              reason: "Valid",
+              diagnostics: null,
+            },
+            source_map: [],
+          }),
+        },
+      },
+    };
+  }, workspace);
+  await page.goto("/");
+  await expect(
+    page.getByText("Profile: Typing", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Edit draft", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Typing", level: 1 }),
+  ).toBeVisible();
+  const capsBehavior = page.locator(".editor-key").first().locator("small");
+
+  await page.getByRole("button", { name: "Profiles", exact: true }).click();
+  await page.getByRole("button", { name: "Duplicate", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Typing copy", level: 1 }),
+  ).toBeVisible();
+  await page.getByLabel("Rename this profile").fill("Gaming");
+  await page.getByRole("button", { name: "Rename profile" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Gaming", level: 1 }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close profiles" }).click();
+  await expect(
+    page.getByRole("button", { name: "Profiles (2)", exact: true }),
+  ).toBeVisible();
+
+  await page.locator(".editor-key").first().click();
+  await page.getByRole("button", { name: "Disable selected key" }).click();
+  await expect(capsBehavior).toHaveText("Disabled");
+
+  await page.getByRole("button", { name: "Profiles (2)", exact: true }).click();
+  await page.getByRole("button", { name: "Open Typing" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Typing", level: 1 }),
+  ).toBeVisible();
+  await expect(capsBehavior).toHaveText("caps");
+  await page.getByRole("button", { name: "Open Gaming" }).click();
+  await expect(capsBehavior).toHaveText("Disabled");
+
+  await page.getByRole("button", { name: "Delete profile" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "This draft has not been applied.",
+  );
+  await page.getByRole("button", { name: "Confirm delete" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Typing", level: 1 }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close profiles" }).click();
+  await page.getByRole("button", { name: "← All keyboards" }).click();
+  await expect(
+    page.getByText("Profile: Typing", { exact: true }),
+  ).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test("offers backup-and-reset recovery for a damaged draft file", async ({
   page,
 }) => {

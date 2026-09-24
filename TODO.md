@@ -81,7 +81,7 @@ terminal, and reconnect restores an authoritative view.
   layers, key behaviors, aliases, macros, and compiler settings.
 - [x] **PROFILE-02** Persist profiles and drafts atomically in application-owned
   storage; cover migrations, corrupted files, recovery, and reopen after a crash.
-- [ ] **PROFILE-03** Add create/rename/duplicate/delete/switch workflows for
+- [x] **PROFILE-03** Add create/rename/duplicate/delete/switch workflows for
   multiple profiles and keyboards, preserving pending edits per profile.
 - [ ] **GEOMETRY-01** Provide a verified first layout and explicit selection;
   map every drawn key to a source key without guessing from a product name.
