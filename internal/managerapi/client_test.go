@@ -564,6 +564,41 @@ func TestConfigurationContentUsesExpectedExternalRevision(t *testing.T) {
 	}
 }
 
+func TestConfigurationAdoptSendsIdempotentRequest(t *testing.T) {
+	socket := testSocket(t, func(rw *bufio.ReadWriter, request capturedRequest) {
+		switch request.Method {
+		case "session.hello":
+			writeResult(t, rw, request.ID, `{"selected_version":1,"server_id":"srv-1","manager_version":"1.2.0"}`)
+		case "configuration.adopt":
+			if request.IdempotencyKey == "" {
+				t.Fatalf("adoption request has no idempotency key")
+			}
+			var params ConfigurationAdoptParams
+			if err := json.Unmarshal(request.Params, &params); err != nil {
+				t.Fatalf("decode adoption params: %v", err)
+			}
+			if params.ConfigurationID != "external-1" || params.Name != "Imported board" {
+				t.Fatalf("unexpected adoption params: %+v", params)
+			}
+			writeResult(t, rw, request.ID, `{"operation":{"id":"op-adopt","kind":"adopt","state":"running"}}`)
+		default:
+			t.Fatalf("unexpected method %s", request.Method)
+		}
+	})
+	client := New(Options{Endpoint: socket})
+	defer client.Close()
+
+	operation, err := client.ConfigurationAdopt(context.Background(), ConfigurationAdoptParams{
+		ConfigurationID: "external-1", Name: "Imported board",
+	}, "keyboardeer-adopt-test")
+	if err != nil {
+		t.Fatalf("adopt: %v", err)
+	}
+	if operation.ID != "op-adopt" || operation.Kind != "adopt" {
+		t.Fatalf("unexpected operation: %+v", operation)
+	}
+}
+
 func TestWorkspaceDoesNotFetchSnapshotWhenManagerGetIsUnsupported(t *testing.T) {
 	var methods []string
 	var methodsMu sync.Mutex

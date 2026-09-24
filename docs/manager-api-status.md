@@ -70,7 +70,7 @@ Relevant source:
 | `configuration.apply` | Implemented by `2516765`; transactional render, validation, persistence, activation confirmation, and rollback pipeline. | Not used directly. | KeyboarDeer uses the explicit create/update routes so a local profile retains one opaque managed-configuration ID. |
 | `configuration.create` / `configuration.update` | Implemented. Create accepts name/model; update requires configuration ID and expected revision. | Implemented. | The Apply control sends a current validated draft directly; updates read the current authoritative desired revision and submit it as `expected_revision`. |
 | `configuration.set_enabled` / `configuration.delete` | Implemented by `f8ea0ec`. Both require expected revision. | Implemented, using the snapshot's desired revision. | Keyboard cards expose a checked/unchecked binding state and a confirmed "Remove from keyboard" action that keeps local profiles. External configurations remain read-only. |
-| `configuration.adopt` | Implemented by `bff4dd2` for manager-validated, losslessly representable external configurations. | Not yet implemented. | Later, opt-in adoption only. Arbitrary visual import remains outside v1. |
+| `configuration.adopt` | Implemented by `bff4dd2` for manager-validated, losslessly representable external configurations. | Implemented; explicit capability-gated ownership hand-off. | Opt-in adoption only; arbitrary visual import remains outside v1. |
 | `events.subscribe` | Implemented by `4551637`; resumable cursor support arrived in `9d44f1f`. Reply is followed by ordered `event` frames on the same connection; resync requires a fresh snapshot. | Dedicated persistent subscription transport and snapshot-coalescing workspace monitor are implemented. Cursors persist in app-owned state; gaps, server changes, resync, and future event types are covered by socket fixtures. | A manager built from the pinned source remains required for an end-to-end desktop smoke test. |
 
 ## Interaction-to-screen cross-reference
@@ -94,7 +94,7 @@ model, or a required runtime capability is unavailable.
 | Enable or disable managed runtime config | `configuration.set_enabled` / `configuration.delete` | Yes | Partial | Keyboard cards use a fresh snapshot revision and direct checkbox state. Removal is a separate, confirmed action; it clears only the removed configuration's profile link. |
 | Show external runtime configuration | `snapshot.get` / `configuration.list` | Yes | Partial | Snapshot-backed device cards expose associated configuration state; a dedicated read-only external screen remains. |
 | Show external raw `.kbd` source | Implemented in v1.1.0 as bounded, revision-checked `configuration.content.get`. | **Yes** | Yes | GUI displays it read-only through the manager. Do not read manager files directly; arbitrary visual import remains out of scope. |
-| Adopt an external config | `configuration.adopt` | Yes | No | External inventory UI, clear lossless-representability explanation, and managed-profile hand-off UX. |
+| Adopt an external config | `configuration.adopt` | Yes | Yes | Adoption is an ownership hand-off; arbitrary external syntax is not imported into the visual profile editor. |
 
 ## Remaining GUI integration gaps
 

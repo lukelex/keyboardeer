@@ -12,6 +12,7 @@
   } from "./validationRecovery";
   import {
     ApplyProfile,
+    AdoptConfiguration,
     ChooseProfileSyncFolder,
     DiscardPendingApply,
     ResumeApply,
@@ -321,6 +322,7 @@
   let rawConfigurationBusy = false;
   let externalContent: ConfigurationContentState | null = null;
   let externalContentBusy = false;
+  let adoptingConfigurationID = "";
   const firstRunStorageKey = "keyboardeer-first-run-complete";
   let firstRunOpen = false;
   let identifyTimeoutMS = 15_000;
@@ -379,6 +381,9 @@
   $: configurationExport =
     capabilities.find((item) => item.name === "configuration_export") ??
     unavailableCapability("configuration_export");
+  $: configurationAdoption =
+    capabilities.find((item) => item.name === "external_configuration_adoption") ??
+    unavailableCapability("external_configuration_adoption");
   $: activeGeometry = activeProfile
     ? geometries.find((geometry) => geometry.id === activeProfile?.geometry.id)
     : undefined;
@@ -901,6 +906,21 @@
       feedback = explain(error);
     } finally {
       externalContentBusy = false;
+    }
+  }
+  async function adoptExternalConfiguration(configuration: Configuration) {
+    if (adoptingConfigurationID || !configurationAdoption.available) return;
+    const label = configuration.name || "this external configuration";
+    if (!window.confirm(`Adopt ${label} as a managed configuration?\n\nThe manager will take ownership only if the configuration is losslessly representable. This does not import arbitrary KMonad syntax into the visual editor.`)) return;
+    adoptingConfigurationID = configuration.id;
+    try {
+      const result = await AdoptConfiguration(configuration.id, configuration.name || "");
+      feedback = `Adoption ${humanize(result.state)}: ${result.reason || "The manager is processing the request."}`;
+      await refresh();
+    } catch (error) {
+      feedback = explain(error);
+    } finally {
+      adoptingConfigurationID = "";
     }
   }
   async function importProfileForDevice(filePath = "") {
@@ -2678,11 +2698,14 @@
                 <p class="eyebrow">MANAGER-SUPERVISED</p>
                 <h2 id="external-title">External configurations</h2>
               </div>
-              <span class="build-label">READ ONLY</span>
+               <span class="build-label">MANAGER-OWNED</span>
             </div>
             <p>
-              These mappings are owned outside KeyboarDeer. Runtime details come
-              from the manager; editing their raw KMonad source is unavailable.
+               These mappings are currently owned outside KeyboarDeer. Runtime
+               details come from the manager. If the manager confirms that a
+               configuration can be represented without loss, you may adopt it
+               for managed lifecycle control; adoption does not visually import
+               arbitrary KMonad syntax.
             </p>
             <div class="external-configuration-list">
               {#each configurations.filter((configuration) => configuration.ownership === "external") as configuration (configuration.id)}
@@ -2707,12 +2730,19 @@
                       </dd>
                     </div>
                   </dl>
-                  <p>{runtimeHealthDetail(configuration)}</p>
+                   <p>{runtimeHealthDetail(configuration)}</p>
                   {#if lastOperation}<small
                       >Latest manager operation: {humanize(lastOperation.state)}
                       — {lastOperation.reason}</small
-                    >{/if}
-                </article>
+                     >{/if}
+                   <Button
+                     variant="secondary"
+                     type="button"
+                     on:click={() => adoptExternalConfiguration(configuration)}
+                     disabled={adoptingConfigurationID !== "" || !configurationAdoption.available || !hasDesktopBinding("AdoptConfiguration")}
+                     >{adoptingConfigurationID === configuration.id ? "Adopting…" : "Adopt as managed"}</Button
+                   >
+                 </article>
               {/each}
             </div>
             <Button
@@ -3958,11 +3988,12 @@
           aria-label="Close external configuration details"
           title="Close">×</Button
         >
-        <p class="eyebrow">MANAGER-SUPERVISED · READ ONLY</p>
+         <p class="eyebrow">MANAGER-SUPERVISED · EXTERNAL</p>
         <h2 id="external-dialog-title">External configurations</h2>
         <p class="dialog-intro">
-          These configurations are not KeyboarDeer profiles. Their runtime state
-          is reported by the manager and cannot be edited here.
+           These configurations are not KeyboarDeer profiles. Their runtime state
+           is reported by the manager. Adoption is an explicit ownership hand-off
+           and only succeeds when the manager can represent the source losslessly.
         </p>
         <div class="external-detail-list">
           {#each configurations.filter((configuration) => configuration.ownership === "external") as configuration (configuration.id)}
@@ -3974,7 +4005,7 @@
                   >Latest manager operation: {humanize(lastOperation.state)} —
                   {lastOperation.reason}</small
                 >{/if}
-              <Button
+               <Button
                 variant="secondary"
                 type="button"
                 on:click={() => viewExternalContent(configuration)}
@@ -3982,7 +4013,14 @@
                   !hasDesktopBinding("ConfigurationContent") ||
                   !configuration.content_revision}
                 >{externalContentBusy ? "Loading source…" : "View raw source"}</Button
-              >
+               >
+               <Button
+                 variant="secondary"
+                 type="button"
+                 on:click={() => adoptExternalConfiguration(configuration)}
+                 disabled={adoptingConfigurationID !== "" || !configurationAdoption.available || !hasDesktopBinding("AdoptConfiguration")}
+                 >{adoptingConfigurationID === configuration.id ? "Adopting…" : "Adopt as managed"}</Button
+               >
             </article>
           {/each}
         </div>

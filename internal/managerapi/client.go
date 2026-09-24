@@ -493,6 +493,12 @@ func (c *APIClient) ConfigurationContent(ctx context.Context, params Configurati
 	return result, err
 }
 
+func (c *APIClient) ConfigurationAdopt(ctx context.Context, params ConfigurationAdoptParams, idempotencyKey string) (Operation, error) {
+	var result ConfigurationWriteResult
+	err := c.mutate(ctx, "configuration.adopt", params, idempotencyKey, &result)
+	return result.Operation, err
+}
+
 // NewIdempotencyKey returns an opaque key within the manager's 128-byte limit.
 func NewIdempotencyKey() string {
 	return "keyboardeer-" + requestID()

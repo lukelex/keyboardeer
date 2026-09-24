@@ -234,8 +234,10 @@ Manager implementation handover:
   [`geometry-catalog.md`](docs/geometry-catalog.md).
 - [ ] Advanced aliases/macros, behavior composition, timing controls, and visual
   explanations with compiler and KMonad conformance coverage.
-- [ ] Explicit representable external adoption when `configuration.adopt` is
-  implemented; preserve unsupported syntax and ownership boundaries.
+- [x] Explicit representable external adoption through `configuration.adopt`;
+  preserve unsupported syntax and ownership boundaries. The GUI offers an
+  explicit capability-gated ownership hand-off, while arbitrary external
+  `.kbd` visual import remains out of scope.
 - [ ] macOS and Windows manager backends/transports, capability reporting,
   native packaging, and the same lifecycle/isolation acceptance suite.
 - [ ] Revisit dark mode, localization, and profile sharing after validating

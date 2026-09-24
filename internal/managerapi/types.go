@@ -317,3 +317,11 @@ type ConfigurationContentResult struct {
 	Digest          string `json:"digest"`
 	Content         string `json:"content"`
 }
+
+// ConfigurationAdoptParams requests the manager's lossless external-config
+// hand-off. The manager validates representability and keeps ownership of
+// device-specific rendering; the GUI never parses or rewrites the .kbd.
+type ConfigurationAdoptParams struct {
+	ConfigurationID string `json:"configuration_id"`
+	Name            string `json:"name,omitempty"`
+}

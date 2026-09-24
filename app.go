@@ -1170,6 +1170,34 @@ func (a *App) ConfigurationContent(configurationID string, expectedRevision uint
 	return managerapi.ConfigurationContentResult{}, fmt.Errorf("manager configuration %q does not exist", configurationID)
 }
 
+// AdoptConfiguration transfers a manager-validated, losslessly representable
+// external configuration into manager ownership. Adoption does not import
+// arbitrary KMonad syntax into the visual profile editor.
+func (a *App) AdoptConfiguration(configurationID, name string) (managerapi.Operation, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := a.canUse(ctx, "external_configuration_adoption"); err != nil {
+		return managerapi.Operation{}, err
+	}
+	snapshot, err := a.manager.SnapshotGet(ctx)
+	if err != nil {
+		return managerapi.Operation{}, err
+	}
+	for _, configuration := range snapshot.Configurations {
+		if configuration.ID != configurationID {
+			continue
+		}
+		if configuration.Ownership != "external" {
+			return managerapi.Operation{}, fmt.Errorf("only external configurations can be adopted")
+		}
+		params := managerapi.ConfigurationAdoptParams{ConfigurationID: configurationID, Name: name}
+		return a.mutationWithRetry(ctx, func(key string) (managerapi.Operation, error) {
+			return a.manager.ConfigurationAdopt(ctx, params, key)
+		})
+	}
+	return managerapi.Operation{}, fmt.Errorf("manager configuration %q does not exist", configurationID)
+}
+
 // DeleteConfiguration stops a manager-owned mapping and removes it from the
 // manager. It is deliberately separate from DeleteProfile: KeyboarDeer
 // profiles are kept, and only their link to the removed configuration is

@@ -78,7 +78,8 @@ files use system fonts only.
 - Preview selectors show empty inventory, lost manager connection, permission
   problems, healthy diagnostics, and incomplete API. Unknown runtime state is
   labeled explicitly; local draft editing remains available.
-- External configuration is read-only. No adoption, overwrite, or file operation
+- External configuration source remains read-only. Explicit manager-validated
+  adoption is supported; it does not overwrite source or visually import syntax.
   is exposed. Its source panel is illustrative and still depends on a future
   manager content-read API.
 

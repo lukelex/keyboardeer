@@ -317,6 +317,10 @@ type AppBindings = {
     configurationID: string,
     expectedRevision: number,
   ) => Promise<ConfigurationContent>;
+  AdoptConfiguration?: (
+    configurationID: string,
+    name: string,
+  ) => Promise<Operation>;
   RecoverCorruptProfileStore?: () => Promise<string>;
   ProfileStoreStatus?: () => Promise<ProfileStoreStatus>;
   IdentifyStart?: (deviceID: string, timeoutMS: number) => Promise<Operation>;
@@ -436,16 +440,23 @@ export const ExportConfiguration = (configurationID: string) =>
     "ExportConfiguration",
   )(configurationID);
 export const SaveConfigurationExport = (configurationID: string) =>
-  binding<(configurationID: string) => Promise<void>>("SaveConfigurationExport")(
-    configurationID,
-  );
+  binding<(configurationID: string) => Promise<void>>(
+    "SaveConfigurationExport",
+  )(configurationID);
 export const ConfigurationContent = (
   configurationID: string,
   expectedRevision: number,
 ) =>
   binding<
-    (configurationID: string, expectedRevision: number) => Promise<ConfigurationContent>
+    (
+      configurationID: string,
+      expectedRevision: number,
+    ) => Promise<ConfigurationContent>
   >("ConfigurationContent")(configurationID, expectedRevision);
+export const AdoptConfiguration = (configurationID: string, name: string) =>
+  binding<(configurationID: string, name: string) => Promise<Operation>>(
+    "AdoptConfiguration",
+  )(configurationID, name);
 export const RecoverCorruptProfileStore = () =>
   binding<() => Promise<string>>("RecoverCorruptProfileStore")();
 export const ProfileStoreStatus = () =>
