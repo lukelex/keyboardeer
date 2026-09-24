@@ -398,6 +398,11 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   const indicator = page.locator(".configuration-indicator");
   await expect(indicator).toHaveAttribute("data-state", "valid");
   await expect(indicator).toHaveAccessibleName("Valid configuration");
+  await expect(indicator).toHaveCSS("color", "rgb(53, 107, 67)");
+  await expect(indicator.locator("i")).toHaveCSS(
+    "background-color",
+    "rgb(47, 138, 75)",
+  );
   await expect(page.getByText("MANAGED PROFILE")).toHaveCount(0);
   await expect(page.getByText("DRAFT ONLY")).toHaveCount(0);
   await expect(

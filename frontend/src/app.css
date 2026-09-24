@@ -709,7 +709,10 @@ h1 {
   background: #c4a260;
 }
 .configuration-indicator[data-state="valid"] i {
-  background: #4f9b68;
+  background: #2f8a4b;
+}
+.configuration-indicator[data-state="valid"] {
+  color: #356b43;
 }
 .configuration-indicator[data-state="blocked"] i {
   background: #d98a2b;

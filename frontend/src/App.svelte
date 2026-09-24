@@ -296,9 +296,12 @@
     linkedConfiguration?.last_operation ??
     null;
   // The validation dot is always shown; only its color and label change.
-  $: validationState = previewBusy
-    ? "checking"
-    : (currentPreview?.validation.outcome ?? "unchecked");
+  $: validationState =
+    currentPreview?.validation.outcome === "valid"
+      ? "valid"
+      : previewBusy
+        ? "checking"
+        : (currentPreview?.validation.outcome ?? "unchecked");
   $: validationLabel =
     {
       checking: "Checking draft preview",
