@@ -126,3 +126,16 @@ The Ubuntu 24.04 container builds the artifacts, verifies `SHA256SUMS`, checks
 Debian metadata, installs the package, confirms its binary/desktop/MIME files,
 and removes it again. It does not replace real-keyboard TEST-04 coverage or
 desktop rendering tests.
+
+For a fuller clean-install test on a Linux host with KVM/QEMU installed, use:
+
+```sh
+./scripts/kvm-release-acceptance.sh
+```
+
+This boots a disposable Ubuntu 24.04 cloud VM, installs the release package,
+checks its desktop and MIME registration, repeats the install as an upgrade,
+and purges it. The VM is removed after the run and SSH is forwarded only to
+localhost. Set `DEB=/path/to/package.deb` to test a specific artifact. USB
+passthrough is deliberately not enabled by default; it should be added only
+for a controlled physical-keyboard TEST-04 run.
