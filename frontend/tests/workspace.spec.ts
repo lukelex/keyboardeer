@@ -2749,7 +2749,7 @@ test("explains unavailable and conflicting keyboard states", async ({
   await expect(
     page.getByRole("heading", { name: "External configurations" }),
   ).toBeVisible();
-  await expect(page.getByText("READ ONLY", { exact: true })).toBeVisible();
+  await expect(page.getByText("MANAGER-OWNED", { exact: true })).toBeVisible();
   await expect(
     page.getByText("The manager could not start this external mapping."),
   ).toBeVisible();

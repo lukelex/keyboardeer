@@ -3,7 +3,7 @@
 set -euo pipefail
 
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-version="${VERSION:-0.1.0}"
+version="${VERSION:-1.0.0}"
 version="${version#v}"
 dist_dir="${DIST_DIR:-$repo_root/dist}"
 export SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-0}"

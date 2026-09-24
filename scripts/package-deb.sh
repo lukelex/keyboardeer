@@ -7,12 +7,12 @@
 # profile file opens it in the app.
 #
 # Requires dpkg-deb. Usage:
-#   BINARY=/path/to/keyboardeer VERSION=0.1.0 scripts/package-deb.sh
+#   BINARY=/path/to/keyboardeer VERSION=1.0.0 scripts/package-deb.sh
 # The default binary is build/bin/keyboardeer.
 set -euo pipefail
 
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-version="${VERSION:-0.1.0}"
+version="${VERSION:-1.0.0}"
 arch="${ARCH:-amd64}"
 binary="${BINARY:-$repo_root/build/bin/keyboardeer}"
 

@@ -20,7 +20,7 @@ func main() {
 	flag.StringVar(&behavior, "behavior", "", "platform-neutral behavior for preview")
 	flag.StringVar(&action, "action", "list", "list, manager, snapshot, preview, identify, cancel, or operation")
 	flag.Parse()
-	client := managerapi.New(managerapi.Options{Endpoint: endpoint, ClientName: "keyboardeer-integration-harness", ClientVersion: "0.1.0-dev"})
+	client := managerapi.New(managerapi.Options{Endpoint: endpoint, ClientName: "keyboardeer-integration-harness", ClientVersion: "1.0.0"})
 	defer client.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()

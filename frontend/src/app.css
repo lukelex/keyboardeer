@@ -674,7 +674,11 @@ h1 {
 }
 .raw-external-heading small {
   color: #647669;
-  font: 11px ui-monospace, SFMono-Regular, Consolas, monospace;
+  font:
+    11px ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
 }
 .raw-external-unavailable {
   background: #fcf6e8;
@@ -1130,7 +1134,7 @@ h1 {
 }
 .layout-candidate:disabled {
   cursor: not-allowed;
-  opacity: .58;
+  opacity: 0.58;
 }
 .layout-candidate span:first-child {
   display: grid;

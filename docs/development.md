@@ -2,7 +2,7 @@
 
 ## Pinned toolchain
 
-- Go **1.24.x** (the module's minimum version)
+- Go **1.25.x** (the module requires Go 1.25.0)
 - Wails **v2.16.0**
 - Node.js **22.12+** and npm **10+**
 - Linux desktop development dependencies required by Wails (WebKitGTK, GTK3,
@@ -40,12 +40,14 @@ manager capability has not been implemented are disabled and explain why.
 
 ## Current desktop behavior
 
-The Wails shell opens on the real, capability-gated **Keyboards** view. With the
-reviewed manager revision, it shows **Manager API incomplete** because
-`manager.get` is not available and disables device, setup, and identification
-actions. This is intentional: the app does not substitute preview fixtures for
-live manager data. The browser Vite preview also keeps controls disabled because
-it has no Wails bindings.
+The Wails app connects to the same-user manager API, negotiates the available
+capabilities, and enables the corresponding device, editor, validation, profile,
+and lifecycle workflows. The Linux release targets KMonad Device Manager
+v1.2.0 or later. If the manager is missing or does not advertise a required
+capability, KeyboarDeer explains the unavailable state and gates the affected
+actions. It does not substitute preview fixtures for live manager data. The
+browser Vite preview has no Wails bindings and therefore cannot connect to the
+manager.
 
 The window uses the committed app icon where supported and restores its previous
 size and position from the per-user KeyboarDeer configuration directory. The
@@ -99,7 +101,7 @@ registration on removal.
 
 ```sh
 wails build
-BINARY=build/bin/keyboardeer VERSION=0.1.0 scripts/package-deb.sh
+BINARY=build/bin/keyboardeer VERSION=1.0.0 scripts/package-deb.sh
 ```
 
 ## CI release artifacts
