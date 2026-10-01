@@ -410,9 +410,7 @@
   let selectedProfiles: Record<string, string> = {};
   let profilesOpen = false;
   let profileRename = "";
-  let confirmProfileDelete = false;
   let profileStoreProblem: ProfileStoreState | null = null;
-  let confirmStoreReset = false;
   let storeRecoveryMessage = "";
   let previewBusy = false;
   let previewInFlight = false;
@@ -428,7 +426,36 @@
   let applyOperation: Operation | null = null;
   let applyOperationProfileID = "";
   let lifecycleBusyID = "";
-  let confirmConfigurationDeleteID = "";
+  // The one confirmation dialog: every irreversible or disruptive action asks
+  // through confirmAction() and waits for the person's answer.
+  type Confirmation = {
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    danger: boolean;
+    resolve: (confirmed: boolean) => void;
+  };
+  let confirmation: Confirmation | null = null;
+  function confirmAction(
+    options: Omit<Confirmation, "resolve" | "cancelLabel" | "danger"> &
+      Partial<Pick<Confirmation, "cancelLabel" | "danger">>,
+  ): Promise<boolean> {
+    confirmation?.resolve(false);
+    return new Promise((resolve) => {
+      confirmation = {
+        cancelLabel: "Cancel",
+        danger: false,
+        ...options,
+        resolve,
+      };
+    });
+  }
+  function settleConfirmation(confirmed: boolean) {
+    const pending = confirmation;
+    confirmation = null;
+    pending?.resolve(confirmed);
+  }
   let operation: Operation | null = null;
   let loading = false;
   let identifyBusy = false;
@@ -1031,11 +1058,15 @@
   }
   async function deleteConfiguration(configuration: Configuration) {
     if (configuration.ownership !== "managed" || lifecycleBusyID) return;
-    if (confirmConfigurationDeleteID !== configuration.id) {
-      confirmConfigurationDeleteID = configuration.id;
-      return;
-    }
-    confirmConfigurationDeleteID = "";
+    const confirmed = await confirmAction({
+      title: `Remove “${configuration.name || "this mapping"}” from the keyboard?`,
+      message:
+        "This stops the mapping on this keyboard and removes it from the manager. Your KeyboarDeer profiles are kept and can be applied again.",
+      confirmLabel: "Remove from keyboard",
+      cancelLabel: "Keep mapping",
+      danger: true,
+    });
+    if (!confirmed || lifecycleBusyID) return;
     lifecycleBusyID = configuration.id;
     feedback = "";
     try {
@@ -1051,8 +1082,22 @@
   async function setLifecycleEnabled(
     configuration: Configuration,
     enabled: boolean,
+    control?: HTMLInputElement,
   ) {
     if (configuration.ownership !== "managed" || lifecycleBusyID) return;
+    if (
+      !enabled &&
+      !(await confirmAction({
+        title: `Disable bindings for “${configuration.name || "this mapping"}”?`,
+        message:
+          "The manager stops this mapping, and the keyboard types normally until you enable it again. The configuration and your profiles are kept.",
+        confirmLabel: "Disable bindings",
+        cancelLabel: "Keep running",
+      }))
+    ) {
+      if (control) control.checked = configuration.enabled;
+      return;
+    }
     lifecycleBusyID = configuration.id;
     feedback = "";
     try {
@@ -1089,12 +1134,10 @@
   function openProfiles() {
     if (!activeProfile) return;
     profileRename = activeProfile.name;
-    confirmProfileDelete = false;
     profilesOpen = true;
   }
   function closeProfiles() {
     profilesOpen = false;
-    confirmProfileDelete = false;
   }
   // Drafts are saved on every edit, so switching never loses pending changes;
   // each profile also keeps its own undo history.
@@ -1115,7 +1158,6 @@
       applyOperation = null;
       draftSaveState = "saved";
       profileRename = activeProfile.name;
-      confirmProfileDelete = false;
       schedulePreview(activeProfile);
     } catch (error) {
       feedback = explain(error);
@@ -1217,7 +1259,13 @@
   async function adoptExternalConfiguration(configuration: Configuration) {
     if (adoptingConfigurationID || !configurationAdoption.available) return;
     const label = configuration.name || "this external configuration";
-    if (!window.confirm(`Adopt ${label} as a managed configuration?\n\nThe manager will take ownership only if the configuration is losslessly representable. This does not import arbitrary KMonad syntax into the visual editor.`)) return;
+    const confirmed = await confirmAction({
+      title: `Adopt ${label} as a managed configuration?`,
+      message:
+        "The manager takes ownership only if it can represent this configuration without loss. Adopting does not import arbitrary KMonad syntax into the visual editor.",
+      confirmLabel: "Adopt as managed",
+    });
+    if (!confirmed || adoptingConfigurationID) return;
     adoptingConfigurationID = configuration.id;
     try {
       const result = await AdoptConfiguration(configuration.id, configuration.name || "");
@@ -1265,11 +1313,15 @@
   }
   async function deleteActiveProfile() {
     if (!activeProfile || !selectedDevice || profileBusy) return;
-    if (!confirmProfileDelete) {
-      confirmProfileDelete = true;
-      return;
-    }
-    confirmProfileDelete = false;
+    const confirmed = await confirmAction({
+      title: `Delete “${activeProfile.name}”?`,
+      message: activeProfile.manager_configuration_id
+        ? "The profile is removed from KeyboarDeer. The mapping already applied to this keyboard keeps running; to stop it, use Remove from keyboard on the keyboard card."
+        : "This draft has not been applied. Deleting it cannot be undone.",
+      confirmLabel: "Delete profile",
+      danger: true,
+    });
+    if (!confirmed || !activeProfile || profileBusy) return;
     profileBusy = true;
     const deleted = activeProfile;
     try {
@@ -1649,11 +1701,13 @@
     schedulePreview(profile);
   }
   async function recoverProfileStore() {
-    if (!confirmStoreReset) {
-      confirmStoreReset = true;
-      return;
-    }
-    confirmStoreReset = false;
+    const confirmed = await confirmAction({
+      title: "Back up the damaged draft file and start fresh?",
+      message:
+        "KeyboarDeer keeps the damaged file as a backup and starts an empty draft list. Running mappings are unaffected.",
+      confirmLabel: "Back up and start fresh",
+    });
+    if (!confirmed) return;
     try {
       const backup = await RecoverCorruptProfileStore();
       storeRecoveryMessage = `The damaged draft file was kept at ${backup}. KeyboarDeer started a new, empty draft list.`;
@@ -1788,6 +1842,7 @@
   function handleHistoryKeydown(event: KeyboardEvent) {
     if (
       !editorOpen ||
+      confirmation ||
       behaviorDialog ||
       profilesOpen ||
       applyReviewOpen ||
@@ -1811,7 +1866,8 @@
   }
   function handleGlobalKeydown(event: KeyboardEvent) {
     if (event.key === "Escape") {
-      if (rawConfigurationOpen) rawConfigurationOpen = false;
+      if (confirmation) settleConfirmation(false);
+      else if (rawConfigurationOpen) rawConfigurationOpen = false;
       else if (externalOpen) externalOpen = false;
       else if (profilesOpen) closeProfiles();
       else if (applyReviewOpen) applyReviewOpen = false;
@@ -2868,9 +2924,7 @@
                   className="store-recovery"
                   type="button"
                   on:click={recoverProfileStore}
-                  >{confirmStoreReset
-                    ? "Confirm: back up and start fresh"
-                    : "Back up and start fresh"}</Button
+                  >Back up and start fresh</Button
                 >
               {/if}
             </div>
@@ -2986,26 +3040,7 @@
                             — {lastOperation.reason}</small
                           >{/if}
                         {#if configuration.ownership === "managed"}
-                          {#if confirmConfigurationDeleteID === configuration.id}
-                            <p
-                              class="configuration-delete-warning"
-                              role="alert"
-                            >
-                              This stops the mapping on this keyboard and
-                              removes it from the manager. Your KeyboarDeer
-                              profiles are kept and can be applied again.
-                            </p>
-                          {/if}
                           <div class="configuration-actions">
-                            {#if confirmConfigurationDeleteID === configuration.id}
-                              <Button
-                                variant="secondary"
-                                type="button"
-                                on:click={() =>
-                                  (confirmConfigurationDeleteID = "")}
-                                >Keep mapping</Button
-                              >
-                            {/if}
                             <Button
                               variant="secondary"
                               className="configuration-delete danger"
@@ -3020,10 +3055,7 @@
                                 : managedConfigurations.reason}
                               >{lifecycleBusyID === configuration.id
                                 ? "Removing…"
-                                : confirmConfigurationDeleteID ===
-                                    configuration.id
-                                  ? "Confirm: remove from keyboard"
-                                  : "Remove from keyboard"}</Button
+                                : "Remove from keyboard"}</Button
                             >
                           </div>
                         {/if}
@@ -3083,6 +3115,7 @@
                     >
                       <input
                         type="checkbox"
+                        role="switch"
                         checked={configuration.enabled}
                         disabled={!!lifecycleBusyID ||
                           !workspaceLive ||
@@ -3092,6 +3125,7 @@
                           setLifecycleEnabled(
                             configuration,
                             event.currentTarget.checked,
+                            event.currentTarget,
                           )}
                         aria-label={`Enable bindings for ${configuration.name}`}
                       />
@@ -4393,14 +4427,6 @@
             >Rename profile</Button
           >
         </form>
-        {#if confirmProfileDelete}
-          <p class="profile-delete-warning" role="alert">
-            Delete “{activeProfile.name}” from KeyboarDeer?
-            {activeProfile.manager_configuration_id
-              ? "The mapping already applied to this keyboard keeps running. To stop it, use Remove from keyboard on the keyboard card."
-              : "This draft has not been applied."}
-          </p>
-        {/if}
         <div class="behavior-form-actions">
           <Button
             variant="secondary"
@@ -4437,9 +4463,7 @@
             type="button"
             on:click={deleteActiveProfile}
             disabled={profileBusy || !!activeProfile.apply_pending}
-            >{confirmProfileDelete
-              ? "Confirm delete"
-              : "Delete profile"}</Button
+            >Delete profile</Button
           >
         </div>
       </dialog>
@@ -4721,6 +4745,37 @@
             it ends. Other keyboards continue independently.
           </p>
         </section>
+      </dialog>
+    </div>
+  {/if}
+  {#if confirmation}
+    <div class="behavior-dialog-backdrop confirm-backdrop">
+      <dialog
+        class="behavior-dialog confirm-dialog"
+        open
+        use:manageDialog
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-title"
+        aria-describedby="confirm-message"
+      >
+        <h2 id="confirm-title">{confirmation.title}</h2>
+        <p id="confirm-message" class="dialog-intro">{confirmation.message}</p>
+        <div class="behavior-form-actions">
+          <Button
+            variant="secondary"
+            type="button"
+            autofocus
+            on:click={() => settleConfirmation(false)}
+            >{confirmation.cancelLabel}</Button
+          >
+          <Button
+            variant={confirmation.danger ? "danger" : "primary"}
+            type="button"
+            on:click={() => settleConfirmation(true)}
+            >{confirmation.confirmLabel}</Button
+          >
+        </div>
       </dialog>
     </div>
   {/if}

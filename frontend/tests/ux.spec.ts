@@ -736,3 +736,23 @@ test("summarises each keyboard's mapping in one line", async ({ page }) => {
     tkl.keys.length,
   );
 });
+
+test("confirms destructive actions in one dialog above the current one", async ({
+  page,
+}) => {
+  await openEditor(page);
+  await page.locator(".profile-switcher").click();
+  await page.getByRole("menuitem", { name: "Rename or delete…" }).click();
+  const deleteProfile = page.getByRole("button", { name: "Delete profile" });
+  await deleteProfile.click();
+  const confirm = page.getByRole("alertdialog", {
+    name: "Delete “Home row mods”?",
+  });
+  await expect(confirm).toContainText("keeps running");
+  // Escape answers only the confirmation; the Profiles dialog stays open and
+  // focus returns to the button that asked.
+  await page.keyboard.press("Escape");
+  await expect(confirm).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Profiles" })).toBeVisible();
+  await expect(deleteProfile).toBeFocused();
+});

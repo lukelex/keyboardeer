@@ -28,6 +28,12 @@ how it is verified.
   dialog, and every modal closes on `Escape` via the window-level
   `handleGlobalKeydown` handler.
 
+- Destructive or disruptive actions (deleting a profile, removing a mapping
+  from the keyboard, disabling bindings, adopting an external configuration,
+  resetting a damaged draft file) all ask through one `role="alertdialog"`
+  confirmation. It opens above any current dialog with focus on the safe
+  choice, and `Escape` answers "no" without closing the dialog underneath.
+
 ### Accessible names and announcements
 
 - Real `role="tabpanel"` wiring: each tab sets `aria-controls` to the panel id

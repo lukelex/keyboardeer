@@ -156,6 +156,12 @@ button:focus-visible {
 .button.primary:hover:not(:disabled) {
   background: #235644;
 }
+.button.primary.danger-fill:not(:disabled) {
+  background: #a1462f;
+}
+.button.primary.danger-fill:hover:not(:disabled) {
+  background: #8a3b24;
+}
 /* Secondary buttons sit on light surfaces everywhere except the dark app
    header, which uses .on-dark. */
 .button.secondary {
@@ -384,10 +390,34 @@ h1 {
   white-space: nowrap;
 }
 .binding-toggle input {
-  accent-color: #2c6652;
-  height: 16px;
+  appearance: none;
+  background: #c7d0c4;
+  border-radius: 999px;
+  cursor: inherit;
+  flex: 0 0 auto;
+  height: 18px;
   margin: 0;
-  width: 16px;
+  position: relative;
+  transition: background-color 0.15s ease;
+  width: 32px;
+}
+.binding-toggle input::after {
+  background: #fffefa;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgb(24 53 44 / 30%);
+  content: "";
+  height: 14px;
+  left: 2px;
+  position: absolute;
+  top: 2px;
+  transition: transform 0.15s ease;
+  width: 14px;
+}
+.binding-toggle input:checked {
+  background: #2c6652;
+}
+.binding-toggle input:checked::after {
+  transform: translateX(14px);
 }
 .binding-toggle.disabled {
   color: #7b8377;
@@ -1810,6 +1840,17 @@ h1 {
   gap: 3px;
   margin-bottom: 3px;
 }
+.behavior-dialog-backdrop.confirm-backdrop {
+  z-index: 45;
+}
+.confirm-dialog {
+  max-width: 460px;
+}
+.confirm-dialog h2 {
+  font-size: 22px;
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+}
 .behavior-dialog-backdrop {
   align-items: center;
   background: rgb(16 42 33 / 48%);
@@ -2287,16 +2328,6 @@ h1 {
   font-size: 11px;
   font-weight: 700;
 }
-.profile-delete-warning {
-  background: #fbefe9;
-  border: 1px solid #e3b9a8;
-  border-radius: 8px;
-  color: #8a3b24;
-  font-size: 12px;
-  line-height: 1.45;
-  margin: 12px 0 0;
-  padding: 9px 11px;
-}
 .configuration-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2307,16 +2338,6 @@ h1 {
 .configuration-actions .button {
   min-height: 28px;
   padding: 4px 10px;
-}
-.configuration-delete-warning {
-  background: #fbefe9;
-  border: 1px solid #e3b9a8;
-  border-radius: 7px;
-  color: #8a3b24;
-  font-size: 11px;
-  line-height: 1.45;
-  margin: 8px 0 0;
-  padding: 7px 9px;
 }
 .layer-manager-list {
   display: grid;

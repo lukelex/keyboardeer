@@ -1,6 +1,7 @@
 <script lang="ts">
   type ButtonVariant =
     | "primary"
+    | "danger"
     | "secondary"
     | "text"
     | "link"
@@ -20,6 +21,7 @@
 
   const variantClasses: Record<ButtonVariant, string> = {
     primary: "button primary",
+    danger: "button primary danger-fill",
     secondary: "button secondary",
     text: "button text",
     link: "back-link",

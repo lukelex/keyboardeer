@@ -274,10 +274,21 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
     .getByRole("button", { name: "Close keyboard identification" })
     .click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  const bindings = page.getByRole("checkbox", {
+  const bindings = page.getByRole("switch", {
     name: "Enable bindings for Managed fixture",
   });
+  // Disabling stops a running mapping, so it is confirmed first; cancelling
+  // leaves the switch on.
   await bindings.uncheck();
+  const confirmDisable = page.getByRole("alertdialog");
+  await expect(confirmDisable).toContainText("Disable bindings for");
+  await confirmDisable.getByRole("button", { name: "Keep running" }).click();
+  await expect(bindings).toBeChecked();
+  await bindings.uncheck();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Disable bindings" })
+    .click();
   await expect(
     page.getByText(
       "Manager disabled bindings: configuration disabled and its KMonad process stopped",
@@ -2208,10 +2219,12 @@ test("switches, renames, duplicates, and deletes profiles per keyboard", async (
   await expect(capsBehavior).toHaveText("No output");
 
   await page.getByRole("button", { name: "Delete profile" }).click();
-  await expect(page.getByRole("alert")).toContainText(
-    "This draft has not been applied.",
-  );
-  await page.getByRole("button", { name: "Confirm delete" }).click();
+  const confirmDelete = page.getByRole("alertdialog");
+  await expect(confirmDelete).toContainText("This draft has not been applied.");
+  await expect(
+    confirmDelete.getByRole("button", { name: "Cancel" }),
+  ).toBeFocused();
+  await confirmDelete.getByRole("button", { name: "Delete profile" }).click();
   await expect(
     page.getByRole("heading", { name: "Typing", level: 1 }),
   ).toBeVisible();
@@ -2587,14 +2600,15 @@ test("removes a managed mapping from the keyboard with confirmation", async ({
   );
   await page.locator(".configuration-state").getByText("Details").click();
   await page.getByRole("button", { name: "Remove from keyboard" }).click();
-  await expect(page.getByRole("alert")).toContainText(
+  await expect(page.getByRole("alertdialog")).toContainText(
     "Your KeyboarDeer profiles are kept",
   );
   await page.getByRole("button", { name: "Keep mapping" }).click();
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
   await page.getByRole("button", { name: "Remove from keyboard" }).click();
   await page
-    .getByRole("button", { name: "Confirm: remove from keyboard" })
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Remove from keyboard" })
     .click();
   await expect(page.locator(".configuration-state")).toHaveCount(0);
   await expect(
@@ -2641,7 +2655,8 @@ test("offers backup-and-reset recovery for a damaged draft file", async ({
   await expect(page.getByRole("button", { name: "Set up" })).toBeDisabled();
   await page.getByRole("button", { name: "Back up and start fresh" }).click();
   await page
-    .getByRole("button", { name: "Confirm: back up and start fresh" })
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Back up and start fresh" })
     .click();
   await expect(
     page.getByText(/profiles\.json\.corrupt-1\. KeyboarDeer started a new/),
