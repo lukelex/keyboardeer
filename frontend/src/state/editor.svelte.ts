@@ -61,7 +61,10 @@ export interface EditorDependencies {
 export class DraftEditor {
   profile = $state.raw<Profile | null>(null);
   layerID = $state(baseLayerID);
+  /** The primary selected key: the inspector and complex actions use it. */
   sourceKey = $state("");
+  /** Keys selected together with the primary one (Ctrl- or Shift-click). */
+  otherKeys = $state.raw<string[]>([]);
   saveState = $state<DraftSaveState>("saved");
   /** The complex-action dialog that is open, if any. */
   dialog = $state<ComplexAction | null>(null);
@@ -89,6 +92,16 @@ export class DraftEditor {
     ),
   );
   activeLayer = $derived(this.keymap?.layer(this.layerID));
+  /** Every selected key, the primary one last. */
+  selectedKeys = $derived(
+    this.sourceKey
+      ? [
+          ...this.otherKeys.filter((key) => key !== this.sourceKey),
+          this.sourceKey,
+        ]
+      : [],
+  );
+  multipleSelected = $derived(this.selectedKeys.length > 1);
   selectedKey = $derived(
     this.geometry?.keys.find((key) => key.source_key === this.sourceKey),
   );
@@ -214,6 +227,7 @@ export class DraftEditor {
     )
       ? selection.sourceKey!
       : "";
+    this.otherKeys = [];
     this.saveState = "saved";
     this.dialog = null;
     this.preview.invalidate(false);
@@ -244,13 +258,36 @@ export class DraftEditor {
     this.layerID = layerID;
   }
 
-  toggleKey(sourceKey: string) {
-    this.sourceKey = this.sourceKey === sourceKey ? "" : sourceKey;
+  /**
+   * A click on a key. Alone it selects only that key (or deselects it);
+   * with `additive` it adds the key to, or removes it from, the selection.
+   */
+  toggleKey(sourceKey: string, additive = false) {
+    if (!additive) {
+      const onlyThis = this.sourceKey === sourceKey && !this.multipleSelected;
+      this.otherKeys = [];
+      this.sourceKey = onlyThis ? "" : sourceKey;
+      return;
+    }
+    if (this.selectedKeys.includes(sourceKey)) {
+      const remaining = this.selectedKeys.filter((key) => key !== sourceKey);
+      this.sourceKey = remaining[remaining.length - 1] ?? "";
+      this.otherKeys = remaining.slice(0, -1);
+    } else {
+      this.otherKeys = this.selectedKeys;
+      this.sourceKey = sourceKey;
+    }
   }
 
   select(layerID: string, sourceKey: string) {
     this.layerID = layerID;
     this.sourceKey = sourceKey;
+    this.otherKeys = [];
+  }
+
+  clearSelection() {
+    this.sourceKey = "";
+    this.otherKeys = [];
   }
 
   // Saving and history
@@ -315,20 +352,31 @@ export class DraftEditor {
 
   // Key edits
 
+  /** Gives every selected key the behavior, in one undoable save. */
   async assign(behavior: ProfileBehavior): Promise<boolean> {
-    if (!this.keymap || !this.sourceKey || this.#library.busy) return false;
-    return Boolean(
-      await this.save(
-        this.keymap.withBehavior(this.layerID, this.sourceKey, behavior),
-      ),
+    const keymap = this.keymap;
+    if (!keymap || !this.sourceKey || this.#library.busy) return false;
+    const draft = this.selectedKeys.reduce(
+      (profile, sourceKey) =>
+        keymap.withBehavior(this.layerID, sourceKey, behavior, profile),
+      keymap.profile,
     );
+    return Boolean(await this.save(draft));
   }
 
+  /** Removes this layer's assignments for every selected key. */
   async restoreSelected() {
-    if (!this.keymap || !this.sourceKey || this.#library.busy) return;
-    await this.save(
-      this.keymap.withoutAssignment(this.layerID, this.sourceKey),
-    );
+    const keymap = this.keymap;
+    if (!keymap || !this.sourceKey || this.#library.busy) return;
+    const keys = new Set(this.selectedKeys);
+    await this.save({
+      ...keymap.profile,
+      assignments: keymap.assignments.filter(
+        (assignment) =>
+          assignment.layer_id !== this.layerID ||
+          !keys.has(assignment.source_key),
+      ),
+    });
   }
 
   openDialog(kind: ComplexAction) {
@@ -336,6 +384,12 @@ export class DraftEditor {
     if (!this.profile || (needsKey && !this.sourceKey)) {
       this.#toasts.info(
         "Select a physical key before choosing a complex action.",
+      );
+      return;
+    }
+    if (needsKey && this.multipleSelected) {
+      this.#toasts.info(
+        "Complex actions apply to one key. Select a single key.",
       );
       return;
     }

@@ -60,7 +60,7 @@
         return;
       }
       case "deselect":
-        editor.sourceKey = "";
+        editor.clearSelection();
         return;
       case "restore":
         return editor.restoreSelected();

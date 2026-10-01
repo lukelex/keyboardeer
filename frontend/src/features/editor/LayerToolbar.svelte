@@ -10,6 +10,8 @@
   const { editor, library } = useApp();
   const keymap = $derived(editor.keymap!);
   const noKey = $derived(!editor.sourceKey || library.busy);
+  // Complex actions are defined for one key at a time.
+  const notOneKey = $derived(noKey || editor.multipleSelected);
 
   function entryDescription(layerID: string) {
     if (layerID === baseLayerID) return "Active by default";
@@ -86,16 +88,16 @@
       title="Ready-made setups such as Caps Lock as Esc and Ctrl"
       >Recipes</Button
     >
-    <Button variant="secondary" onclick={() => editor.openDialog("tap_hold")} disabled={noKey}
+    <Button variant="secondary" onclick={() => editor.openDialog("tap_hold")} disabled={notOneKey}
       >Tap &amp; hold</Button
     >
-    <Button variant="secondary" onclick={() => editor.openDialog("layer")} disabled={noKey}
+    <Button variant="secondary" onclick={() => editor.openDialog("layer")} disabled={notOneKey}
       >Layer action</Button
     >
-    <Button variant="secondary" onclick={() => editor.openDialog("alias")} disabled={noKey}
+    <Button variant="secondary" onclick={() => editor.openDialog("alias")} disabled={notOneKey}
       >Alias</Button
     >
-    <Button variant="secondary" onclick={() => editor.openDialog("macro")} disabled={noKey}
+    <Button variant="secondary" onclick={() => editor.openDialog("macro")} disabled={notOneKey}
       >Macro</Button
     >
     {#each Object.keys(keymap.profile.aliases ?? {}).sort() as name}

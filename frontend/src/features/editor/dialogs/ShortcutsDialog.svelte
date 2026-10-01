@@ -12,7 +12,12 @@
   const groups: { heading: string; shortcuts: Shortcut[] }[] = [
     {
       heading: "With no key selected",
-      shortcuts: [{ keys: ["Any key"], action: "Select that key on the keyboard" }],
+      shortcuts: [{ keys: ["Any key"], action: "Select that key on the keyboard" },
+        {
+          keys: ["Ctrl", "Click"],
+          action: "Add a key to the selection, or remove it",
+          combo: true,
+        },],
     },
     {
       heading: "With a key selected",

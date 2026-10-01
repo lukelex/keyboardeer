@@ -1165,3 +1165,38 @@ test("previews a recipe and adds it as one undoable edit", async ({ page }) => {
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(f.locator(".cap-hold")).toHaveCount(0);
 });
+
+test("selects several keys and changes them in one step", async ({ page }) => {
+  await openEditor(page);
+  const key = (sourceKey: string) =>
+    page.locator(`.editor-key[data-source-key="${sourceKey}"]`);
+  await key("q").click();
+  await key("w").click({ modifiers: ["Control"] });
+  await key("e").click({ modifiers: ["Shift"] });
+  await expect(page.locator(".selected-key")).toHaveCount(3);
+  const inspector = page.getByRole("group", { name: "Selected key" });
+  await expect(inspector.locator("strong").first()).toHaveText("3 keys");
+  await expect(inspector).toContainText("Q, W, E");
+  await expect(
+    page.getByRole("button", { name: "Tap & hold", exact: true }),
+  ).toBeDisabled();
+  // A palette key assigns all selected keys.
+  await page.locator('.palette-key[aria-label="Assign Esc (esc)"]').click();
+  for (const sourceKey of ["q", "w", "e"]) {
+    await expect(key(sourceKey).locator("small")).toHaveText("esc");
+  }
+  // Ctrl-click removes a key; the others stay selected.
+  await key("w").click({ modifiers: ["Control"] });
+  await expect(page.locator(".selected-key")).toHaveCount(2);
+  await inspector.getByRole("button", { name: "Disable keys" }).click();
+  await expect(key("q")).toHaveClass(/disabled-key/);
+  await expect(key("e")).toHaveClass(/disabled-key/);
+  await expect(key("w").locator("small")).toHaveText("esc");
+  // One undo reverts the whole multi-key edit.
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(key("q").locator("small")).toHaveText("esc");
+  await expect(key("e").locator("small")).toHaveText("esc");
+  // A plain click selects just that key again.
+  await key("r").click();
+  await expect(page.locator(".selected-key")).toHaveCount(1);
+});

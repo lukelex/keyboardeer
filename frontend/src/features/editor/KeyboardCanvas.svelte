@@ -32,7 +32,7 @@
             keymap.isRemapped(editor.layerID, key.source_key) && "remapped-key",
             change && "changed-key",
             behavior?.kind === "disabled" && "disabled-key",
-            editor.sourceKey === key.source_key && "selected-key",
+            editor.selectedKeys.includes(key.source_key) && "selected-key",
             editor.isInvalidKey(key.source_key) && "invalid-key",
             flashingKey === key.source_key && "flashing-key",
           ]}
@@ -44,8 +44,12 @@
           title={behavior?.kind === "disabled"
             ? `Disabled on ${editor.activeLayer?.name ?? "current"} layer: this key sends no input and blocks lower layers.`
             : `${key.label}: ${keymap.describe(behavior, key.source_key, editor.layerID)}`}
-          onclick={() => editor.toggleKey(key.source_key)}
-          aria-pressed={editor.sourceKey === key.source_key}
+          onclick={(event) =>
+            editor.toggleKey(
+              key.source_key,
+              event.shiftKey || event.ctrlKey || event.metaKey,
+            )}
+          aria-pressed={editor.selectedKeys.includes(key.source_key)}
         >
           <strong>{key.label}</strong><small
             >{legend.text}{#if legend.hold}<span class="cap-hold"
