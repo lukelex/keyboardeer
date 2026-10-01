@@ -362,7 +362,13 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
     await paletteKeys.evaluateAll((keys) =>
       keys.slice(0, 5).map((key) => key.getAttribute("title")),
     ),
-  ).toEqual(["2 (2)", "A (a)", "Z (z)", "Caps (caps)", "Ctrl (lctl)"]);
+  ).toEqual([
+    "A (a)",
+    "Z (z)",
+    "2 (2)",
+    "Left Ctrl (lctl)",
+    "Caps Lock (caps)",
+  ]);
   expect(
     await paletteKeys.evaluateAll((keys) =>
       keys
@@ -396,9 +402,9 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   await visualizedKey.click();
   await expect(
     page.locator(
-      '.palette-key[aria-label="Assign Next track (next)"] .palette-symbol',
+      '.palette-key[aria-label="Assign Next track (next)"] svg[data-icon="next"]',
     ),
-  ).toHaveText("⏭");
+  ).toBeVisible();
   await expect(
     page.locator('.palette-key[aria-label="Assign Next track (next)"]'),
   ).toHaveAttribute("title", "Next track (next)");
@@ -407,14 +413,19 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   ).toHaveAttribute("title", "Brightness up (brup)");
   await expect(
     page.locator(
-      '.palette-key[aria-label="Assign Brightness up (brup)"] .palette-symbol',
+      '.palette-key[aria-label="Assign Brightness up (brup)"] svg[data-icon="brup"]',
     ),
-  ).toHaveText("☀+");
-  await expect(
-    page.locator(
-      '.palette-key[aria-label="Assign Keyboard backlight toggle (kbdillumtoggle)"] .palette-symbol',
+  ).toBeVisible();
+  const backlightCode = page.locator(
+    '.palette-key[aria-label="Assign Keyboard backlight toggle (kbdillumtoggle)"] small',
+  );
+  expect(
+    await backlightCode.evaluate(
+      (code) =>
+        code.getBoundingClientRect().right <=
+        code.parentElement!.getBoundingClientRect().right,
     ),
-  ).toHaveText("⌨☼");
+  ).toBe(true);
   await page.locator('.palette-key[aria-label="Assign A (a)"]').click();
   await expect(visualizedKey.locator("small")).toHaveText("a");
   await page.locator(".layer-tabs").getByRole("tab", { name: "Base" }).click();
@@ -481,7 +492,7 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
     .getByRole("button", { name: "Close complex action dialog" })
     .click();
   await page
-    .locator('.palette-buttons button[aria-label="Assign Caps (caps)"]')
+    .locator('.palette-buttons button[aria-label="Assign Caps Lock (caps)"]')
     .click();
   await expect(
     page.getByRole("heading", { name: "Unconfigured keyboard draft" }),
@@ -522,7 +533,10 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   const keySearch = page.getByLabel("Search keys");
   await keySearch.fill("ctr");
   await expect(paletteKeys).toHaveCount(1);
-  await expect(paletteKeys.first()).toHaveAttribute("title", "Ctrl (lctl)");
+  await expect(paletteKeys.first()).toHaveAttribute(
+    "title",
+    "Left Ctrl (lctl)",
+  );
   await keySearch.fill("f24");
   await expect(paletteKeys).toHaveCount(1);
   await expect(paletteKeys.first()).toHaveAttribute("title", "F24 (f24)");
@@ -2927,7 +2941,7 @@ test("supports keyboard navigation, dialog focus trapping, and focus restoration
   await expect(allCategory).toHaveAttribute("tabindex", "0");
   await page.keyboard.press("ArrowRight");
   const numbersCategory = categoryTablist.getByRole("tab", {
-    name: "Numbers",
+    name: "Common",
   });
   await expect(numbersCategory).toBeFocused();
   await expect(numbersCategory).toHaveAttribute("aria-selected", "true");
@@ -2935,7 +2949,7 @@ test("supports keyboard navigation, dialog focus trapping, and focus restoration
   await expect(palettePanel).toHaveAttribute("role", "tabpanel");
   await expect(palettePanel).toHaveAttribute(
     "aria-labelledby",
-    "palette-category-0",
+    "palette-category-common",
   );
   await numbersCategory.focus();
   await page.keyboard.press("ArrowLeft");

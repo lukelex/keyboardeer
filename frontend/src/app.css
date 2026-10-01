@@ -1648,11 +1648,14 @@ h1 {
   justify-content: start;
 }
 .palette-group-heading {
+  color: #486453;
+  font-size: 12px;
+  font-weight: 700;
   grid-column: 1 / -1;
   margin: 8px 0 0;
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 600;
+}
+.palette-group-heading:first-child {
+  margin-top: 0;
 }
 .palette-buttons .palette-key {
   align-items: center;
@@ -1671,16 +1674,31 @@ h1 {
   background: #d9ecd1;
   border-color: #608b61;
 }
-.palette-buttons .palette-key .palette-symbol {
-  font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", sans-serif;
-  font-size: 22px;
-  line-height: 1;
+.palette-buttons .palette-key .key-icon {
+  fill: none;
+  flex: 0 0 auto;
+  height: 22px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+  width: 22px;
+}
+.palette-buttons .palette-key > span {
+  line-height: 1.1;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
 }
 .palette-buttons .palette-key small {
   color: #4f6256;
   font-size: 9px;
   font-weight: 500;
   line-height: 1;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .editor-page.compact-palette .key-palette {
   max-height: none;

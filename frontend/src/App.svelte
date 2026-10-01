@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import Button from "./components/Button.svelte";
+  import KeyIcon, { keyIconPaths } from "./components/KeyIcon.svelte";
   import Menu, { type MenuItem } from "./components/Menu.svelte";
   import { formatKMonad } from "./kmonadFormat";
   import {
@@ -70,7 +71,17 @@
   type View = "devices" | "setup" | "editor";
   type KeyOption = GeometryTemplate["keys"][number];
   type PaletteKey = Pick<KeyOption, "label" | "source_key">;
-  type PaletteCategory = "all" | "0" | "1" | "2" | "3" | "4" | "5" | "6";
+  type PaletteGroup =
+    | "common"
+    | "letters"
+    | "numbers"
+    | "symbols"
+    | "modifiers"
+    | "function"
+    | "navigation"
+    | "media"
+    | "other";
+  type PaletteCategory = "all" | PaletteGroup;
   type ComplexAction = "tap_hold" | "layer" | "alias" | "macro" | "layers";
   type EditableState = Pick<
     Profile,
@@ -97,74 +108,125 @@
   const keyboardFrameHeight = 123;
   const fullPaletteMinHeight = 380;
   const fullPaletteViewportShare = 0.45;
-  const paletteIcons: Record<string, string> = {
-    bspc: "⌫",
-    tab: "⇥",
-    ret: "↵",
-    spc: "␣",
-    del: "⌦",
-    left: "←",
-    rght: "→",
-    up: "↑",
-    down: "↓",
-    prnt: "⎙",
-    mute: "🔇",
-    volu: "🔊",
-    voldwn: "🔉",
-    pp: "⏯",
-    next: "⏭",
-    prev: "⏮",
-    stopcd: "⏹",
-    eject: "⏏",
-    brup: "☀+",
-    brdown: "☀−",
-    kbdillumtoggle: "⌨☼",
-    blup: "⌨↑",
-    bldn: "⌨↓",
-  };
+  // Palette groups in display order. Within a group, keys listed in `order`
+  // come first in that order (keyboard order for symbols, left/right pairs
+  // for modifiers); any others follow alphabetically.
+  const paletteGroups: {
+    id: PaletteGroup;
+    label: string;
+    heading: string;
+    order: string[];
+  }[] = [
+    {
+      id: "common",
+      label: "Common",
+      heading: "Common keys",
+      order: ["esc", "tab", "ret", "spc", "bspc"],
+    },
+    { id: "letters", label: "Letters", heading: "Letters", order: [] },
+    {
+      id: "numbers",
+      label: "Numbers",
+      heading: "Numbers",
+      order: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+    },
+    {
+      id: "symbols",
+      label: "Symbols",
+      heading: "Symbols",
+      order: ["grv", "-", "=", "[", "]", "\\", ";", "'", ",", ".", "/"],
+    },
+    {
+      id: "modifiers",
+      label: "Modifiers",
+      heading: "Modifiers",
+      order: [
+        "lctl",
+        "rctl",
+        "lsft",
+        "rsft",
+        "lalt",
+        "ralt",
+        "lmet",
+        "rmet",
+        "caps",
+        "cmp",
+      ],
+    },
+    { id: "function", label: "Function", heading: "Function keys", order: [] },
+    {
+      id: "navigation",
+      label: "Navigation",
+      heading: "Navigation & system",
+      order: [
+        "left",
+        "down",
+        "up",
+        "rght",
+        "home",
+        "end",
+        "pgup",
+        "pgdn",
+        "ins",
+        "del",
+        "prnt",
+        "scrlck",
+        "pause",
+        "break",
+        "nlck",
+        "ssrq",
+      ],
+    },
+    {
+      id: "media",
+      label: "Media",
+      heading: "Media & brightness",
+      order: [
+        "mute",
+        "voldwn",
+        "volu",
+        "prev",
+        "pp",
+        "next",
+        "stopcd",
+        "eject",
+        "brdown",
+        "brup",
+        "kbdillumtoggle",
+        "bldn",
+        "blup",
+      ],
+    },
+    { id: "other", label: "Other", heading: "Other keys", order: [] },
+  ];
   const paletteCategories: { id: PaletteCategory; label: string }[] = [
     { id: "all", label: "All" },
-    { id: "0", label: "Numbers" },
-    { id: "1", label: "Letters" },
-    { id: "2", label: "Modifiers" },
-    { id: "3", label: "Function" },
-    { id: "4", label: "Navigation" },
-    { id: "5", label: "Media" },
-    { id: "6", label: "Other" },
+    ...paletteGroups.map(({ id, label }) => ({ id, label })),
   ];
-  const modifierSourceKeys = new Set([
-    "caps",
-    "cmp",
-    "lalt",
-    "lctl",
-    "lmet",
-    "lsft",
-    "ralt",
-    "rctl",
-    "rmet",
-    "rsft",
-  ]);
+  // Short cap labels; the full name is in each key's tooltip and accessible
+  // name.
+  const paletteCapLabels: Record<string, string> = {
+    bspc: "Bksp",
+    fwd: "Fwd",
+    lctl: "L Ctrl",
+    rctl: "R Ctrl",
+    lsft: "L Shift",
+    rsft: "R Shift",
+    lalt: "L Alt",
+    ralt: "R Alt",
+    lmet: "L Super",
+    rmet: "R Super",
+    caps: "Caps",
+    ssrq: "SysRq",
+    scrlck: "ScrLk",
+    nlck: "NumLk",
+  };
   const navigationSystemKeys = [
     { label: "Num Lock", source_key: "nlck" },
     { label: "Scroll Lock", source_key: "scrlck" },
     { label: "System Request", source_key: "ssrq" },
     { label: "Break", source_key: "break" },
   ];
-  const navigationSystemSourceKeys = new Set([
-    "ins",
-    "home",
-    "pgup",
-    "del",
-    "end",
-    "pgdn",
-    "up",
-    "down",
-    "left",
-    "rght",
-    "prnt",
-    "pause",
-    ...navigationSystemKeys.map((key) => key.source_key),
-  ]);
   const mediaSystemKeys = [
     { label: "Mute", source_key: "mute" },
     { label: "Volume up", source_key: "volu" },
@@ -462,7 +524,12 @@
   $: normalizedKeySearch = keySearch.trim().toLowerCase();
   $: visiblePaletteKeys = normalizedKeySearch
     ? paletteKeyOptions.filter((key) =>
-        [key.label, key.source_key, paletteLabel(key)].some((value) =>
+        [
+          key.label,
+          key.source_key,
+          paletteLabel(key),
+          keyName(key.source_key),
+        ].some((value) =>
           value.toLowerCase().includes(normalizedKeySearch),
         ),
       )
@@ -470,7 +537,7 @@
   $: compactPaletteKeys = visiblePaletteKeys.filter(
     (key) =>
       activePaletteCategory === "all" ||
-      paletteKeyGroup(key) === Number(activePaletteCategory),
+      paletteGroups[paletteKeyGroup(key)].id === activePaletteCategory,
   );
   $: renderedPaletteKeys = compactPalette
     ? compactPaletteKeys
@@ -783,49 +850,40 @@
     return device.role === undefined || device.role === "input";
   }
   function paletteKeyGroup(key: PaletteKey) {
-    if (/^[0-9]$/.test(key.source_key)) return 0;
-    if (/^[a-z]$/.test(key.source_key)) return 1;
-    if (modifierSourceKeys.has(key.source_key)) return 2;
-    if (/^f\d+$/.test(key.source_key)) return 3;
-    if (navigationSystemSourceKeys.has(key.source_key)) return 4;
-    if (mediaSystemKeys.some((item) => item.source_key === key.source_key))
-      return 5;
-    return 6;
-  }
-  function paletteGroupLabel(group: number) {
-    return {
-      3: "Function keys",
-      4: "Navigation & system",
-      5: "Media & system",
-      6: "Other keys",
-    }[group];
+    const index = paletteGroups.findIndex(({ order }) =>
+      order.includes(key.source_key),
+    );
+    if (index >= 0) return index;
+    const groupIndex = (id: PaletteGroup) =>
+      paletteGroups.findIndex((group) => group.id === id);
+    if (/^[a-z]$/.test(key.source_key)) return groupIndex("letters");
+    if (/^f\d+$/.test(key.source_key)) return groupIndex("function");
+    return groupIndex("other");
   }
   function comparePaletteKeys(left: PaletteKey, right: PaletteKey) {
-    const groupDifference = paletteKeyGroup(left) - paletteKeyGroup(right);
+    const group = paletteKeyGroup(left);
+    const groupDifference = group - paletteKeyGroup(right);
     if (groupDifference) return groupDifference;
     if (/^f\d+$/.test(left.source_key) && /^f\d+$/.test(right.source_key)) {
       return (
         Number(left.source_key.slice(1)) - Number(right.source_key.slice(1))
       );
     }
-    if (paletteKeyGroup(left) === 0) {
-      return Number(left.source_key) - Number(right.source_key);
-    }
+    const order = paletteGroups[group].order;
+    const rank = (key: PaletteKey) => {
+      const index = order.indexOf(key.source_key);
+      return index < 0 ? order.length : index;
+    };
     return (
+      rank(left) - rank(right) ||
       left.label.localeCompare(right.label, undefined, {
         sensitivity: "base",
-      }) || left.source_key.localeCompare(right.source_key)
+      }) ||
+      left.source_key.localeCompare(right.source_key)
     );
   }
   function paletteLabel(key: PaletteKey) {
-    const compactLabels: Record<string, string> = {
-      bspc: "Bksp",
-      fwd: "Fwd",
-    };
-    return compactLabels[key.source_key] ?? key.label;
-  }
-  function paletteIcon(sourceKey: string) {
-    return paletteIcons[sourceKey];
+    return paletteCapLabels[key.source_key] ?? key.label;
   }
   function scrollPaletteWithWheel(event: WheelEvent) {
     if (!compactPalette || Math.abs(event.deltaY) <= Math.abs(event.deltaX))
@@ -3663,10 +3721,9 @@
               on:wheel|nonpassive={scrollPaletteWithWheel}
             >
               {#each renderedPaletteKeys as key, index (key.source_key)}
-                {@const icon = paletteIcon(key.source_key)}
-                {#if !compactPalette && !normalizedKeySearch && (index === 0 || paletteKeyGroup(renderedPaletteKeys[index - 1]) !== paletteKeyGroup(key)) && paletteKeyGroup(key) >= 3}
+                {#if !compactPalette && !normalizedKeySearch && (index === 0 || paletteKeyGroup(renderedPaletteKeys[index - 1]) !== paletteKeyGroup(key))}
                   <h3 class="palette-group-heading">
-                    {paletteGroupLabel(paletteKeyGroup(key))}
+                    {paletteGroups[paletteKeyGroup(key)].heading}
                   </h3>
                 {/if}
                 <Button
@@ -3677,11 +3734,13 @@
                       key: key.source_key,
                     })}
                   disabled={profileBusy || !selectedSourceKey}
-                  aria-label={`Assign ${key.label} (${key.source_key})`}
-                  title={`${key.label} (${key.source_key})`}
-                  ><span class:palette-symbol={!!icon}
-                    >{icon ?? paletteLabel(key)}</span
-                  ><small>{key.source_key}</small></Button
+                  aria-label={`Assign ${keyName(key.source_key)} (${key.source_key})`}
+                  title={`${keyName(key.source_key)} (${key.source_key})`}
+                  >{#if keyIconPaths[key.source_key]}<KeyIcon
+                      name={key.source_key}
+                    />{:else}<span>{paletteLabel(key)}</span>{/if}<small
+                    >{key.source_key}</small
+                  ></Button
                 >
               {:else}
                 <p class="palette-empty">

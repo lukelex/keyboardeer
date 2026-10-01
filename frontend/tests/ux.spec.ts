@@ -465,3 +465,38 @@ test("inspects the selected key and edits its existing behavior", async ({
   await inspector.getByRole("button", { name: "Restore original" }).click();
   await expect(inspector).toContainText("Passes through to the layer below");
 });
+
+test("leads the palette with common keys and unambiguous labels", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await openEditor(page);
+  await expect(page.locator(".palette-group-heading").first()).toHaveText(
+    "Common keys",
+  );
+  const keys = page.locator(".palette-key");
+  expect(
+    await keys.evaluateAll((elements) =>
+      elements.slice(0, 5).map((key) => key.getAttribute("title")),
+    ),
+  ).toEqual([
+    "Esc (esc)",
+    "Tab (tab)",
+    "Enter (ret)",
+    "Space (spc)",
+    "Backspace (bspc)",
+  ]);
+  // Every cap shows a distinct label or icon, so left and right modifiers are
+  // told apart without reading the KMonad code underneath.
+  const caps = await keys.evaluateAll((elements) =>
+    elements.map(
+      (key) =>
+        key.querySelector("svg")?.dataset.icon ??
+        key.querySelector("span")?.textContent?.trim(),
+    ),
+  );
+  expect(caps.filter((label, index) => caps.indexOf(label) !== index)).toEqual(
+    [],
+  );
+  expect(caps).toEqual(expect.arrayContaining(["L Ctrl", "R Ctrl", "L Alt"]));
+});
