@@ -20,6 +20,8 @@ export interface ApplyHost {
   /** A current, valid preview exists and nothing blocks an Apply. */
   readonly canApply: boolean;
   profileUpdated(profile: Profile): void;
+  /** Starts the safety timer for a mapping the manager just activated. */
+  startTrial(configurationID: string): void;
   refresh(): Promise<void>;
   error(error: unknown): void;
 }
@@ -33,6 +35,8 @@ export class ApplyController {
   busy = $state(false);
   reviewOpen = $state(false);
   reviewNotice = $state("");
+  /** Switch the new mapping off unless it is kept within the time limit. */
+  trialRequested = $state(false);
   #operation = $state.raw<Operation | null>(null);
   #operationProfileID = $state("");
   readonly #host: ApplyHost;
@@ -84,6 +88,14 @@ export class ApplyController {
       const result = await ApplyProfile(profile.id);
       this.accept(result);
       await this.#host.refresh();
+      const configurationID = result.profile.manager_configuration_id;
+      if (
+        this.trialRequested &&
+        result.operation.state === "succeeded" &&
+        configurationID
+      ) {
+        this.#host.startTrial(configurationID);
+      }
       if (result.stale) {
         // Another client changed this keyboard's configuration after the
         // review. Nothing was applied; show the refreshed state and ask again.

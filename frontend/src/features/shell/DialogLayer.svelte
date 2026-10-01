@@ -14,6 +14,7 @@
   import RenderedConfigurationDialog from "../editor/dialogs/RenderedConfigurationDialog.svelte";
   import ShortcutsDialog from "../editor/dialogs/ShortcutsDialog.svelte";
   import TapHoldDialog from "../editor/dialogs/TapHoldDialog.svelte";
+  import TrialDialog from "../editor/dialogs/TrialDialog.svelte";
   import PreferencesDialog from "../preferences/PreferencesDialog.svelte";
 
   // Every dialog renders here, directly inside the app shell, in stacking
@@ -38,4 +39,5 @@
 {#if sources.external}<ExternalSourceDialog />{/if}
 {#if sources.renderedOpen && sources.rendered}<RenderedConfigurationDialog />{/if}
 {#if identify.open && identify.device}<IdentifyDialog />{/if}
+{#if app.trial.active}<TrialDialog />{/if}
 <ConfirmDialog confirmations={app.confirmations} />

@@ -51,6 +51,8 @@ export interface EditorDependencies {
   toasts: ToastCenter;
   /** The keyboard whose profile is being edited. */
   device: () => Device | null;
+  /** Starts the post-Apply safety timer. */
+  startTrial: (configurationID: string) => void;
 }
 
 /**
@@ -200,6 +202,7 @@ export class DraftEditor {
         return editor.canApply;
       },
       profileUpdated: (profile) => this.#replace(profile),
+      startTrial: (configurationID) => dependencies.startTrial(configurationID),
       refresh: () => this.#connection.refresh(),
       error: (error) => this.#toasts.error(error),
     });

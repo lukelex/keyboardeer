@@ -156,8 +156,10 @@ async function openWorkspace(page: Page, fixture: Partial<Fixture> = {}) {
       const testWindow = window as unknown as {
         __workspaceEvent?: (payload: unknown) => void;
         __notifications: [string, string][];
+        __enabled: [string, boolean][];
       };
       testWindow.__notifications = [];
+      testWindow.__enabled = [];
       window.runtime = {
         EventsOn: (_, callback) => {
           testWindow.__workspaceEvent = callback;
@@ -189,6 +191,26 @@ async function openWorkspace(page: Page, fixture: Partial<Fixture> = {}) {
             ExportProfile: async () => {},
             Notify: async (summary: string, body: string) => {
               testWindow.__notifications.push([summary, body]);
+            },
+            ApplyProfile: async () => ({
+              profile: { ...draft, manager_configuration_id: "cfg-1" },
+              operation: {
+                id: "op-apply",
+                kind: "apply",
+                state: "succeeded",
+                reason_code: "operation_succeeded",
+                reason: "configuration persisted and activation confirmed",
+              },
+            }),
+            SetConfigurationEnabled: async (id: string, enabled: boolean) => {
+              testWindow.__enabled.push([id, enabled]);
+              return {
+                id: "op-lifecycle",
+                kind: "lifecycle",
+                state: "succeeded",
+                reason_code: "operation_succeeded",
+                reason: enabled ? "enabled" : "disabled",
+              };
             },
             IdentifyStart: async () => ({
               id: "identify-1",
@@ -1379,5 +1401,42 @@ test("reports a mapping that stops running and recovers", async ({ page }) => {
   await expect.poll(async () => (await notifications()).length).toBe(2);
   await expect(page.locator(".toast-region").getByRole("alert")).toContainText(
     "stopped running",
+  );
+});
+
+test("switches bindings off unless a trial Apply is kept", async ({ page }) => {
+  await page.clock.install();
+  await openEditor(page);
+  const enabledCalls = () =>
+    page.evaluate(
+      () => (window as unknown as { __enabled: [string, boolean][] }).__enabled,
+    );
+  const applyWithTrial = async () => {
+    await page.getByRole("button", { name: "Apply to keyboard" }).click();
+    const review = page.getByRole("dialog", {
+      name: "Ready to send this draft?",
+    });
+    await review.getByLabel(/Ask me to keep it/).check();
+    await review.getByRole("button", { name: "Apply to keyboard" }).click();
+    return page.getByRole("alertdialog", { name: "Keep the new mapping?" });
+  };
+
+  // Keeping the mapping leaves the bindings alone.
+  let trial = await applyWithTrial();
+  await expect(trial).toContainText("30 s");
+  await page.clock.runFor(10_000);
+  await expect(trial).toContainText("20 s");
+  await trial.getByRole("button", { name: "Keep mapping" }).click();
+  await expect(trial).toHaveCount(0);
+  await page.clock.runFor(30_000);
+  expect(await enabledCalls()).toEqual([]);
+
+  // Letting the timer run out switches the bindings off.
+  trial = await applyWithTrial();
+  await page.clock.runFor(31_000);
+  await expect(trial).toHaveCount(0);
+  expect(await enabledCalls()).toEqual([["cfg-1", false]]);
+  await expect(page.locator(".toast-region")).toContainText(
+    "are off, so the keyboard types normally",
   );
 });

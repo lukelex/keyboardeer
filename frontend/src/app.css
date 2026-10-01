@@ -3200,3 +3200,36 @@ kbd {
   position: absolute;
   width: 1px;
 }
+.trial-option {
+  align-items: flex-start;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 10px 12px;
+}
+.trial-option input {
+  accent-color: var(--accent);
+  margin-top: 2px;
+}
+.trial-option strong,
+.trial-option small {
+  display: block;
+}
+.trial-option strong {
+  color: var(--text);
+  font-size: 13px;
+}
+.trial-option small {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin-top: 2px;
+}
+.trial-countdown {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}

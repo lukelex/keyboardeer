@@ -50,6 +50,16 @@
         : "No explicit assignments; the original Base layout will be applied."}
     </p>
   {/if}
+  <label class="trial-option">
+    <input type="checkbox" bind:checked={apply.trialRequested} />
+    <span
+      ><strong>Ask me to keep it</strong><small
+        >After applying, confirm within 30 seconds or the bindings switch off and
+        the keyboard types normally again. Use this when trying out changes to
+        keys you need.</small
+      ></span
+    >
+  </label>
   <div class="behavior-form-actions">
     <Button variant="secondary" type="button" onclick={() => apply.closeReview()}
       >Keep editing</Button

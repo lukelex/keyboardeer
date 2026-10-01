@@ -23,6 +23,7 @@ import {
 import { PreferencesStore } from "./preferences.svelte";
 import { SetupForm } from "./setup.svelte";
 import { SourceViewer } from "./sources.svelte";
+import { ApplyTrial } from "./trial.svelte";
 import { ToastCenter } from "./toasts.svelte";
 
 /**
@@ -52,11 +53,13 @@ export class KeyboarDeer {
     this.toasts,
     (deviceID) => this.connection.device(deviceID)?.display_name ?? "",
   );
+  readonly trial = new ApplyTrial(this.connection, this.toasts);
   readonly editor = new DraftEditor({
     library: this.library,
     connection: this.connection,
     toasts: this.toasts,
     device: () => this.navigation.device,
+    startTrial: (configurationID) => this.trial.start(configurationID),
   });
 
   info = $state<AppInfo>({ name: "KeyboarDeer", version: "starting…" });
@@ -110,6 +113,7 @@ export class KeyboarDeer {
       stopPersisting();
       this.toasts.dispose();
       this.identify.dispose();
+      this.trial.dispose();
       this.editor.dispose();
     };
   }
