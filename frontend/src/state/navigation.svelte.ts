@@ -37,6 +37,20 @@ export class LocalSettings {
   readonly #uiStateKey = "keyboardeer-ui-state";
   readonly #firstRunKey = "keyboardeer-first-run-complete";
   readonly #themeKey = "keyboardeer-theme";
+  readonly #alertsKey = "keyboardeer-desktop-alerts";
+
+  /** Desktop notifications for mapping failures; on unless turned off. */
+  get desktopAlerts(): boolean {
+    try {
+      return localStorage.getItem(this.#alertsKey) !== "off";
+    } catch {
+      return true;
+    }
+  }
+
+  set desktopAlerts(enabled: boolean) {
+    this.#write(this.#alertsKey, enabled ? "on" : "off");
+  }
 
   get theme(): Theme {
     try {

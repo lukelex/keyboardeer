@@ -287,6 +287,7 @@ export interface ProfileApplyResult {
 
 type AppBindings = {
   Info?: () => Promise<AppInfo>;
+  Notify?: (summary: string, body: string) => Promise<void>;
   Preferences?: () => Promise<Preferences>;
   SavePreferences?: (preferences: Preferences) => Promise<void>;
   ChooseProfileSyncFolder?: () => Promise<string>;
@@ -371,6 +372,11 @@ function binding<T>(name: keyof AppBindings): T {
 }
 
 export const Info = () => binding<() => Promise<AppInfo>>("Info")();
+export const Notify = (summary: string, body: string) =>
+  binding<(summary: string, body: string) => Promise<void>>("Notify")(
+    summary,
+    body,
+  );
 export const Preferences = () =>
   binding<() => Promise<Preferences>>("Preferences")();
 export const SavePreferences = (preferences: Preferences) =>

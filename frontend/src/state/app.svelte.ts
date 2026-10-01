@@ -11,6 +11,7 @@ import { ConfirmationService } from "./confirmations.svelte";
 import { ManagerConnection, type WorkspaceChange } from "./connection.svelte";
 import { DialogStack } from "./dialogs.svelte";
 import { DraftEditor } from "./editor.svelte";
+import { RuntimeHealthMonitor } from "./healthMonitor.svelte";
 import { IdentifySession } from "./identify.svelte";
 import { ProfileLibrary } from "./library.svelte";
 import {
@@ -47,6 +48,10 @@ export class KeyboarDeer {
     this.toasts,
   );
   readonly sources = new SourceViewer(this.connection, this.toasts);
+  readonly health = new RuntimeHealthMonitor(
+    this.toasts,
+    (deviceID) => this.connection.device(deviceID)?.display_name ?? "",
+  );
   readonly editor = new DraftEditor({
     library: this.library,
     connection: this.connection,
@@ -75,6 +80,8 @@ export class KeyboarDeer {
     void this.preferences.load();
     void this.#loadInfo();
     void this.library.loadPendingFile();
+    this.health.desktopAlerts = this.settings.desktopAlerts;
+    const stopMonitoring = this.connection.observe(this.health);
     const stopObserving = this.connection.observe({
       workspaceChanged: (change) => this.#workspaceChanged(change),
       desktopReady: () => void this.#loadProfiles(),
@@ -99,6 +106,7 @@ export class KeyboarDeer {
     return () => {
       disconnect();
       stopObserving();
+      stopMonitoring();
       stopPersisting();
       this.toasts.dispose();
       this.identify.dispose();
@@ -130,6 +138,11 @@ export class KeyboarDeer {
     if (!device) return;
     this.dismissFirstRun();
     this.openDevice(device);
+  }
+
+  setDesktopAlerts(enabled: boolean) {
+    this.health.desktopAlerts = enabled;
+    this.settings.desktopAlerts = enabled;
   }
 
   setTheme(theme: Theme) {

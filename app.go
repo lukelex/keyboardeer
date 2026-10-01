@@ -51,6 +51,8 @@ type App struct {
 	// argument when the OS opened KeyboarDeer as the default file handler. It
 	// is set once before startup and consumed (cleared) by the frontend.
 	pendingProfileFile string
+	// notifier sends desktop notifications; nil uses the D-Bus session.
+	notifier desktopNotifier
 }
 
 func (a *App) SetPendingKbdProfileFile(path string) {

@@ -152,7 +152,18 @@ async function openWorkspace(page: Page, fixture: Partial<Fixture> = {}) {
     }: Fixture) => {
       let draft = profile;
       localStorage.setItem("keyboardeer-first-run-complete", "1");
-      window.runtime = { EventsOn: () => () => {} };
+      // Tests push manager events and read notifications through these.
+      const testWindow = window as unknown as {
+        __workspaceEvent?: (payload: unknown) => void;
+        __notifications: [string, string][];
+      };
+      testWindow.__notifications = [];
+      window.runtime = {
+        EventsOn: (_, callback) => {
+          testWindow.__workspaceEvent = callback;
+          return () => {};
+        },
+      };
       window.go = {
         main: {
           App: {
@@ -176,6 +187,9 @@ async function openWorkspace(page: Page, fixture: Partial<Fixture> = {}) {
                 }
               : {}),
             ExportProfile: async () => {},
+            Notify: async (summary: string, body: string) => {
+              testWindow.__notifications.push([summary, body]);
+            },
             IdentifyStart: async () => ({
               id: "identify-1",
               kind: "identify",
@@ -1312,5 +1326,58 @@ test("keeps buttons readable in dark mode", async ({ page }) => {
   await expect(page.locator("html")).toHaveCSS(
     "background-color",
     "rgb(247, 245, 237)",
+  );
+});
+
+test("reports a mapping that stops running and recovers", async ({ page }) => {
+  await openWorkspace(page);
+  const emit = (healthy: boolean) =>
+    page.evaluate(
+      ([snapshot, healthy]) => {
+        const next = structuredClone(snapshot);
+        Object.assign(next.snapshot!.configurations![0].runtime, {
+          healthy,
+          phase: healthy ? "running" : "failed",
+          reason: healthy
+            ? "KMonad process running"
+            : "KMonad exited with status 1",
+        });
+        (
+          window as unknown as { __workspaceEvent: (value: unknown) => void }
+        ).__workspaceEvent(next);
+      },
+      [workspace, healthy] as const,
+    );
+  // Pretend the window is in the background, so a desktop notice is sent.
+  await page.evaluate(() => (document.hasFocus = () => false));
+  await emit(false);
+  await expect(page.locator(".toast-region").getByRole("alert")).toContainText(
+    "Home row mods on Keychron K8 Pro stopped running: KMonad exited with status 1",
+  );
+  const notifications = () =>
+    page.evaluate(
+      () =>
+        (window as unknown as { __notifications: string[][] }).__notifications,
+    );
+  await expect
+    .poll(notifications)
+    .toEqual([
+      [
+        "Home row mods stopped running on Keychron K8 Pro",
+        "KMonad exited with status 1",
+      ],
+    ]);
+  await emit(true);
+  await expect(page.locator(".toast-region").getByRole("status")).toContainText(
+    "Home row mods on Keychron K8 Pro is running again.",
+  );
+  // Turning desktop notices off keeps the toasts.
+  await page.getByRole("button", { name: "Preferences" }).click();
+  await page.getByLabel(/Notify me when a mapping stops running/).uncheck();
+  await page.keyboard.press("Escape");
+  await emit(false);
+  await expect.poll(async () => (await notifications()).length).toBe(2);
+  await expect(page.locator(".toast-region").getByRole("alert")).toContainText(
+    "stopped running",
   );
 });

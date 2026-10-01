@@ -44,6 +44,21 @@
   </fieldset>
   <div class="preference-setting">
     <label class="preference-toggle"
+      ><input
+        type="checkbox"
+        checked={app.health.desktopAlerts}
+        onchange={(event) => app.setDesktopAlerts(event.currentTarget.checked)}
+      /><span
+        ><strong>Notify me when a mapping stops running</strong><small
+          >While KeyboarDeer is open, a desktop notification appears when a
+          keyboard's mapping fails or recovers and the window is not in focus.
+          Applies right away.</small
+        ></span
+      ></label
+    >
+  </div>
+  <div class="preference-setting">
+    <label class="preference-toggle"
       ><input type="checkbox" bind:checked={preferences.syncEnabled} /><span
         ><strong>Sync profiles to a folder</strong><small
           >Save editable profile JSON here so your existing sync service or Git

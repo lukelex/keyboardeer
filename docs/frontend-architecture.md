@@ -42,6 +42,7 @@ host or observer interface instead of importing it.
 | `IdentifySession` | Manager-owned keyboard identification. |
 | `ConfigurationActions` | Enable, disable, remove and adopt manager configurations. |
 | `SourceViewer` | The rendered `.kbd` and external configuration sources. |
+| `RuntimeHealthMonitor` | Reports managed mappings that stop running or recover, as toasts and (when unfocused) desktop notifications through the Go `Notify` binding. |
 | `PreferencesStore`, `Navigation`, `LocalSettings` | Preferences; current screen and keyboard; browser-local conveniences. |
 | `ToastCenter`, `ConfirmationService`, `DialogStack` | Toasts; the one confirmation dialog; Escape closes the topmost dialog. |
 | `KeyboarDeer` | The composition root: builds and wires the services, and implements use cases that span several of them (open a keyboard, switch or delete a profile, restore the last screen). |
