@@ -431,8 +431,14 @@ test("inspects the selected key and edits its existing behavior", async ({
   await expect(inspector).toContainText("Tap: Esc · Hold: Left Ctrl · 200 ms");
   await inspector.getByRole("button", { name: "Edit tap & hold" }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByLabel("Tap", { exact: true })).toHaveValue("esc");
-  await expect(dialog.getByLabel("Held key")).toHaveValue("lctl");
+  await expect(dialog.getByLabel("Tap", { exact: true })).toHaveAttribute(
+    "data-value",
+    "esc",
+  );
+  await expect(dialog.getByLabel("Held key")).toHaveAttribute(
+    "data-value",
+    "lctl",
+  );
   await dialog.getByLabel("Tap timeout (milliseconds)").fill("250");
   await dialog.getByRole("button", { name: "Update tap & hold" }).click();
   await expect(dialog).toHaveCount(0);
@@ -499,4 +505,76 @@ test("leads the palette with common keys and unambiguous labels", async ({
     [],
   );
   expect(caps).toEqual(expect.arrayContaining(["L Ctrl", "R Ctrl", "L Alt"]));
+});
+
+test("picks keys in action dialogs by search or by pressing them", async ({
+  page,
+}) => {
+  await openEditor(page);
+  await page.locator('.editor-key[data-source-key="f"]').click();
+  await page.getByRole("button", { name: "Tap & hold", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  // A new tap-hold starts as a home-row modifier on the key's own output.
+  const tap = dialog.getByLabel("Tap", { exact: true });
+  const held = dialog.getByLabel("Held key");
+  await expect(tap).toHaveAttribute("data-value", "f");
+  await expect(held).toHaveAttribute("data-value", "lctl");
+
+  await held.click();
+  const search = dialog.getByRole("combobox", { name: "Search keys" });
+  await expect(search).toBeFocused();
+  await search.fill("shift");
+  await expect(
+    dialog.getByRole("listbox", { name: "Keys" }).getByRole("option"),
+  ).toHaveText([/Left Shift/, /Right Shift/]);
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(held).toHaveAttribute("data-value", "rsft");
+  await expect(held).toBeFocused();
+
+  // Escape closes only the picker; the dialog stays open.
+  await held.click();
+  await page.keyboard.press("Escape");
+  await expect(dialog.getByRole("listbox")).toHaveCount(0);
+  await expect(dialog).toBeVisible();
+
+  // Pressing a key picks it, including Escape itself.
+  await tap.click();
+  await dialog.getByRole("button", { name: "Press a key" }).click();
+  await page.keyboard.press("Escape");
+  await expect(tap).toHaveAttribute("data-value", "esc");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Assign tap & hold" }).click();
+  await expect(page.getByRole("group", { name: "Selected key" })).toContainText(
+    "Tap: Esc · Hold: Right Shift · 200 ms",
+  );
+
+  // Macro steps can be reordered before saving.
+  await page.getByRole("button", { name: "Macro", exact: true }).click();
+  await dialog.getByLabel("Macro name").fill("greet");
+  const nextKey = dialog.getByLabel("Add a key press");
+  for (const code of ["KeyH", "KeyI"]) {
+    await nextKey.click();
+    await dialog.getByRole("button", { name: "Press a key" }).click();
+    await page.keyboard.press(code);
+    await dialog.getByRole("button", { name: "Add", exact: true }).click();
+  }
+  const steps = dialog.getByRole("list", { name: "Macro key sequence" });
+  await expect(steps.getByRole("listitem")).toHaveText([/^H/, /^I/]);
+  await dialog.getByRole("button", { name: "Move step 2 earlier" }).click();
+  await expect(steps.getByRole("listitem")).toHaveText([/^I/, /^H/]);
+  await dialog.getByRole("button", { name: "Create and assign macro" }).click();
+  await expect(page.getByRole("group", { name: "Selected key" })).toContainText(
+    "Macro #greet: I, H",
+  );
+});
+
+test("styles the add-layer field like other dialog inputs", async ({
+  page,
+}) => {
+  await openEditor(page);
+  await page.getByRole("button", { name: "Manage", exact: true }).click();
+  const input = page.getByLabel("Add a layer");
+  await expect(input).toHaveCSS("border-radius", "8px");
+  await expect(input).toHaveCSS("min-height", "40px");
 });

@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from "svelte";
   import Button from "./components/Button.svelte";
   import KeyIcon, { keyIconPaths } from "./components/KeyIcon.svelte";
+  import KeyPicker, { type KeyPickerGroup } from "./components/KeyPicker.svelte";
   import Menu, { type MenuItem } from "./components/Menu.svelte";
   import { formatKMonad } from "./kmonadFormat";
   import {
@@ -521,6 +522,19 @@
       ].map((key) => [key.source_key, key]),
     ).values(),
   ].sort(comparePaletteKeys);
+  $: keyPickerGroups = paletteGroups
+    .map(
+      (group, index): KeyPickerGroup => ({
+        heading: group.heading,
+        keys: paletteKeyOptions
+          .filter((key) => paletteKeyGroup(key) === index)
+          .map((key) => ({
+            source_key: key.source_key,
+            name: keyName(key.source_key),
+          })),
+      }),
+    )
+    .filter((group) => group.keys.length);
   $: normalizedKeySearch = keySearch.trim().toLowerCase();
   $: visiblePaletteKeys = normalizedKeySearch
     ? paletteKeyOptions.filter((key) =>
@@ -1957,18 +1971,32 @@
       feedback = "Select a physical key before choosing a complex action.";
       return;
     }
+    // A new action starts from what the key sends now, and a tap-hold from
+    // the common home-row-modifier shape: tap sends it, hold is Left Ctrl.
+    const current = selectedSourceKey ? behaviorFor(selectedSourceKey) : undefined;
+    const available = (key: string | undefined) =>
+      !!key && paletteKeyOptions.some((option) => option.source_key === key);
     const fallback = paletteKeyOptions[0]?.source_key ?? "";
-    tapKey ||= fallback;
-    holdKey ||= fallback;
-    aliasKey ||= fallback;
-    macroNextKey ||= fallback;
+    const currentOutput =
+      current?.kind === "key" && available(current.key)
+        ? current.key!
+        : available(selectedSourceKey)
+          ? selectedSourceKey
+          : fallback;
+    tapKey = currentOutput;
+    tapHoldMode = "key";
+    holdKey = available("lctl") && currentOutput !== "lctl" ? "lctl" : fallback;
+    aliasName = "";
+    aliasKey = currentOutput;
+    macroName = "";
+    macroSteps = [];
+    macroNextKey = currentOutput;
     tapHoldLayerID = selectedLayerID;
     tapHoldTimeoutMS = defaultTapHoldTimeoutMS;
     layerTargetID = selectedLayerID;
     layerRename = activeLayer?.name ?? "";
     editingDeclaration = "";
     // Opening the dialog for the key's own kind of behavior edits it in place.
-    const current = selectedSourceKey ? behaviorFor(selectedSourceKey) : undefined;
     if (kind === "tap_hold" && current?.kind === "tap_hold") {
       if (current.tap?.kind === "key" && current.tap.key) tapKey = current.tap.key;
       if (current.hold?.kind === "hold_layer" && current.hold.target) {
@@ -2068,6 +2096,13 @@
       aliasName = "";
       closeBehaviorDialog();
     }
+  }
+  function moveMacroStep(index: number, direction: -1 | 1) {
+    const destination = index + direction;
+    if (destination < 0 || destination >= macroSteps.length) return;
+    const steps = [...macroSteps];
+    [steps[index], steps[destination]] = [steps[destination], steps[index]];
+    macroSteps = steps;
   }
   function addMacroStep() {
     if (macroNextKey) macroSteps = [...macroSteps, macroNextKey];
@@ -4000,11 +4035,12 @@
           </p>
           <form class="behavior-form" on:submit|preventDefault={assignTapHold}>
             <label for="tap-key">Tap</label>
-            <select id="tap-key" bind:value={tapKey}>
-              {#each paletteKeyOptions as key (key.source_key)}
-                <option value={key.source_key}>{key.label}</option>
-              {/each}
-            </select>
+            <KeyPicker
+              id="tap-key"
+              bind:value={tapKey}
+              groups={keyPickerGroups}
+              captureMap={browserCodeToSourceKey}
+            />
             <label for="hold-type">Hold</label>
             <select id="hold-type" bind:value={tapHoldMode}>
               <option value="key">Send a key</option>
@@ -4012,11 +4048,12 @@
             </select>
             {#if tapHoldMode === "key"}
               <label for="hold-key">Held key</label>
-              <select id="hold-key" bind:value={holdKey}>
-                {#each paletteKeyOptions as key (key.source_key)}
-                  <option value={key.source_key}>{key.label}</option>
-                {/each}
-              </select>
+              <KeyPicker
+              id="hold-key"
+              bind:value={holdKey}
+              groups={keyPickerGroups}
+              captureMap={browserCodeToSourceKey}
+            />
             {:else}
               <label for="tap-hold-layer">Layer while held</label>
               <select id="tap-hold-layer" bind:value={tapHoldLayerID}>
@@ -4120,11 +4157,12 @@
               required
             />
             <label for="alias-key">Action</label>
-            <select id="alias-key" bind:value={aliasKey}>
-              {#each paletteKeyOptions as key (key.source_key)}
-                <option value={key.source_key}>{key.label}</option>
-              {/each}
-            </select>
+            <KeyPicker
+              id="alias-key"
+              bind:value={aliasKey}
+              groups={keyPickerGroups}
+              captureMap={browserCodeToSourceKey}
+            />
             <div class="behavior-form-actions">
               <Button
                 variant="secondary"
@@ -4161,11 +4199,12 @@
             />
             <label for="macro-next-key">Add a key press</label>
             <div class="macro-step-control">
-              <select id="macro-next-key" bind:value={macroNextKey}>
-                {#each paletteKeyOptions as key (key.source_key)}
-                  <option value={key.source_key}>{key.label}</option>
-                {/each}
-              </select>
+              <KeyPicker
+              id="macro-next-key"
+              bind:value={macroNextKey}
+              groups={keyPickerGroups}
+              captureMap={browserCodeToSourceKey}
+            />
               <Button variant="secondary" type="button" on:click={addMacroStep}
                 >Add</Button
               >
@@ -4173,16 +4212,35 @@
             <ol class="macro-steps" aria-label="Macro key sequence">
               {#each macroSteps as step, index (`${step}-${index}`)}
                 <li>
-                  <span>{step}</span>
-                  <Button
-                    variant="plain"
-                    className="macro-remove"
-                    type="button"
-                    on:click={() =>
-                      (macroSteps = macroSteps.filter(
-                        (_, stepIndex) => stepIndex !== index,
-                      ))}>Remove</Button
-                  >
+                  <span>{keyName(step)} <small>{step}</small></span>
+                  <span class="macro-step-actions">
+                    <Button
+                      variant="plain"
+                      type="button"
+                      disabled={index === 0}
+                      aria-label={`Move step ${index + 1} earlier`}
+                      title="Move earlier"
+                      on:click={() => moveMacroStep(index, -1)}>↑</Button
+                    >
+                    <Button
+                      variant="plain"
+                      type="button"
+                      disabled={index === macroSteps.length - 1}
+                      aria-label={`Move step ${index + 1} later`}
+                      title="Move later"
+                      on:click={() => moveMacroStep(index, 1)}>↓</Button
+                    >
+                    <Button
+                      variant="plain"
+                      className="macro-remove"
+                      type="button"
+                      aria-label={`Remove step ${index + 1}`}
+                      on:click={() =>
+                        (macroSteps = macroSteps.filter(
+                          (_, stepIndex) => stepIndex !== index,
+                        ))}>Remove</Button
+                    >
+                  </span>
                 </li>
               {/each}
             </ol>
