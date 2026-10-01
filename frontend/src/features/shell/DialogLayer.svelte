@@ -6,6 +6,7 @@
   import AliasDialog from "../editor/dialogs/AliasDialog.svelte";
   import ApplyReviewDialog from "../editor/dialogs/ApplyReviewDialog.svelte";
   import LayerActionDialog from "../editor/dialogs/LayerActionDialog.svelte";
+  import LayerOverviewDialog from "../editor/dialogs/LayerOverviewDialog.svelte";
   import MacroDialog from "../editor/dialogs/MacroDialog.svelte";
   import ManageLayersDialog from "../editor/dialogs/ManageLayersDialog.svelte";
   import ProfilesDialog from "../editor/dialogs/ProfilesDialog.svelte";
@@ -33,6 +34,7 @@
 {#if editing && app.profileManagerOpen && app.navigation.device}<ProfilesDialog />{/if}
 {#if editing && editor.apply.reviewOpen}<ApplyReviewDialog />{/if}
 {#if editing && app.shortcutsOpen}<ShortcutsDialog />{/if}
+{#if editing && app.overviewOpen}<LayerOverviewDialog />{/if}
 {#if sources.external}<ExternalSourceDialog />{/if}
 {#if sources.renderedOpen && sources.rendered}<RenderedConfigurationDialog />{/if}
 {#if identify.open && identify.device}<IdentifyDialog />{/if}

@@ -57,6 +57,7 @@ export class KeyboarDeer {
   firstRunOpen = $state(false);
   profileManagerOpen = $state(false);
   shortcutsOpen = $state(false);
+  overviewOpen = $state(false);
   /** Height of the editor palette, so toasts never cover keys. */
   paletteHeight = $state(0);
   editorOpen = $derived(

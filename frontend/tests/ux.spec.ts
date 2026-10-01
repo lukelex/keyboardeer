@@ -1265,3 +1265,29 @@ test("suggests fixes for layouts the manager would accept", async ({
       .getByRole("tab", { name: "Symbols" }),
   ).toHaveAttribute("aria-selected", "true");
 });
+
+test("shows every layer in a printable overview", async ({ page }) => {
+  await openEditor(page);
+  await page.getByRole("button", { name: "More profile actions" }).click();
+  await page.getByRole("menuitem", { name: /Layer overview/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Layer overview" });
+  await expect(dialog.getByRole("img")).toHaveCount(2);
+  await expect(
+    dialog.getByRole("heading", { name: /Navigation/ }),
+  ).toContainText("Entered via Space (hold)");
+  const navigation = dialog.getByRole("img", { name: "Navigation layer" });
+  await expect(navigation.locator(".sheet-key.remapped")).toHaveCount(1);
+  await expect(navigation.locator(".sheet-key.remapped strong")).toHaveText(
+    "left",
+  );
+  // Printing shows only the cheat sheet.
+  await page.emulateMedia({ media: "print" });
+  await expect(page.locator(".app-header")).toBeHidden();
+  await expect(page.locator(".key-palette")).toBeHidden();
+  await expect(navigation).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Print or save as PDF" }),
+  ).toBeHidden();
+  await page.emulateMedia({ media: "screen" });
+  await expect(page.locator(".app-header")).toBeVisible();
+});

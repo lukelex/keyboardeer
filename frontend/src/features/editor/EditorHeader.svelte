@@ -46,6 +46,12 @@
   );
   const moreItems = $derived<MenuItem[]>([
     {
+      label: "Layer overview…",
+      hint: "Every layer at once; printable",
+      onSelect: () => (app.overviewOpen = true),
+    },
+    { separator: true },
+    {
       label: "View .kbd",
       hint: renderedUnavailable,
       disabled:
