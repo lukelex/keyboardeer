@@ -363,6 +363,7 @@ func (a *App) SaveProfile(draft profile.Profile) (profile.Profile, error) {
 	// ordinary draft edit from the frontend.
 	draft.ManagerConfigurationID = current.ManagerConfigurationID
 	draft.ApplyPending = current.ApplyPending
+	draft.Applied = current.Applied
 	saved, err := store.Upsert(draft)
 	if err != nil {
 		return profile.Profile{}, err

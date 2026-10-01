@@ -182,6 +182,8 @@ export interface Profile {
   } | null;
   /** Last terminal Apply outcome, persisted locally across GUI restarts. */
   last_apply_operation?: Operation | null;
+  /** The editable model as of the latest Apply the manager confirmed. */
+  applied?: AppliedState | null;
   draft_revision: number;
   geometry: ProfileGeometry;
   layers: ProfileLayer[];
@@ -192,6 +194,15 @@ export interface Profile {
   validation_recovery?: ValidationRecovery;
   created_at: string;
   updated_at: string;
+}
+export interface AppliedState {
+  draft_revision: number;
+  configuration_revision?: number;
+  applied_at: string;
+  layers: ProfileLayer[];
+  assignments: ProfileAssignment[] | null;
+  aliases?: Record<string, ProfileBehavior>;
+  macros?: Record<string, ProfileBehavior[]>;
 }
 export interface ValidationRecovery {
   checkpoint?: ValidationCheckpoint;

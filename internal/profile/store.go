@@ -355,12 +355,23 @@ func (s *Store) SetApplyOutcome(id string, expectedDraftRevision uint64, configu
 			for other := range data.Profiles {
 				if data.Profiles[other].ID != id && data.Profiles[other].ManagerConfigurationID == configurationID {
 					data.Profiles[other].ManagerConfigurationID = ""
+					data.Profiles[other].Applied = nil
 				}
 			}
 			profile.ManagerConfigurationID = configurationID
 		}
 		profile.ApplyPending = nil
 		profile.LastApplyOperation = &outcome
+		// The expected revision guarantees the editable model is exactly what
+		// the manager accepted. Other outcomes leave the previous mapping, and
+		// so the previous snapshot, in place.
+		if outcome.State == "succeeded" {
+			applied, err := snapshotApplied(*profile, outcome.ConfigurationRevision)
+			if err != nil {
+				return Profile{}, err
+			}
+			profile.Applied = applied
+		}
 		profile.UpdatedAt = time.Now().UTC()
 		if err := s.save(data); err != nil {
 			return Profile{}, err
@@ -368,6 +379,26 @@ func (s *Store) SetApplyOutcome(id string, expectedDraftRevision uint64, configu
 		return *profile, nil
 	}
 	return Profile{}, fmt.Errorf("profile %q does not exist", id)
+}
+
+// snapshotApplied deep-copies the editable model through JSON, so later draft
+// edits never alias the recorded applied state.
+func snapshotApplied(profile Profile, configurationRevision uint64) (*AppliedState, error) {
+	encoded, err := json.Marshal(AppliedState{
+		Layers: profile.Layers, Assignments: profile.Assignments,
+		Aliases: profile.Aliases, Macros: profile.Macros,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var applied AppliedState
+	if err := json.Unmarshal(encoded, &applied); err != nil {
+		return nil, err
+	}
+	applied.DraftRevision = profile.DraftRevision
+	applied.ConfigurationRevision = configurationRevision
+	applied.AppliedAt = time.Now().UTC()
+	return &applied, nil
 }
 
 // SetValidationCheckpoint persists a successfully validated draft state without
@@ -426,6 +457,7 @@ func (s *Store) ClearConfigurationLink(configurationID string) error {
 	for index := range data.Profiles {
 		if data.Profiles[index].ManagerConfigurationID == configurationID {
 			data.Profiles[index].ManagerConfigurationID = ""
+			data.Profiles[index].Applied = nil
 			data.Profiles[index].UpdatedAt = time.Now().UTC()
 			changed = true
 		}

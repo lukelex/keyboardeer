@@ -58,6 +58,7 @@ moves the link, rather than creating a second configuration for the device.
 | `manager_configuration_id` | Opaque manager configuration linked by Apply. Written only by the apply workflow. |
 | `apply_pending` | Set while an Apply outcome is unconfirmed; blocks editing and another Apply. Holds the manager server ID, start time, and the idempotency key, method, exact request parameters, and any accepted operation ID. Replaying without a known operation ID is enabled only for manager versions that guarantee durable idempotency. |
 | `last_apply_operation` | The latest terminal operation returned by the manager for this profile, retained across GUI restarts. It reports the manager's outcome; `active_revision` and runtime health continue to come from the live manager snapshot. |
+| `applied` | Local-only copy of `layers`, `assignments`, `aliases`, and `macros` as of the latest Apply the manager confirmed (`succeeded`), with its draft and configuration revisions and time. The Apply review diffs the draft against it. Rejected, rolled-back, and unknown outcomes keep the previous copy; removing the configuration or linking it to another profile clears it. It is not included in portable profile exports and cannot be changed by draft edits. |
 | `draft_revision` | Positive, incremented by every draft edit. |
 | `geometry.id` | Verified layout ID. Fixed at creation. |
 | `geometry.source_keys` | KMonad source keys in physical order. Repeated codes are shared physical keys. Fixed at creation. |

@@ -38,6 +38,7 @@ type Profile struct {
 	ManagerConfigurationID string                `json:"manager_configuration_id,omitempty"`
 	ApplyPending           *PendingApply         `json:"apply_pending,omitempty"`
 	LastApplyOperation     *ApplyOutcome         `json:"last_apply_operation,omitempty"`
+	Applied                *AppliedState         `json:"applied,omitempty"`
 	DraftRevision          uint64                `json:"draft_revision"`
 	Geometry               Geometry              `json:"geometry"`
 	Layers                 []Layer               `json:"layers"`
@@ -106,6 +107,19 @@ type ApplyOutcome struct {
 	ReasonCode            string         `json:"reason_code"`
 	Reason                string         `json:"reason"`
 	ConfigurationRevision uint64         `json:"configuration_revision,omitempty"`
+}
+
+// AppliedState is the editable model as of the latest Apply the manager
+// confirmed, so the Apply review can show what a new Apply changes. It is
+// local provenance: the manager snapshot stays authoritative for what runs.
+type AppliedState struct {
+	DraftRevision         uint64                `json:"draft_revision"`
+	ConfigurationRevision uint64                `json:"configuration_revision,omitempty"`
+	AppliedAt             time.Time             `json:"applied_at"`
+	Layers                []Layer               `json:"layers"`
+	Assignments           []Assignment          `json:"assignments"`
+	Aliases               map[string]Behavior   `json:"aliases,omitempty"`
+	Macros                map[string][]Behavior `json:"macros,omitempty"`
 }
 
 type ApplyResource struct {

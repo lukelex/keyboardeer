@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
+import { diffAgainstApplied } from "../src/applyDiff";
 import type {
   GeometryTemplate,
   ManagerWorkspace,
@@ -577,4 +578,135 @@ test("styles the add-layer field like other dialog inputs", async ({
   const input = page.getByLabel("Add a layer");
   await expect(input).toHaveCSS("border-radius", "8px");
   await expect(input).toHaveCSS("min-height", "40px");
+});
+
+test("diffs a draft against its last applied state", () => {
+  const applied = {
+    draft_revision: 3,
+    configuration_revision: 7,
+    applied_at: "2026-09-30T09:00:00Z",
+    layers: [
+      { id: "base", name: "Base" },
+      { id: "layer-nav", name: "Nav" },
+      { id: "layer-old", name: "Old" },
+    ],
+    assignments: [
+      // Go omits empty fields; the editor may send explicit nulls.
+      {
+        layer_id: "base",
+        source_key: "a",
+        behavior: { kind: "key", key: "b" },
+      },
+      {
+        layer_id: "base",
+        source_key: "caps",
+        behavior: { kind: "key", key: "esc" },
+      },
+      {
+        layer_id: "layer-nav",
+        source_key: "h",
+        behavior: { kind: "key", key: "left" },
+      },
+    ],
+    aliases: { keep: { kind: "key", key: "x" } },
+  };
+  const diff = diffAgainstApplied(applied, {
+    layers: [
+      { id: "base", name: "Base" },
+      { id: "layer-nav", name: "Navigation" },
+      { id: "layer-sym", name: "Symbols" },
+    ],
+    assignments: [
+      {
+        layer_id: "base",
+        source_key: "a",
+        behavior: { key: "b", kind: "key", target: null } as never,
+      },
+      {
+        layer_id: "base",
+        source_key: "caps",
+        behavior: { kind: "key", key: "lctl" },
+      },
+      { layer_id: "base", source_key: "z", behavior: { kind: "disabled" } },
+    ],
+    aliases: { keep: { kind: "key", key: "x" } },
+    macros: { greet: [{ kind: "key", key: "h" }] },
+  });
+  expect(
+    diff.assignments.map(({ kind, layerID, sourceKey }) => [
+      kind,
+      layerID,
+      sourceKey,
+    ]),
+  ).toEqual([
+    ["changed", "base", "caps"],
+    ["added", "base", "z"],
+    ["removed", "layer-nav", "h"],
+  ]);
+  expect(diff.layers).toEqual([
+    {
+      kind: "changed",
+      id: "layer-nav",
+      name: "Navigation",
+      beforeName: "Nav",
+    },
+    { kind: "added", id: "layer-sym", name: "Symbols" },
+    { kind: "removed", id: "layer-old", name: "Old" },
+  ]);
+  expect(diff.declarations).toEqual([
+    { kind: "added", name: "greet", type: "macro" },
+  ]);
+  expect(diff.count).toBe(7);
+  // A first Apply lists every explicit assignment as added.
+  expect(
+    diffAgainstApplied(undefined, {
+      layers: [{ id: "base", name: "Base" }],
+      assignments: applied.assignments,
+    }).assignments.every((change) => change.kind === "added"),
+  ).toBe(true);
+});
+
+test("reviews only the changes since the last Apply", async ({ page }) => {
+  const drifted = structuredClone(workspace);
+  drifted.snapshot!.configurations![0].active_revision = 8;
+  await openEditor(page, {
+    workspace: drifted,
+    profile: {
+      ...profile,
+      applied: {
+        draft_revision: 2,
+        configuration_revision: 7,
+        applied_at: "2026-09-29T18:00:00Z",
+        layers: profile.layers,
+        assignments: [
+          {
+            layer_id: "base",
+            source_key: "caps",
+            behavior: { kind: "key", key: "esc" },
+          },
+          ...profile.assignments!.slice(1),
+          {
+            layer_id: "layer-nav",
+            source_key: "j",
+            behavior: { kind: "key", key: "down" },
+          },
+        ],
+      },
+    },
+  });
+  await page.getByRole("button", { name: "Apply to keyboard" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText(
+    "Changes since this profile was last applied",
+  );
+  await expect(dialog.getByRole("status")).toContainText(
+    "The keyboard now runs revision 8, not revision 7",
+  );
+  const changes = dialog
+    .getByRole("list", { name: "Changes to apply" })
+    .getByRole("listitem");
+  await expect(changes).toHaveText([
+    "Changed Base · Caps Lock Sends Esc → Tap: Esc · Hold: Left Ctrl · 200 ms",
+    "Removed Navigation · J Sends Down arrow → Passes through to the layer below",
+  ]);
 });

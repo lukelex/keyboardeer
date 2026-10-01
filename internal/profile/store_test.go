@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -121,6 +122,55 @@ func TestStoreRecordsApplyStateWithoutChangingDraftRevision(t *testing.T) {
 	reopened, err := NewStore(store.Path()).Load()
 	if err != nil || reopened.Profiles[0].LastApplyOperation == nil || reopened.Profiles[0].LastApplyOperation.ConfigurationRevision != 4 {
 		t.Fatalf("apply outcome was not persisted: %#v, %v", reopened, err)
+	}
+}
+
+func TestStoreRecordsAppliedStateOnlyForConfirmedApply(t *testing.T) {
+	store := NewStore(filepath.Join(t.TempDir(), "profiles.json"))
+	saved, err := store.Upsert(testProfile(t, "Applied"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rejected, err := store.SetApplyOutcome(saved.ID, saved.DraftRevision, "cfg-1", ApplyOutcome{
+		ID: "op-1", Kind: "apply", State: "rejected", ReasonCode: "validation_rejected", Reason: "rejected",
+	})
+	if err != nil || rejected.Applied != nil {
+		t.Fatalf("a rejected apply must not record applied state: %#v, %v", rejected.Applied, err)
+	}
+	linked, err := store.SetApplyOutcome(saved.ID, saved.DraftRevision, "cfg-1", ApplyOutcome{
+		ID: "op-2", Kind: "apply", State: "succeeded", ReasonCode: "operation_succeeded",
+		Reason: "confirmed", ConfigurationRevision: 4,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	applied := linked.Applied
+	if applied == nil || applied.DraftRevision != saved.DraftRevision || applied.ConfigurationRevision != 4 ||
+		applied.AppliedAt.IsZero() || !reflect.DeepEqual(applied.Assignments, saved.Assignments) {
+		t.Fatalf("unexpected applied state: %#v", applied)
+	}
+	// The snapshot is a copy: editing the draft never changes it.
+	linked.Assignments[0].Behavior.Key = "c"
+	if linked.Applied.Assignments[0].Behavior.Key != "b" {
+		t.Fatal("applied state aliases the editable draft")
+	}
+	reopened, err := NewStore(store.Path()).Load()
+	if err != nil || reopened.Profiles[0].Applied == nil || reopened.Profiles[0].Applied.Assignments[0].Behavior.Key != "b" {
+		t.Fatalf("applied state was not persisted: %#v, %v", reopened.Profiles[0].Applied, err)
+	}
+	// Rolled back and unknown outcomes keep the previously applied state.
+	kept, err := store.SetApplyOutcome(saved.ID, saved.DraftRevision, "cfg-1", ApplyOutcome{
+		ID: "op-3", Kind: "apply", State: "rolled_back", ReasonCode: "runtime_rolled_back", Reason: "restored",
+	})
+	if err != nil || kept.Applied == nil || kept.Applied.ConfigurationRevision != 4 {
+		t.Fatalf("a rollback must keep the previous applied state: %#v, %v", kept.Applied, err)
+	}
+	if err := store.ClearConfigurationLink("cfg-1"); err != nil {
+		t.Fatal(err)
+	}
+	cleared, err := NewStore(store.Path()).Load()
+	if err != nil || cleared.Profiles[0].Applied != nil {
+		t.Fatalf("removing the configuration must clear applied state: %#v, %v", cleared.Profiles[0].Applied, err)
 	}
 }
 

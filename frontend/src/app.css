@@ -2138,10 +2138,42 @@ h1 {
 }
 .apply-review-list li {
   background: #edf3e8;
+  border-left: 3px solid #7da26a;
   border-radius: 7px;
   display: grid;
   gap: 2px;
+  grid-template-columns: auto 1fr;
   padding: 8px 10px;
+}
+.apply-review-list li[data-change="changed"] {
+  background: #fcf6e8;
+  border-left-color: #ba9650;
+}
+.apply-review-list li[data-change="removed"] {
+  background: #fbefe9;
+  border-left-color: #c78c59;
+}
+.apply-review-list .change-kind {
+  color: #486453;
+  font-size: 10px;
+  font-weight: 750;
+  grid-row: span 2;
+  letter-spacing: 0.6px;
+  margin-right: 10px;
+  min-width: 58px;
+  text-transform: uppercase;
+}
+.apply-review-list li > strong,
+.apply-review-list li > span:not(.change-kind) {
+  grid-column: 2;
+}
+.apply-review-empty {
+  background: #edf3e8;
+  border-radius: 7px;
+  color: #486453;
+  font-size: 13px;
+  margin: 18px 0;
+  padding: 10px 12px;
 }
 .apply-review-list strong {
   color: #486453;

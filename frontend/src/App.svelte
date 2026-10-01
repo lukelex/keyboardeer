@@ -4,6 +4,7 @@
   import KeyIcon, { keyIconPaths } from "./components/KeyIcon.svelte";
   import KeyPicker, { type KeyPickerGroup } from "./components/KeyPicker.svelte";
   import Menu, { type MenuItem } from "./components/Menu.svelte";
+  import { diffAgainstApplied, type ChangeKind } from "./applyDiff";
   import { formatKMonad } from "./kmonadFormat";
   import {
     applyAssignmentRecovery,
@@ -738,6 +739,21 @@
                     : "";
   let problemsHidden = false;
   $: if (validationState === "valid") problemsHidden = false;
+  $: applyDiff = activeProfile
+    ? diffAgainstApplied(activeProfile.applied, activeProfile)
+    : null;
+  // The manager reports a different active revision than this profile last
+  // applied, so something else changed the mapping in the meantime.
+  $: appliedRevisionDrift =
+    !!activeProfile?.applied?.configuration_revision &&
+    !!linkedConfiguration?.active_revision &&
+    linkedConfiguration.active_revision !==
+      activeProfile.applied.configuration_revision;
+  const changeLabels: Record<ChangeKind, string> = {
+    added: "Added",
+    changed: "Changed",
+    removed: "Removed",
+  };
   $: canApply =
     !!activeProfile &&
     workspaceLive &&
@@ -1422,7 +1438,11 @@
     return humanize(behavior.kind);
   }
   function layerName(id: string | undefined) {
-    return activeProfile?.layers.find((layer) => layer.id === id)?.name ?? id;
+    return (
+      activeProfile?.layers.find((layer) => layer.id === id)?.name ??
+      activeProfile?.applied?.layers.find((layer) => layer.id === id)?.name ??
+      id
+    );
   }
   function behaviorTargetsLayer(
     behavior: ProfileBehavior,
@@ -4408,27 +4428,72 @@
         {#if applyReviewNotice}
           <p class="apply-review-notice" role="alert">{applyReviewNotice}</p>
         {/if}
-        <p class="dialog-intro">
-          The manager will render, validate, persist, and supervise this
-          profile. Nothing changes until you confirm.
-        </p>
-        <ul class="apply-review-list">
-          {#each activeProfile.assignments ?? [] as assignment (`${assignment.layer_id}-${assignment.source_key}`)}
-            <li>
-              <strong
-                >{layerName(assignment.layer_id)} · {assignment.source_key}</strong
-              >
-              <span>{behaviorSummary(assignment.behavior)}</span>
-            </li>
-          {:else}
-            <li>
-              <span
-                >No explicit assignments; the original Base layout will be
-                applied.</span
-              >
-            </li>
-          {/each}
-        </ul>
+        {#if activeProfile.applied}
+          <p class="dialog-intro">
+            Changes since this profile was last applied on {new Date(
+              activeProfile.applied.applied_at,
+            ).toLocaleString()}. Nothing changes on the keyboard until you
+            confirm.
+          </p>
+          {#if appliedRevisionDrift}
+            <p class="apply-review-notice" role="status">
+              The keyboard now runs revision {linkedConfiguration?.active_revision},
+              not revision {activeProfile.applied.configuration_revision} from this
+              profile's last Apply. Applying replaces it with this draft.
+            </p>
+          {/if}
+        {:else}
+          <p class="dialog-intro">
+            This is the first Apply of this profile, so everything below will be
+            sent. Nothing changes on the keyboard until you confirm.
+          </p>
+        {/if}
+        {#if applyDiff && applyDiff.count}
+          <ul class="apply-review-list" aria-label="Changes to apply">
+            {#each applyDiff.layers as change (`layer-${change.id}`)}
+              <li data-change={change.kind}>
+                <span class="change-kind">{changeLabels[change.kind]}</span>
+                <strong>{change.name} layer</strong>
+                {#if change.beforeName}<span
+                    >Renamed from {change.beforeName}</span
+                  >{/if}
+              </li>
+            {/each}
+            {#each applyDiff.declarations as change (`${change.type}-${change.name}`)}
+              <li data-change={change.kind}>
+                <span class="change-kind">{changeLabels[change.kind]}</span>
+                <strong
+                  >{change.type === "alias" ? "Alias @" : "Macro #"}{change.name}</strong
+                >
+              </li>
+            {/each}
+            {#each applyDiff.assignments as change (`${change.layerID}-${change.sourceKey}`)}
+              <li data-change={change.kind}>
+                <span class="change-kind">{changeLabels[change.kind]}</span>
+                <strong
+                  >{layerName(change.layerID)} · {keyName(change.sourceKey)}</strong
+                >
+                <span
+                  >{#if change.kind !== "added"}{describeBehavior(
+                      change.before,
+                      change.sourceKey,
+                      change.layerID,
+                    )}{" → "}{/if}{describeBehavior(
+                    change.after,
+                    change.sourceKey,
+                    change.layerID,
+                  )}</span
+                >
+              </li>
+            {/each}
+          </ul>
+        {:else}
+          <p class="apply-review-empty">
+            {activeProfile.applied
+              ? "No changes since the last Apply. Applying again re-sends the same mapping."
+              : "No explicit assignments; the original Base layout will be applied."}
+          </p>
+        {/if}
         <div class="behavior-form-actions">
           <Button
             variant="secondary"
