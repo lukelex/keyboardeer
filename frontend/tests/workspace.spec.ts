@@ -1,12 +1,16 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import { formatKMonad } from "../src/kmonadFormat";
-import type { ManagerWorkspace, Profile, ProfilePreview } from "../src/desktop";
+import { formatKMonad } from "../src/domain/kmonadFormat";
+import type {
+  ManagerWorkspace,
+  Profile,
+  ProfilePreview,
+} from "../src/platform/desktop";
 import {
   applyAssignmentRecovery,
   assignmentRecovery,
   mapDiagnosticToAssignment,
-} from "../src/validationRecovery";
+} from "../src/domain/validationRecovery";
 
 // Nil Go slices are JSON null, including configured_by on actual unconfigured
 // devices and assignments in freshly created local profiles.

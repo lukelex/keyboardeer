@@ -10,6 +10,9 @@
 - On Arch Linux: `sudo pacman -S --needed gtk3 webkit2gtk-4.1`. The launcher
   detects the 4.1 ABI and selects Wails' matching build tag automatically.
 
+See [frontend-architecture.md](frontend-architecture.md) for how the
+frontend is structured.
+
 The lockfile is authoritative for frontend dependencies. Do not substitute
 manager CLI output, files, or input-device access for the versioned API.
 

@@ -1,48 +1,55 @@
-<script context="module" lang="ts">
-  export type KeyPickerGroup = {
-    heading: string;
-    keys: { source_key: string; name: string }[];
-  };
-</script>
-
 <script lang="ts">
-  import { onDestroy, tick } from "svelte";
+  import { tick } from "svelte";
+  import type { KeyChoiceGroup } from "../domain/keyCatalog";
 
   // Picks one output key from the same grouped catalog as the palette:
   // search by name or KMonad code, or press the key itself.
-  export let id: string;
-  export let value: string;
-  export let groups: KeyPickerGroup[];
-  /** Maps KeyboardEvent.code to a KMonad source key for "Press a key". */
-  export let captureMap: Record<string, string>;
-  export let disabled = false;
+  interface Props {
+    id: string;
+    value: string;
+    groups: KeyChoiceGroup[];
+    /** Maps KeyboardEvent.code to a KMonad source key for "Press a key". */
+    captureMap: Readonly<Record<string, string>>;
+    disabled?: boolean;
+  }
+  let {
+    id,
+    value = $bindable(),
+    groups,
+    captureMap,
+    disabled = false,
+  }: Props = $props();
 
-  let open = false;
-  let query = "";
-  let capturing = false;
-  let captureNotice = "";
-  let active = 0;
-  let search: HTMLInputElement | undefined;
+  let open = $state(false);
+  let query = $state("");
+  let capturing = $state(false);
+  let captureNotice = $state("");
+  let active = $state(0);
+  let search = $state<HTMLInputElement>();
   let trigger: HTMLButtonElement;
-  const listID = `${id}-options`;
+  const listID = $derived(`${id}-options`);
 
-  $: allKeys = groups.flatMap((group) => group.keys);
-  $: selected = allKeys.find((key) => key.source_key === value);
-  $: normalized = query.trim().toLowerCase();
-  $: filteredGroups = groups
-    .map((group) => ({
-      ...group,
-      keys: normalized
-        ? group.keys.filter(
-            (key) =>
-              key.name.toLowerCase().includes(normalized) ||
-              key.source_key.toLowerCase().includes(normalized),
-          )
-        : group.keys,
-    }))
-    .filter((group) => group.keys.length);
-  $: visibleKeys = filteredGroups.flatMap((group) => group.keys);
-  $: if (active >= visibleKeys.length) active = Math.max(0, visibleKeys.length - 1);
+  const allKeys = $derived(groups.flatMap((group) => group.keys));
+  const selected = $derived(allKeys.find((key) => key.source_key === value));
+  const filteredGroups = $derived.by(() => {
+    const normalized = query.trim().toLowerCase();
+    return groups
+      .map((group) => ({
+        ...group,
+        keys: normalized
+          ? group.keys.filter(
+              (key) =>
+                key.name.toLowerCase().includes(normalized) ||
+                key.source_key.toLowerCase().includes(normalized),
+            )
+          : group.keys,
+      }))
+      .filter((group) => group.keys.length);
+  });
+  const visibleKeys = $derived(filteredGroups.flatMap((group) => group.keys));
+  const activeIndex = $derived(
+    Math.min(active, Math.max(0, visibleKeys.length - 1)),
+  );
 
   // The KMonad code is shown only when it differs from the visible name.
   function showCode(key: { source_key: string; name: string }) {
@@ -71,18 +78,18 @@
   }
   function scrollActiveIntoView() {
     document
-      .getElementById(`${id}-option-${active}`)
+      .getElementById(`${id}-option-${activeIndex}`)
       ?.scrollIntoView({ block: "nearest" });
   }
   function handleSearchKeydown(event: KeyboardEvent) {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       const step = event.key === "ArrowDown" ? 1 : -1;
-      active = (active + step + visibleKeys.length) % visibleKeys.length;
+      active = (activeIndex + step + visibleKeys.length) % visibleKeys.length;
       scrollActiveIntoView();
     } else if (event.key === "Enter") {
       event.preventDefault();
-      if (visibleKeys[active]) choose(visibleKeys[active].source_key);
+      if (visibleKeys[activeIndex]) choose(visibleKeys[activeIndex].source_key);
     } else if (event.key === "Escape") {
       // Closes the picker, not the dialog around it.
       event.preventDefault();
@@ -109,7 +116,7 @@
     capturing = false;
     window.removeEventListener("keydown", captureKey, { capture: true });
   }
-  onDestroy(stopCapture);
+  $effect(() => stopCapture);
 </script>
 
 <div class="key-picker">
@@ -122,7 +129,7 @@
     aria-expanded={open}
     data-value={value}
     {disabled}
-    on:click={() => (open ? hide() : void show())}
+    onclick={() => (open ? hide() : void show())}
   >
     <span>{selected?.name ?? "Choose a key"}</span>
     {#if selected && showCode(selected)}<small>{selected.source_key}</small
@@ -141,24 +148,24 @@
           aria-controls={listID}
           aria-expanded="true"
           aria-autocomplete="list"
-          aria-activedescendant={visibleKeys[active]
-            ? `${id}-option-${active}`
+          aria-activedescendant={visibleKeys[activeIndex]
+            ? `${id}-option-${activeIndex}`
             : undefined}
           placeholder="Name or KMonad code"
           autocomplete="off"
           disabled={capturing}
-          on:input={() => (active = 0)}
-          on:keydown={handleSearchKeydown}
+          oninput={() => (active = 0)}
+          onkeydown={handleSearchKeydown}
         />
         {#if capturing}
-          <button class="button secondary" type="button" on:click={stopCapture}
+          <button class="button secondary" type="button" onclick={stopCapture}
             >Cancel</button
           >
         {:else}
           <button
             class="button secondary"
             type="button"
-            on:click={startCapture}
+            onclick={startCapture}
             title="Press the key you want on your keyboard">Press a key</button
           >
         {/if}
@@ -179,14 +186,13 @@
               {@const index = visibleKeys.indexOf(key)}
               <button
                 id={`${id}-option-${index}`}
-                class="key-picker-option"
-                class:active={index === active}
+                class={["key-picker-option", index === activeIndex && "active"]}
                 type="button"
                 role="option"
                 aria-selected={key.source_key === value}
                 tabindex="-1"
-                on:click={() => choose(key.source_key)}
-                on:mousemove={() => (active = index)}
+                onclick={() => choose(key.source_key)}
+                onmousemove={() => (active = index)}
               >
                 <span>{key.name}</span>{#if showCode(key)}<small
                     >{key.source_key}</small

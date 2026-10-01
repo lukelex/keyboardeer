@@ -14,7 +14,7 @@ how it is verified.
 - Layer and palette-category tabs implement the WAI-ARIA tabs pattern: a real
   `role="tablist"` container with `tabindex="-1"`, roving `tabindex` on the
   tabs (`0` on the active tab, `-1` elsewhere), and a shared
-  `handleTabListKeydown` action so `ArrowLeft`/`ArrowRight`/`ArrowUp`/
+  `rovingTabs` action (`actions/tabs.ts`) so `ArrowLeft`/`ArrowRight`/`ArrowUp`/
   `ArrowDown` move focus and activate the next/previous tab (wrapping at the
   ends). Arrow *Up*/*Down* are accepted as horizontal equivalents for
   right-to-left/top-to-bottom preferences.
@@ -23,11 +23,10 @@ how it is verified.
   `ArrowUp` open the menu and move between items, `Home`/`End` jump, `Escape`
   closes and returns focus to the trigger, and `Tab` or a click outside closes
   it. Disabled items stay visible with a hint that explains why.
-- Dialog keyboard support: `manageDialog` moves initial focus to the first
-  focusable element (or `[autofocus]`), traps `Tab`/`Shift+Tab` inside the
-  dialog, and every modal closes on `Escape` via the window-level
-  `handleGlobalKeydown` handler.
-
+- Dialog keyboard support: the `modal` action (`actions/modal.ts`) moves
+  initial focus to the first focusable element (or `[autofocus]`) and traps
+  `Tab`/`Shift+Tab` inside the dialog. Every dialog registers with the
+  `DialogStack`, so `Escape` closes only the topmost one.
 - Destructive or disruptive actions (deleting a profile, removing a mapping
   from the keyboard, disabling bindings, adopting an external configuration,
   resetting a damaged draft file) all ask through one `role="alertdialog"`
@@ -51,7 +50,7 @@ how it is verified.
 
 ### Focus restoration
 
-- `manageDialog` records the opener (the element with focus when the dialog
+- The `modal` action records the opener (the element with focus when the dialog
   mounts), inerts the app background, and restores focus to the opener when
   the dialog closes — including when it is closed with `Escape`.
 

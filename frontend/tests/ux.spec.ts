@@ -1,13 +1,13 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { diffAgainstApplied } from "../src/applyDiff";
+import { diffAgainstApplied } from "../src/domain/applyDiff";
 import type {
   GeometryTemplate,
   ManagerWorkspace,
   Profile,
   ProfilePreview,
   ScanMatch,
-} from "../src/desktop";
+} from "../src/platform/desktop";
 
 // A copy of the verified US ANSI TKL template from internal/geometry, so the
 // layout checks below run against a full-size, six-row physical keyboard.

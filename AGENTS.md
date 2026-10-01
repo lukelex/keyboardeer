@@ -18,6 +18,8 @@
   device discovery/identification, platform input access, validation, apply,
   KMonad supervision, recovery, and runtime diagnostics. The service must keep
   running mappings with the GUI closed.
+- The frontend is layered (platform → domain → state → components →
+  features); see `docs/frontend-architecture.md` before adding code there.
 - Keep the GUI's Go backend thin: manager communication, profile persistence,
   config compilation, import/export, and desktop integration. Do not duplicate
   device access or process supervision, or choose device-specific `defcfg`

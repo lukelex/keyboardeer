@@ -3,7 +3,7 @@ import type {
   Profile,
   ProfileAssignment,
   ProfileBehavior,
-} from "./desktop";
+} from "../platform/desktop";
 
 export type ChangeKind = "added" | "changed" | "removed";
 

@@ -1,4 +1,4 @@
-<script context="module" lang="ts">
+<script lang="ts" module>
   export type MenuItem =
     | { separator: true }
     | {
@@ -15,23 +15,35 @@
 </script>
 
 <script lang="ts">
-  import { tick } from "svelte";
+  import { tick, type Snippet } from "svelte";
 
   // A WAI-ARIA menu button: arrow keys move between items, Escape or Tab
   // closes, and focus returns to the trigger after a choice.
-  export let items: MenuItem[];
-  /** Names the menu. */
-  export let label: string;
-  /** Names an icon-only trigger; text triggers are named by their content. */
-  export let triggerLabel = "";
-  export let triggerClass = "";
-  export let title = "";
-  export let align: "start" | "end" = "start";
+  interface Props {
+    items: MenuItem[];
+    /** Names the menu. */
+    label: string;
+    /** Names an icon-only trigger; text triggers are named by their content. */
+    triggerLabel?: string;
+    triggerClass?: string;
+    title?: string;
+    align?: "start" | "end";
+    children: Snippet;
+  }
+  let {
+    items,
+    label,
+    triggerLabel = "",
+    triggerClass = "",
+    title = "",
+    align = "start",
+    children,
+  }: Props = $props();
 
-  let open = false;
+  let open = $state(false);
   let root: HTMLElement;
   let trigger: HTMLButtonElement;
-  let menu: HTMLElement | undefined;
+  let menu = $state<HTMLElement>();
   const menuID = `menu-${Math.random().toString(36).slice(2, 9)}`;
 
   function enabledItems() {
@@ -93,7 +105,7 @@
   }
 </script>
 
-<svelte:window on:pointerdown={handleWindowPointerdown} />
+<svelte:window onpointerdown={handleWindowPointerdown} />
 
 <div class="menu" bind:this={root}>
   <button
@@ -105,35 +117,33 @@
     aria-controls={menuID}
     aria-label={triggerLabel || undefined}
     title={title || undefined}
-    on:click={() => (open ? hide() : void show())}
-    on:keydown={handleTriggerKeydown}
+    onclick={() => (open ? hide() : void show())}
+    onkeydown={handleTriggerKeydown}
   >
-    <slot />
+    {@render children()}
   </button>
   {#if open}
     <div
       bind:this={menu}
-      class="menu-popover"
-      class:align-end={align === "end"}
+      class={["menu-popover", align === "end" && "align-end"]}
       id={menuID}
       role="menu"
       aria-label={label}
       tabindex="-1"
-      on:keydown={handleMenuKeydown}
+      onkeydown={handleMenuKeydown}
     >
       {#each items as item, index (index)}
         {#if item.separator}
           <div class="menu-separator" role="separator"></div>
         {:else}
           <button
-            class="menu-item"
-            class:danger={item.danger}
+            class={["menu-item", item.danger && "danger"]}
             type="button"
             role={item.checked === undefined ? "menuitem" : "menuitemradio"}
             aria-checked={item.checked}
             disabled={item.disabled}
             tabindex="-1"
-            on:click={() => choose(item)}
+            onclick={() => choose(item)}
           >
             <span class="menu-check" aria-hidden="true"
               >{item.checked ? "✓" : ""}</span

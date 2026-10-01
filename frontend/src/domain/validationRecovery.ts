@@ -3,7 +3,7 @@ import type {
   Profile,
   ProfileBehavior,
   ProfilePreview,
-} from "./desktop";
+} from "../platform/desktop";
 
 export interface MappedAssignmentIssue {
   diagnosticID: string;

@@ -1,5 +1,8 @@
 <script lang="ts">
-  type ButtonVariant =
+  import type { Snippet } from "svelte";
+  import type { HTMLButtonAttributes } from "svelte/elements";
+
+  type Variant =
     | "primary"
     | "danger"
     | "secondary"
@@ -10,16 +13,22 @@
     | "icon"
     | "plain";
 
-  type NativeButtonType = "button" | "submit" | "reset";
+  interface Props extends HTMLButtonAttributes {
+    variant?: Variant;
+    children?: Snippet;
+  }
 
-  export let variant: ButtonVariant = "secondary";
-  export let className = "";
-  // Match the native <button> default so wrapping a submit control preserves
-  // the containing form's existing behavior.
-  export let type: NativeButtonType = "submit";
-  export let disabled = false;
+  // The native default type is "submit", so wrapping a submit control keeps
+  // the containing form's behaviour.
+  let {
+    variant = "secondary",
+    class: extraClass = "",
+    type = "submit",
+    children,
+    ...rest
+  }: Props = $props();
 
-  const variantClasses: Record<ButtonVariant, string> = {
+  const variantClasses: Record<Variant, string> = {
     primary: "button primary",
     danger: "button primary danger-fill",
     secondary: "button secondary",
@@ -30,10 +39,8 @@
     icon: "icon-button",
     plain: "",
   };
-
-  $: classes = [variantClasses[variant], className].filter(Boolean).join(" ");
 </script>
 
-<button class={classes} {type} {disabled} {...$$restProps} on:click>
-  <slot />
+<button class={[variantClasses[variant], extraClass]} {type} {...rest}>
+  {@render children?.()}
 </button>
