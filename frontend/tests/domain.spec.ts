@@ -9,6 +9,7 @@ import {
 import { KeyCatalog } from "../src/domain/keyCatalog";
 import { KeyboardGrid } from "../src/domain/keyboardGrid";
 import { Keymap, editableState } from "../src/domain/keymap";
+import { lintKeymap } from "../src/domain/keymapLint";
 import { recipeUnavailableReason, recipes } from "../src/domain/recipes";
 import type { GeometryTemplate, Profile } from "../src/platform/desktop";
 
@@ -244,4 +245,54 @@ test("Keymap finds every key that sends an output", () => {
     { layerID: "layer-nav", sourceKey: "h", role: "sends" },
     { layerID: "base", sourceKey: "left", role: "unchanged" },
   ]);
+});
+
+test("lintKeymap explains layouts that are valid but likely unintended", () => {
+  // The fixture: Symbols is entered only by switching (via alias → macro)
+  // and has nothing to switch back; Space's layer Navigation is held.
+  const messages = (map: Keymap) => lintKeymap(map).map((item) => item.id);
+  expect(messages(keymap)).toEqual([
+    "no-way-back:layer-sym",
+    "empty:layer-sym",
+  ]);
+
+  const withReturn = new Keymap(
+    keymap.withBehavior("layer-sym", "q", {
+      kind: "switch_layer",
+      target: "base",
+    }),
+    catalog,
+  );
+  expect(messages(withReturn)).toEqual([]);
+
+  // Caps holds Navigation; assigning Caps on Navigation can never be used.
+  const heldKey = new Keymap(
+    keymap.withBehavior("layer-nav", "caps", { kind: "key", key: "a" }),
+    catalog,
+  );
+  expect(messages(heldKey)).toContain("held-key:layer-nav:caps");
+
+  const quick = new Keymap(
+    keymap.withBehavior("base", "z", {
+      kind: "tap_hold",
+      tap: { kind: "key", key: "z" },
+      hold: { kind: "key", key: "lctl" },
+      timeout_ms: 80,
+    }),
+    catalog,
+  );
+  expect(
+    lintKeymap(quick).find((item) => item.id === "timeout:base:z")?.message,
+  ).toBe(
+    "Z switches to its hold action after only 80 ms, so normal typing may trigger it. 150–250 ms is typical.",
+  );
+
+  const unused = new Keymap(
+    {
+      ...keymap.profile,
+      aliases: { ...keymap.profile.aliases, spare: { kind: "key", key: "x" } },
+    },
+    catalog,
+  );
+  expect(messages(unused)).toContain("unused-alias:spare");
 });

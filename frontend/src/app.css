@@ -2870,3 +2870,37 @@ kbd {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.suggestions-panel {
+  background: #f4f6fb;
+  border: 1px solid #d3dbe8;
+  border-left: 4px solid #5a72a0;
+  border-radius: 9px;
+  color: #2e3d58;
+  font-size: 12px;
+  margin: 12px auto 0;
+  max-width: 780px;
+  padding: 7px 13px;
+}
+.suggestions-panel summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+.suggestions-panel ul {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 8px 0 2px;
+  padding: 0;
+}
+.suggestions-panel li {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  line-height: 1.45;
+}
+.suggestions-panel .inline-link {
+  color: #3a5585;
+  flex: 0 0 auto;
+}

@@ -1232,3 +1232,36 @@ test("shows which keys send an output key", async ({ page }) => {
     "h",
   );
 });
+
+test("suggests fixes for layouts the manager would accept", async ({
+  page,
+}) => {
+  await openEditor(page, {
+    profile: {
+      ...profile,
+      layers: [...profile.layers, { id: "layer-sym", name: "Symbols" }],
+      assignments: [
+        ...profile.assignments!,
+        {
+          layer_id: "base",
+          source_key: "ralt",
+          behavior: { kind: "switch_layer", target: "layer-sym" },
+        },
+      ],
+    },
+  });
+  const panel = page.locator(".suggestions-panel");
+  await expect(panel.locator("summary")).toHaveText(
+    "2 suggestions for this draft",
+  );
+  await panel.locator("summary").click();
+  await expect(panel).toContainText(
+    "Symbols can be switched to, but nothing on it switches back.",
+  );
+  await panel.getByRole("button", { name: "Show layer" }).first().click();
+  await expect(
+    page
+      .getByRole("tablist", { name: "Keymap layers" })
+      .getByRole("tab", { name: "Symbols" }),
+  ).toHaveAttribute("aria-selected", "true");
+});

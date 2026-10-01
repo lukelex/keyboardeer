@@ -11,6 +11,7 @@
   import { usesCompactPalette } from "./layout";
   import { PaletteState } from "./paletteState.svelte";
   import ProblemsPanel from "./ProblemsPanel.svelte";
+  import SuggestionsPanel from "./SuggestionsPanel.svelte";
   import { resolveShortcut, type EditorCommand } from "./shortcuts";
 
   const app = useApp();
@@ -144,6 +145,7 @@
         </p>
       {/if}
       <ProblemsPanel />
+      <SuggestionsPanel />
       <KeyboardCanvas {flashingKey} found={foundHere} />
       <ChangesBar />
       <ApplyStatus />
