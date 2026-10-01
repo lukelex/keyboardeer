@@ -98,6 +98,14 @@ test("Keymap describes behaviors and finds layer entries through declarations", 
   expect(keymap.fallsThrough("layer-nav", "j")).toBe(true);
   expect(keymap.capLegend("layer-nav", "z")).toEqual({ text: "z" });
   expect(keymap.capLegend("layer-nav", "h")).toEqual({ text: "left" });
+  // Printed sheets use readable labels instead of KMonad codes.
+  expect(keymap.capLegend("base", "caps", { readable: true })).toEqual({
+    text: "ESC",
+    hold: "Navigation",
+  });
+  expect(keymap.capLegend("base", "pgup", { readable: true })).toEqual({
+    text: "PgUp",
+  });
   expect(keymap.isRemapped("base", "caps")).toBe(true);
   expect(keymap.isRemapped("layer-nav", "j")).toBe(false);
   expect(keymap.isRemapped("base", "z")).toBe(false);

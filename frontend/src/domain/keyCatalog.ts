@@ -214,6 +214,12 @@ export class KeyCatalog {
     );
   }
 
+  /** A short label for an output key, such as "PgUp" or "L Ctrl". */
+  shortLabel(sourceKey: string): string {
+    const key = this.#bySourceKey.get(sourceKey);
+    return key ? this.capLabel(key) : (capLabels[sourceKey] ?? sourceKey);
+  }
+
   /** The short label printed on a palette cap. */
   capLabel(key: PaletteKey): string {
     return capLabels[key.source_key] ?? key.label;

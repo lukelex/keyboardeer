@@ -1278,7 +1278,7 @@ test("shows every layer in a printable overview", async ({ page }) => {
   const navigation = dialog.getByRole("img", { name: "Navigation layer" });
   await expect(navigation.locator(".sheet-key.remapped")).toHaveCount(1);
   await expect(navigation.locator(".sheet-key.remapped strong")).toHaveText(
-    "left",
+    "Left",
   );
   // Printing shows only the cheat sheet.
   await page.emulateMedia({ media: "print" });

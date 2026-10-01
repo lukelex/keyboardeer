@@ -20,7 +20,9 @@
   {#each rows as row}
     <div class="keyboard-sheet-row">
       {#each geometry.keys.filter((key) => key.row === row) as key (key.id)}
-        {@const legend = keymap.capLegend(layerID, key.source_key)}
+        {@const legend = keymap.capLegend(layerID, key.source_key, {
+          readable: true,
+        })}
         <div
           class={[
             "sheet-key",

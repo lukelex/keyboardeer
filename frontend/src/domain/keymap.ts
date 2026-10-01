@@ -119,19 +119,23 @@ export class Keymap {
    * The short legend on an editor keycap; falling-through keys show Base.
    * Tap-hold keys get a second line for the hold action.
    */
-  capLegend(layerID: string, sourceKey: string): CapLegend {
+  capLegend(
+    layerID: string,
+    sourceKey: string,
+    { readable = false }: { readable?: boolean } = {},
+  ): CapLegend {
     const shown = this.fallsThrough(layerID, sourceKey) ? baseLayerID : layerID;
     const behavior = this.behaviorAt(shown, sourceKey);
     if (behavior?.kind === "tap_hold") {
       return {
-        text: this.label(behavior.tap, sourceKey, shown),
+        text: this.label(behavior.tap, sourceKey, shown, readable),
         hold:
           behavior.hold?.kind === "hold_layer"
             ? this.layerName(behavior.hold.target)
-            : this.label(behavior.hold, sourceKey, shown),
+            : this.label(behavior.hold, sourceKey, shown, readable),
       };
     }
-    return { text: this.label(behavior, sourceKey, shown) };
+    return { text: this.label(behavior, sourceKey, shown, readable) };
   }
 
   /** Whether the layer explicitly changes what the key does. */
@@ -140,15 +144,23 @@ export class Keymap {
     return !!behavior && behavior.kind !== "transparent";
   }
 
+  /**
+   * A short legend for a behavior: KMonad codes by default (as on editor
+   * caps), or readable labels such as "PgUp" for printed sheets.
+   */
   label(
     behavior: ProfileBehavior | undefined,
     sourceKey: string,
     layerID: string,
+    readable = false,
   ): string {
-    if (!behavior) return layerID === baseLayerID ? sourceKey : "Pass through";
+    const output = (key: string) =>
+      readable ? this.catalog.shortLabel(key) : key;
+    if (!behavior)
+      return layerID === baseLayerID ? output(sourceKey) : "Pass through";
     switch (behavior.kind) {
       case "key":
-        return behavior.key ?? sourceKey;
+        return output(behavior.key ?? sourceKey);
       case "transparent":
         return "Pass through";
       case "disabled":
