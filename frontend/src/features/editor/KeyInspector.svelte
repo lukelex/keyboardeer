@@ -62,8 +62,8 @@
       </p>
     {:else}
       <p class="key-inspector-hint">
-        Click a key on the keyboard to change it. Pressing a key on your
-        keyboard highlights it here.
+        Click a key, or press it on your keyboard, to change it. Press ? for
+        keyboard shortcuts.
       </p>
     {/if}
   </div>

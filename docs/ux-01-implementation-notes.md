@@ -18,6 +18,14 @@ how it is verified.
   `ArrowDown` move focus and activate the next/previous tab (wrapping at the
   ends). Arrow *Up*/*Down* are accepted as horizontal equivalents for
   right-to-left/top-to-bottom preferences.
+- The editor can be driven from the keyboard
+  (`features/editor/shortcuts.ts`). With no key selected, pressing a physical
+  key selects it; modifiers are selected only when tapped alone, so
+  combinations such as `Shift`+`?` never select them. With a key selected,
+  arrow keys move the selection to the spatial neighbour (`KeyboardGrid`),
+  typing starts a palette search, `Delete`/`Backspace` restores the original
+  and `Escape` deselects. `?` lists the shortcuts. Text fields, `Tab`, and
+  `Space`/`Enter` on a focused button keep their normal meaning.
 - Header menus (the profile switcher and "More profile actions") follow the
   WAI-ARIA menu button pattern in `components/Menu.svelte`: `ArrowDown`/
   `ArrowUp` open the menu and move between items, `Home`/`End` jump, `Escape`

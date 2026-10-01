@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tick } from "svelte";
+  import { KeyboardGrid } from "../../domain/keyboardGrid";
   import { browserCodeToSourceKey } from "../../domain/keys";
   import { useApp } from "../../state/context";
   import ApplyStatus from "./ApplyStatus.svelte";
@@ -7,59 +9,111 @@
   import EditorPalette from "./EditorPalette.svelte";
   import KeyboardCanvas from "./KeyboardCanvas.svelte";
   import { usesCompactPalette } from "./layout";
+  import { PaletteState } from "./paletteState.svelte";
   import ProblemsPanel from "./ProblemsPanel.svelte";
+  import { resolveShortcut, type EditorCommand } from "./shortcuts";
 
   const app = useApp();
   const editor = app.editor;
+  const palette = new PaletteState();
   let viewportHeight = $state(0);
   let flashingKey = $state("");
   let flashTimer: ReturnType<typeof setTimeout> | undefined;
   const compact = $derived(usesCompactPalette(viewportHeight, editor.rows.length));
+  const grid = $derived(editor.geometry ? new KeyboardGrid(editor.geometry) : null);
+  const layoutKeys = $derived(
+    new Set(editor.geometry?.keys.map((key) => key.source_key) ?? []),
+  );
 
-  const typing = (target: EventTarget | null) =>
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLSelectElement ||
-    target instanceof HTMLTextAreaElement;
-
-  // Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, unless a dialog or a text field has focus.
-  function handleHistoryKey(event: KeyboardEvent) {
-    if (!app.dialogs.isEmpty || event.altKey || typing(event.target)) return;
-    const key = event.key.toLowerCase();
-    if (key === "z" && !event.shiftKey) {
-      event.preventDefault();
-      void editor.undo();
-    } else if ((key === "z" && event.shiftKey) || key === "y") {
-      event.preventDefault();
-      void editor.redo();
-    }
-  }
-
-  // Pressing a physical key highlights it on the keyboard.
-  function flashPressedKey(event: KeyboardEvent) {
-    if (
-      editor.sourceKey ||
-      !app.dialogs.isEmpty ||
-      event.repeat ||
-      event.altKey ||
-      typing(event.target)
-    )
-      return;
-    const sourceKey = browserCodeToSourceKey[event.code];
-    if (!sourceKey || !editor.geometry?.keys.some((key) => key.source_key === sourceKey))
-      return;
+  function flash(sourceKey: string) {
     flashingKey = sourceKey;
     clearTimeout(flashTimer);
     flashTimer = setTimeout(() => (flashingKey = ""), 240);
   }
 
+  /** Selects a key and moves focus to it, so the selection is visible. */
+  async function selectAndFocus(sourceKey: string) {
+    editor.select(editor.layerID, sourceKey);
+    flash(sourceKey);
+    await tick();
+    const key = document.querySelector<HTMLElement>(
+      `.editor-key[data-source-key="${CSS.escape(sourceKey)}"]`,
+    );
+    key?.focus({ preventScroll: true });
+    key?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+
+  async function run(command: EditorCommand) {
+    switch (command.kind) {
+      case "undo":
+        return editor.undo();
+      case "redo":
+        return editor.redo();
+      case "help":
+        app.shortcutsOpen = true;
+        return;
+      case "select":
+        return selectAndFocus(command.sourceKey);
+      case "move": {
+        const next = grid?.neighbor(editor.sourceKey, command.direction);
+        if (next) await selectAndFocus(next);
+        return;
+      }
+      case "deselect":
+        editor.sourceKey = "";
+        return;
+      case "restore":
+        return editor.restoreSelected();
+      case "search":
+        palette.startSearch(command.text);
+        await tick();
+        document.getElementById("palette-search")?.focus();
+        return;
+    }
+  }
+
+  const sourceKeyFor = (code: string) => {
+    const sourceKey = browserCodeToSourceKey[code];
+    return sourceKey && layoutKeys.has(sourceKey) ? sourceKey : undefined;
+  };
+
+  // Modifiers are selected only when tapped alone, so Shift+? or Ctrl+Z
+  // never select Shift or Ctrl on the way.
+  const modifierKeys = new Set(["Shift", "Control", "Alt", "Meta"]);
+  let tappedModifier = "";
+
   function handleKeydown(event: KeyboardEvent) {
-    if (event.ctrlKey || event.metaKey) handleHistoryKey(event);
-    else flashPressedKey(event);
+    // A dialog, menu or picker already handled it, or one is open.
+    if (event.defaultPrevented || !app.dialogs.isEmpty) return;
+    if (modifierKeys.has(event.key)) {
+      tappedModifier = editor.sourceKey || event.repeat ? "" : event.code;
+      return;
+    }
+    tappedModifier = "";
+    const command = resolveShortcut(event, {
+      selected: editor.sourceKey,
+      sourceKeyFor,
+    });
+    if (!command) return;
+    event.preventDefault();
+    void run(command);
+  }
+
+  function handleKeyup(event: KeyboardEvent) {
+    const code = tappedModifier;
+    tappedModifier = "";
+    if (code !== event.code || !app.dialogs.isEmpty || editor.sourceKey) return;
+    const sourceKey = sourceKeyFor(code);
+    if (sourceKey) void run({ kind: "select", sourceKey });
   }
   $effect(() => () => clearTimeout(flashTimer));
 </script>
 
-<svelte:window bind:innerHeight={viewportHeight} onkeydown={handleKeydown} />
+<svelte:window
+  bind:innerHeight={viewportHeight}
+  onkeydown={handleKeydown}
+  onkeyup={handleKeyup}
+/>
 
 <section
   class={["editor-page", compact && "compact-palette"]}
@@ -79,7 +133,7 @@
       <ChangesBar />
       <ApplyStatus />
     </div>
-    <EditorPalette {compact} />
+    <EditorPalette {compact} {palette} />
   {:else}
     <div class="editor-scroll-region">
       <section class="manager-notice" data-state="incomplete">

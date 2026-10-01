@@ -56,6 +56,7 @@ export class KeyboarDeer {
   info = $state<AppInfo>({ name: "KeyboarDeer", version: "starting…" });
   firstRunOpen = $state(false);
   profileManagerOpen = $state(false);
+  shortcutsOpen = $state(false);
   /** Height of the editor palette, so toasts never cover keys. */
   paletteHeight = $state(0);
   editorOpen = $derived(

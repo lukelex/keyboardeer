@@ -471,7 +471,7 @@ test("inspects the selected key and edits its existing behavior", async ({
 }) => {
   await openEditor(page);
   const inspector = page.getByRole("group", { name: "Selected key" });
-  await expect(inspector).toContainText("Click a key on the keyboard");
+  await expect(inspector).toContainText("Click a key, or press it");
 
   const caps = page.locator('.editor-key[data-source-key="caps"]');
   await expect(caps).toHaveAttribute(
@@ -1077,4 +1077,63 @@ test("marks remapped keys and the changes not yet applied", async ({
     .getByRole("tab", { name: "Navigation" })
     .click();
   await expect(bar).toContainText("Changes are on Base.");
+});
+
+test("edits from the keyboard: select, move, search, restore", async ({
+  page,
+}) => {
+  await openEditor(page);
+  const inspector = page.getByRole("group", { name: "Selected key" });
+  // With nothing selected, pressing a physical key selects it.
+  await page.keyboard.press("KeyF");
+  const f = page.locator('.editor-key[data-source-key="f"]');
+  await expect(f).toHaveClass(/selected-key/);
+  await expect(f).toBeFocused();
+  await expect(inspector.locator("strong").first()).toHaveText("F");
+  // Arrows move the selection to the neighbouring key.
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator(".selected-key")).toHaveAttribute(
+    "data-source-key",
+    "g",
+  );
+  await page.keyboard.press("ArrowUp");
+  await expect(page.locator(".selected-key")).toHaveAttribute(
+    "data-source-key",
+    "t",
+  );
+  // Typing searches the palette; Enter on a result assigns it.
+  await page.keyboard.press("e");
+  const search = page.getByLabel("Search keys", { exact: true });
+  await expect(search).toBeFocused();
+  await expect(search).toHaveValue("e");
+  await page.keyboard.type("sc");
+  await expect(page.locator(".palette-key")).toHaveCount(1);
+  await page.locator(".palette-key").click();
+  await expect(inspector).toContainText("Sends Esc");
+  // Delete restores, Escape deselects.
+  await page.locator('.editor-key[data-source-key="t"]').focus();
+  await page.keyboard.press("Delete");
+  await expect(inspector).toContainText("Sends T (unchanged)");
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".selected-key")).toHaveCount(0);
+  // "?" lists the shortcuts; Escape closes only that dialog.
+  await page.keyboard.press("Shift+Slash");
+  const dialog = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+  await expect(dialog).toContainText("Select the neighbouring key");
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  // A modifier tapped alone selects it; used in a combination it does not.
+  await page.keyboard.press("ShiftLeft");
+  await expect(page.locator(".selected-key")).toHaveAttribute(
+    "data-source-key",
+    "lsft",
+  );
+  await page.keyboard.press("Escape");
+  // Space and Enter keep activating a focused button.
+  await page.getByRole("button", { name: "Manage", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("dialog", { name: "Manage layers" }),
+  ).toBeVisible();
+  await expect(page.locator(".selected-key")).toHaveCount(0);
 });

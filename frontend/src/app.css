@@ -2740,3 +2740,49 @@ h1 {
 .legacy-discard {
   margin-top: 6px;
 }
+.shortcuts-dialog {
+  max-width: 480px;
+}
+.shortcut-group {
+  margin-top: 16px;
+}
+.shortcut-group h3 {
+  color: #486453;
+  font-size: 12px;
+  margin: 0 0 6px;
+}
+.shortcut-group dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.shortcut-group dl > div {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 150px 1fr;
+}
+.shortcut-group dt {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.shortcut-group dd {
+  color: #3c5544;
+  font-size: 13px;
+  margin: 0;
+}
+kbd {
+  background: #fffefa;
+  border: 1px solid #c7d0c4;
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  color: #18352c;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  min-width: 22px;
+  padding: 1px 6px;
+  text-align: center;
+}

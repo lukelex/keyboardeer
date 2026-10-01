@@ -7,6 +7,7 @@ import {
   tapHoldDefaults,
 } from "../src/domain/actionDefaults";
 import { KeyCatalog } from "../src/domain/keyCatalog";
+import { KeyboardGrid } from "../src/domain/keyboardGrid";
 import { Keymap, editableState } from "../src/domain/keymap";
 import type { GeometryTemplate, Profile } from "../src/platform/desktop";
 
@@ -151,4 +152,16 @@ test("dialog defaults edit the key's behavior or start from its output", () => {
   expect(
     macroDefaults({ keymap, catalog, layerID: "layer-nav", sourceKey: "h" }),
   ).toEqual({ editing: "", name: "", steps: [], nextKey: "left" });
+});
+
+test("KeyboardGrid finds spatial neighbours on the physical layout", () => {
+  const grid = new KeyboardGrid(tkl);
+  expect(grid.neighbor("f", "right")).toBe("g");
+  expect(grid.neighbor("f", "left")).toBe("d");
+  expect(grid.neighbor("f", "up")).toBe("r");
+  expect(grid.neighbor("f", "down")).toBe("v");
+  // Wide keys and gaps resolve to the closest key by position.
+  expect(grid.neighbor("spc", "up")).toBe("b");
+  expect(grid.neighbor("esc", "left")).toBeUndefined();
+  expect(grid.neighbor("unknown", "up")).toBeUndefined();
 });

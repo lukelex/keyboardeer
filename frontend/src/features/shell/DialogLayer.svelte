@@ -10,6 +10,7 @@
   import ManageLayersDialog from "../editor/dialogs/ManageLayersDialog.svelte";
   import ProfilesDialog from "../editor/dialogs/ProfilesDialog.svelte";
   import RenderedConfigurationDialog from "../editor/dialogs/RenderedConfigurationDialog.svelte";
+  import ShortcutsDialog from "../editor/dialogs/ShortcutsDialog.svelte";
   import TapHoldDialog from "../editor/dialogs/TapHoldDialog.svelte";
   import PreferencesDialog from "../preferences/PreferencesDialog.svelte";
 
@@ -29,6 +30,7 @@
 {/if}
 {#if editing && app.profileManagerOpen && app.navigation.device}<ProfilesDialog />{/if}
 {#if editing && editor.apply.reviewOpen}<ApplyReviewDialog />{/if}
+{#if editing && app.shortcutsOpen}<ShortcutsDialog />{/if}
 {#if sources.external}<ExternalSourceDialog />{/if}
 {#if sources.renderedOpen && sources.rendered}<RenderedConfigurationDialog />{/if}
 {#if identify.open && identify.device}<IdentifyDialog />{/if}

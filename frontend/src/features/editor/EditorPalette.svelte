@@ -2,11 +2,13 @@
   import { useApp } from "../../state/context";
   import KeyInspector from "./KeyInspector.svelte";
   import LayerToolbar from "./LayerToolbar.svelte";
+  import type { PaletteState } from "./paletteState.svelte";
   import PaletteKeys from "./PaletteKeys.svelte";
 
   // The bottom panel: what the selected key does, the layer and action
   // toolbar, and the keys that can be assigned.
-  let { compact }: { compact: boolean } = $props();
+  let { compact, palette }: { compact: boolean; palette: PaletteState } =
+    $props();
   const app = useApp();
   let layerHelpOpen = $state(false);
 </script>
@@ -30,5 +32,5 @@
     </section>
   {/if}
   <LayerToolbar bind:helpOpen={layerHelpOpen} />
-  <PaletteKeys {compact} />
+  <PaletteKeys {compact} {palette} />
 </section>

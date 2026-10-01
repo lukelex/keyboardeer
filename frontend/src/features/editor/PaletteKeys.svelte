@@ -3,24 +3,22 @@
   import { rovingTabs } from "../../actions/tabs";
   import Button from "../../components/Button.svelte";
   import KeyIcon from "../../components/KeyIcon.svelte";
-  import {
-    KeyCatalog,
-    paletteCategories,
-    type PaletteCategory,
-  } from "../../domain/keyCatalog";
+  import { KeyCatalog, paletteCategories } from "../../domain/keyCatalog";
   import { keyIconPaths } from "../../domain/keyIcons";
+  import type { PaletteState } from "./paletteState.svelte";
   import { useApp } from "../../state/context";
 
   // Output keys to assign to the selected key. The full palette shows every
   // group with headings; the compact strip shows one category at a time.
-  let { compact }: { compact: boolean } = $props();
+  let { compact, palette }: { compact: boolean; palette: PaletteState } =
+    $props();
   const { editor, library } = useApp();
-  let search = $state("");
-  let category = $state<PaletteCategory>("all");
   const catalog = $derived(editor.catalog);
-  const searching = $derived(!!search.trim());
-  const matches = $derived(catalog.search(search));
-  const shown = $derived(compact ? catalog.inCategory(matches, category) : matches);
+  const searching = $derived(!!palette.search.trim());
+  const matches = $derived(catalog.search(palette.search));
+  const shown = $derived(
+    compact ? catalog.inCategory(matches, palette.category) : matches,
+  );
 </script>
 
 <div class="palette-search">
@@ -28,7 +26,7 @@
   <input
     id="palette-search"
     type="search"
-    bind:value={search}
+    bind:value={palette.search}
     placeholder="Name or KMonad code"
     autocomplete="off"
   />
@@ -44,13 +42,13 @@
   {#each paletteCategories as item (item.id)}
     <Button
       variant="secondary"
-      class={["palette-category", category === item.id && "active"]}
+      class={["palette-category", palette.category === item.id && "active"]}
       role="tab"
       id={`palette-category-${item.id}`}
       aria-controls="palette-category-panel"
-      aria-selected={category === item.id}
-      tabindex={category === item.id ? 0 : -1}
-      onclick={() => (category = item.id)}>{item.label}</Button
+      aria-selected={palette.category === item.id}
+      tabindex={palette.category === item.id ? 0 : -1}
+      onclick={() => (palette.category = item.id)}>{item.label}</Button
     >
   {/each}
 </div>
@@ -58,7 +56,7 @@
   class="palette-buttons"
   id="palette-category-panel"
   role="tabpanel"
-  aria-labelledby={`palette-category-${category}`}
+  aria-labelledby={`palette-category-${palette.category}`}
   use:horizontalWheel={compact}
 >
   {#each shown as key, index (key.source_key)}
@@ -77,7 +75,9 @@
     >
   {:else}
     <p class="palette-empty">
-      {searching ? `No keys match “${search.trim()}”.` : "No keys in this category."}
+      {searching
+        ? `No keys match “${palette.search.trim()}”.`
+        : "No keys in this category."}
     </p>
   {/each}
 </div>

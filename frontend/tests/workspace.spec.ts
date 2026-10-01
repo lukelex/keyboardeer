@@ -395,8 +395,12 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
     ),
   ).toEqual([52, 52, 52, 52, 52]);
   await expect(page.getByText("SELECTED KEY", { exact: true })).toHaveCount(0);
+  // Pressing a physical key selects (and flashes) it; Escape deselects.
   await page.keyboard.press("CapsLock");
   await expect(page.locator(".editor-key").first()).toHaveClass(/flashing-key/);
+  await expect(page.locator(".editor-key").first()).toHaveClass(/selected-key/);
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".selected-key")).toHaveCount(0);
   await page.getByRole("button", { name: "Manage" }).click();
   await expect(
     page.getByRole("heading", { name: "Manage layers" }),
