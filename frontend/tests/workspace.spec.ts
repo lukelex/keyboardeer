@@ -489,7 +489,7 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   await expect(page.locator(".editor-key").first().locator("small")).toHaveText(
     "caps",
   );
-  await page.getByRole("button", { name: "Disable selected key" }).click();
+  await page.getByRole("button", { name: "Disable key" }).click();
   const disabledKey = page.locator(".editor-key").first();
   await expect(disabledKey.locator("small")).toHaveText("No output");
   await expect(disabledKey).toHaveClass(/disabled-key/);
@@ -2177,7 +2177,7 @@ test("switches, renames, duplicates, and deletes profiles per keyboard", async (
   await expect(profileSwitcher).toBeFocused();
 
   await page.locator(".editor-key").first().click();
-  await page.getByRole("button", { name: "Disable selected key" }).click();
+  await page.getByRole("button", { name: "Disable key" }).click();
   await expect(capsBehavior).toHaveText("No output");
 
   await profileSwitcher.click();
@@ -2899,7 +2899,8 @@ test("supports keyboard navigation, dialog focus trapping, and focus restoration
   await expect(selectedKeyContext).toHaveAttribute("aria-atomic", "true");
   await expect(selectedKeyContext.locator("strong")).toHaveText("Select a key");
   await page.locator(".editor-key").first().click();
-  await expect(selectedKeyContext.locator("strong")).toHaveText("caps");
+  await expect(selectedKeyContext.locator("strong")).toHaveText("Caps");
+  await expect(selectedKeyContext).toContainText("Sends Caps Lock (unchanged)");
   await expect(selectedKeyContext.locator("span").first()).toHaveText(
     "Base layer",
   );

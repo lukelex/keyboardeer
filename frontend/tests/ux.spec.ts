@@ -228,7 +228,7 @@ for (const [width, height, compact] of [
     const palette = await page.locator(".key-palette").boundingBox();
     expect(palette!.y + palette!.height).toBeLessThanOrEqual(height + 1);
     await page.locator('[data-source-key="caps"]').click();
-    await page.getByRole("button", { name: "Tap & hold" }).click();
+    await page.getByRole("button", { name: "Tap & hold", exact: true }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
   });
 }
@@ -412,4 +412,56 @@ test("explains that a disconnected keyboard blocks Apply", async ({ page }) => {
     "title",
     "Apply unavailable: the keyboard is disconnected.",
   );
+});
+
+test("inspects the selected key and edits its existing behavior", async ({
+  page,
+}) => {
+  await openEditor(page);
+  const inspector = page.getByRole("group", { name: "Selected key" });
+  await expect(inspector).toContainText("Click a key on the keyboard");
+
+  const caps = page.locator('.editor-key[data-source-key="caps"]');
+  await expect(caps).toHaveAttribute(
+    "title",
+    "CAPS: Tap: Esc · Hold: Left Ctrl · 200 ms",
+  );
+  await caps.click();
+  await expect(inspector).toContainText("Base layer");
+  await expect(inspector).toContainText("Tap: Esc · Hold: Left Ctrl · 200 ms");
+  await inspector.getByRole("button", { name: "Edit tap & hold" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByLabel("Tap", { exact: true })).toHaveValue("esc");
+  await expect(dialog.getByLabel("Held key")).toHaveValue("lctl");
+  await dialog.getByLabel("Tap timeout (milliseconds)").fill("250");
+  await dialog.getByRole("button", { name: "Update tap & hold" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(inspector).toContainText("Tap: Esc · Hold: Left Ctrl · 250 ms");
+
+  // Space holds a layer; the layer dialog opens on its current target.
+  await page.locator('.editor-key[data-source-key="spc"]').click();
+  await expect(inspector).toContainText(
+    "Tap: Space · Hold: Navigation layer · 200 ms",
+  );
+
+  // A plain key on an overlay layer shows what falls through from Base.
+  await page
+    .getByRole("tablist", { name: "Keymap layers" })
+    .getByRole("tab", { name: "Navigation" })
+    .click();
+  await page.locator('.editor-key[data-source-key="a"]').click();
+  await expect(inspector).toContainText("Passes through to the layer below");
+  await expect(inspector).toContainText("Base: Sends A (unchanged)");
+  await expect(
+    inspector.getByRole("button", { name: "Restore original" }),
+  ).toBeDisabled();
+  await page.locator('.editor-key[data-source-key="h"]').click();
+  await expect(inspector).toContainText("Sends Left arrow");
+  await inspector.getByRole("button", { name: "Disable key" }).click();
+  await expect(inspector).toContainText("Sends nothing (disabled)");
+  await expect(
+    inspector.getByRole("button", { name: "Disable key" }),
+  ).toBeDisabled();
+  await inspector.getByRole("button", { name: "Restore original" }).click();
+  await expect(inspector).toContainText("Passes through to the layer below");
 });

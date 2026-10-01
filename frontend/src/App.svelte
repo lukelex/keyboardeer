@@ -79,6 +79,13 @@
   type DraftHistory = { past: EditableState[]; future: EditableState[] };
   type DraftSaveState = "saved" | "saving" | "failed";
   const draftHistoryLimit = 100;
+  const complexActionNames: Record<ComplexAction, string> = {
+    tap_hold: "tap & hold",
+    layer: "layer action",
+    alias: "alias",
+    macro: "macro",
+    layers: "layers",
+  };
   const defaultTapHoldTimeoutMS = 200;
   const compactPaletteHeight = 720;
   // The keyboard always gets its natural height first. Full-palette mode is
@@ -173,6 +180,37 @@
     { label: "Keyboard backlight down", source_key: "bldn" },
     { label: "Eject media", source_key: "eject" },
   ];
+  // Readable names for keys whose geometry or palette label is ambiguous or
+  // terse. Everything else uses its label.
+  const keyNames: Record<string, string> = {
+    esc: "Esc",
+    grv: "Grave `",
+    bspc: "Backspace",
+    tab: "Tab",
+    caps: "Caps Lock",
+    ret: "Enter",
+    spc: "Space",
+    lsft: "Left Shift",
+    rsft: "Right Shift",
+    lctl: "Left Ctrl",
+    rctl: "Right Ctrl",
+    lalt: "Left Alt",
+    ralt: "Right Alt",
+    lmet: "Left Super",
+    rmet: "Right Super",
+    cmp: "Menu",
+    ins: "Insert",
+    del: "Delete",
+    home: "Home",
+    end: "End",
+    pgup: "Page Up",
+    pgdn: "Page Down",
+    left: "Left arrow",
+    rght: "Right arrow",
+    up: "Up arrow",
+    down: "Down arrow",
+    prnt: "Print Screen",
+  };
   const browserCodeToSourceKey: Record<string, string> = {
     Escape: "esc",
     Backquote: "grv",
@@ -278,6 +316,10 @@
   let activePaletteCategory: PaletteCategory = "all";
   let viewportHeight = 0;
   let behaviorDialog: ComplexAction | null = null;
+  // True when the open dialog edits the selected key's existing behavior.
+  let behaviorEditing = false;
+  // The alias or macro being edited; saving redefines it for every key.
+  let editingDeclaration = "";
   let tapKey = "";
   let tapHoldMode: "key" | "layer" = "key";
   let holdKey = "";
@@ -480,6 +522,39 @@
       .filter((assignment) => assignment.layer_id === selectedLayerID)
       .map((assignment) => [assignment.source_key, assignment.behavior]),
   );
+  $: selectedKey = activeGeometry?.keys.find(
+    (key) => key.source_key === selectedSourceKey,
+  );
+  $: selectedBehavior = selectedSourceKey
+    ? selectedLayerBehaviors[selectedSourceKey]
+    : undefined;
+  $: selectedBehaviorText = selectedSourceKey
+    ? describeBehavior(selectedBehavior, selectedSourceKey)
+    : "";
+  // What a non-Base key falls through to when nothing on this layer is set.
+  $: selectedFallthroughText =
+    selectedSourceKey &&
+    selectedLayerID !== "base" &&
+    (!selectedBehavior || selectedBehavior.kind === "transparent")
+      ? describeBehavior(
+          activeProfile?.assignments?.find(
+            (assignment) =>
+              assignment.layer_id === "base" &&
+              assignment.source_key === selectedSourceKey,
+          )?.behavior,
+          selectedSourceKey,
+          "base",
+        )
+      : "";
+  $: selectedEditableKind = (
+    {
+      tap_hold: "tap_hold",
+      hold_layer: "layer",
+      switch_layer: "layer",
+      alias: "alias",
+      macro: "macro",
+    } as Record<string, ComplexAction>
+  )[selectedBehavior?.kind ?? ""];
   $: selectedLayerReferences = activeProfile
     ? layerEntryCount(selectedLayerID)
     : 0;
@@ -1197,6 +1272,70 @@
     if (behavior.kind === "macro") return `Macro ${behavior.target}`;
     return humanize(behavior.kind);
   }
+  function keyName(sourceKey: string | undefined) {
+    if (!sourceKey) return "…";
+    return (
+      keyNames[sourceKey] ??
+      paletteKeyOptions.find((key) => key.source_key === sourceKey)?.label ??
+      sourceKey
+    );
+  }
+  // A complete, untruncated sentence for the key inspector and key tooltips.
+  function describeBehavior(
+    behavior: ProfileBehavior | undefined,
+    sourceKey: string,
+    layerID = selectedLayerID,
+  ): string {
+    if (!behavior) {
+      return layerID === "base"
+        ? `Sends ${keyName(sourceKey)} (unchanged)`
+        : "Passes through to the layer below";
+    }
+    switch (behavior.kind) {
+      case "key":
+        return `Sends ${keyName(behavior.key)}`;
+      case "disabled":
+        return "Sends nothing (disabled)";
+      case "transparent":
+        return "Passes through to the layer below";
+      case "hold_layer":
+        return `Holds the ${layerName(behavior.target)} layer while pressed`;
+      case "switch_layer":
+        return `Switches to the ${layerName(behavior.target)} layer`;
+      case "tap_hold":
+        return `Tap: ${
+          behavior.tap ? describeTapHoldPart(behavior.tap) : "…"
+        } · Hold: ${
+          behavior.hold ? describeTapHoldPart(behavior.hold) : "…"
+        } · ${behavior.timeout_ms ?? defaultTapHoldTimeoutMS} ms`;
+      case "alias": {
+        const target = behavior.target
+          ? activeProfile?.aliases?.[behavior.target]
+          : undefined;
+        return `Alias @${behavior.target}${
+          target ? ` → ${describeBehavior(target, sourceKey, layerID)}` : ""
+        }`;
+      }
+      case "macro": {
+        const steps = behavior.target
+          ? (activeProfile?.macros?.[behavior.target] ?? [])
+          : [];
+        return `Macro #${behavior.target}${
+          steps.length
+            ? `: ${steps.map((step) => keyName(step.key)).join(", ")}`
+            : ""
+        }`;
+      }
+      default:
+        return humanize(behavior.kind);
+    }
+  }
+  function describeTapHoldPart(behavior: ProfileBehavior) {
+    if (behavior.kind === "key") return keyName(behavior.key);
+    if (behavior.kind === "hold_layer")
+      return `${layerName(behavior.target)} layer`;
+    return describeBehavior(behavior, "");
+  }
   function behaviorSummary(behavior: ProfileBehavior) {
     if (behavior.kind === "key") return `Send ${behavior.key}`;
     if (behavior.kind === "disabled") return "Disable key";
@@ -1766,8 +1905,47 @@
     aliasKey ||= fallback;
     macroNextKey ||= fallback;
     tapHoldLayerID = selectedLayerID;
+    tapHoldTimeoutMS = defaultTapHoldTimeoutMS;
     layerTargetID = selectedLayerID;
     layerRename = activeLayer?.name ?? "";
+    editingDeclaration = "";
+    // Opening the dialog for the key's own kind of behavior edits it in place.
+    const current = selectedSourceKey ? behaviorFor(selectedSourceKey) : undefined;
+    if (kind === "tap_hold" && current?.kind === "tap_hold") {
+      if (current.tap?.kind === "key" && current.tap.key) tapKey = current.tap.key;
+      if (current.hold?.kind === "hold_layer" && current.hold.target) {
+        tapHoldMode = "layer";
+        tapHoldLayerID = current.hold.target;
+      } else if (current.hold?.kind === "key" && current.hold.key) {
+        tapHoldMode = "key";
+        holdKey = current.hold.key;
+      }
+      tapHoldTimeoutMS = current.timeout_ms ?? defaultTapHoldTimeoutMS;
+    } else if (
+      kind === "layer" &&
+      (current?.kind === "hold_layer" || current?.kind === "switch_layer") &&
+      current.target
+    ) {
+      layerAction = current.kind;
+      layerTargetID = current.target;
+    } else if (kind === "alias" && current?.kind === "alias" && current.target) {
+      const alias = activeProfile.aliases?.[current.target];
+      editingDeclaration = current.target;
+      aliasName = current.target;
+      if (alias?.kind === "key" && alias.key) aliasKey = alias.key;
+    } else if (kind === "macro" && current?.kind === "macro" && current.target) {
+      editingDeclaration = current.target;
+      macroName = current.target;
+      macroSteps = (activeProfile.macros?.[current.target] ?? [])
+        .map((step) => step.key ?? "")
+        .filter(Boolean);
+    }
+    behaviorEditing =
+      !!current &&
+      ((kind === "tap_hold" && current.kind === "tap_hold") ||
+        (kind === "layer" &&
+          (current.kind === "hold_layer" || current.kind === "switch_layer")) ||
+        !!editingDeclaration);
     behaviorDialog = kind;
   }
   function closeBehaviorDialog() {
@@ -1812,8 +1990,8 @@
       return;
     }
     if (
-      activeProfile.aliases?.[aliasName] ||
-      activeProfile.macros?.[aliasName]
+      aliasName !== editingDeclaration &&
+      (activeProfile.aliases?.[aliasName] || activeProfile.macros?.[aliasName])
     ) {
       feedback = "That alias or macro name is already in use.";
       return;
@@ -1846,8 +2024,8 @@
       return;
     }
     if (
-      activeProfile.aliases?.[macroName] ||
-      activeProfile.macros?.[macroName]
+      macroName !== editingDeclaration &&
+      (activeProfile.aliases?.[macroName] || activeProfile.macros?.[macroName])
     ) {
       feedback = "That alias or macro name is already in use.";
       return;
@@ -3169,7 +3347,10 @@
                       title={selectedLayerBehaviors[key.source_key]?.kind ===
                       "disabled"
                         ? `Disabled on ${activeLayer?.name ?? "current"} layer: this key sends no input and blocks lower layers.`
-                        : undefined}
+                        : `${key.label}: ${describeBehavior(
+                            selectedLayerBehaviors[key.source_key],
+                            key.source_key,
+                          )}`}
                       on:click={() =>
                         (selectedSourceKey =
                           selectedSourceKey === key.source_key
@@ -3282,13 +3463,22 @@
               </p>{/if}
           </div>
           <section class="key-palette" aria-label="Basic key assignments">
-            <div class="palette-toolbar">
+            <div
+              class="key-inspector"
+              class:empty={!selectedSourceKey}
+              aria-label="Selected key"
+              role="group"
+            >
               <div
                 class="selected-key-context"
                 aria-live="polite"
                 aria-atomic="true"
               >
-                <strong>{selectedSourceKey || "Select a key"}</strong>
+                <strong
+                  >{selectedSourceKey
+                    ? (selectedKey?.label ?? selectedSourceKey)
+                    : "Select a key"}</strong
+                >
                 <span
                   >{activeLayer
                     ? `${activeLayer.name} layer`
@@ -3297,7 +3487,65 @@
                 {#if activeLayer && !layerIsReachable(activeLayer.id)}
                   <em>Needs an entry action</em>
                 {/if}
+                {#if selectedSourceKey}
+                  <p class="key-inspector-behavior">
+                    {selectedBehaviorText}{#if selectedFallthroughText}<small
+                        >Base: {selectedFallthroughText}</small
+                      >{/if}
+                  </p>
+                {:else}
+                  <p class="key-inspector-hint">
+                    Click a key on the keyboard to change it. Pressing a key on
+                    your keyboard highlights it here.
+                  </p>
+                {/if}
               </div>
+              {#if selectedSourceKey}
+                <div class="key-inspector-actions">
+                  {#if selectedEditableKind}
+                    <Button
+                      variant="secondary"
+                      type="button"
+                      on:click={() => openBehaviorDialog(selectedEditableKind)}
+                      disabled={profileBusy}
+                      >Edit {complexActionNames[selectedEditableKind]}</Button
+                    >
+                  {/if}
+                  <Button
+                    variant="secondary"
+                    type="button"
+                    on:click={restoreSelectedKey}
+                    disabled={profileBusy || !selectedBehavior}
+                    title={selectedBehavior
+                      ? "Remove this layer's assignment for the key."
+                      : "This key has no assignment on this layer."}
+                    >Restore original</Button
+                  >
+                  <Button
+                    variant="secondary"
+                    type="button"
+                    on:click={() => assignBehavior({ kind: "disabled" })}
+                    disabled={profileBusy ||
+                      selectedBehavior?.kind === "disabled"}
+                    title="Make this key send nothing on this layer."
+                    >Disable key</Button
+                  >
+                  <Button
+                    variant="secondary"
+                    type="button"
+                    on:click={() => assignBehavior({ kind: "transparent" })}
+                    disabled={profileBusy ||
+                      selectedLayerID === "base" ||
+                      selectedBehavior?.kind === "transparent"}
+                    title={selectedLayerID === "base"
+                      ? "The Base layer cannot fall through."
+                      : "Let this key fall through to the layer below."}
+                    >Pass through</Button
+                  >
+                </div>
+              {/if}
+            </div>
+            <div class="palette-toolbar">
               <div
                 class="layer-tabs"
                 role="tablist"
@@ -3442,33 +3690,6 @@
                     : "No keys in this category."}
                 </p>
               {/each}
-              <div class="palette-utility">
-                <Button
-                  variant="secondary"
-                  className="palette-disable"
-                  on:click={() => assignBehavior({ kind: "disabled" })}
-                  disabled={profileBusy || !selectedSourceKey}
-                  >Disable selected key</Button
-                >
-                <Button
-                  variant="secondary"
-                  className="palette-restore"
-                  on:click={restoreSelectedKey}
-                  disabled={profileBusy || !selectedSourceKey}
-                  >Restore original</Button
-                >
-                <Button
-                  variant="secondary"
-                  on:click={() => assignBehavior({ kind: "transparent" })}
-                  disabled={profileBusy ||
-                    !selectedSourceKey ||
-                    selectedLayerID === "base"}
-                  title={selectedLayerID === "base"
-                    ? "The Base layer cannot fall through."
-                    : "Let this key fall through to the lower layer."}
-                  >Pass through</Button
-                >
-              </div>
             </div>
           </section>
         {:else}
@@ -3761,7 +3982,9 @@
                 on:click={closeBehaviorDialog}>Cancel</Button
               >
               <Button variant="primary" disabled={profileBusy} type="submit"
-                >Assign tap &amp; hold</Button
+                >{behaviorEditing
+                  ? "Update tap & hold"
+                  : "Assign tap & hold"}</Button
               >
             </div>
           </form>
@@ -3810,7 +4033,9 @@
                 on:click={closeBehaviorDialog}>Cancel</Button
               >
               <Button variant="primary" disabled={profileBusy} type="submit"
-                >Assign layer action</Button
+                >{behaviorEditing
+                  ? "Update layer action"
+                  : "Assign layer action"}</Button
               >
             </div>
           </form>
@@ -3820,6 +4045,11 @@
             Save a reusable name for a key action, then assign that alias to the
             selected key.
           </p>
+          {#if editingDeclaration}
+            <p class="timing-explanation">
+              Changing the action updates every key that uses @{editingDeclaration}.
+            </p>
+          {/if}
           <form class="behavior-form" on:submit|preventDefault={createAlias}>
             <label for="alias-name">Alias name</label>
             <input
@@ -3843,7 +4073,9 @@
                 on:click={closeBehaviorDialog}>Cancel</Button
               >
               <Button variant="primary" disabled={profileBusy} type="submit"
-                >Create and assign alias</Button
+                >{editingDeclaration && aliasName === editingDeclaration
+                  ? "Update alias"
+                  : "Create and assign alias"}</Button
               >
             </div>
           </form>
@@ -3853,6 +4085,11 @@
             Build an ordered sequence of key presses. It will be saved as a
             named macro and assigned to the selected key.
           </p>
+          {#if editingDeclaration}
+            <p class="timing-explanation">
+              Changing the steps updates every key that uses #{editingDeclaration}.
+            </p>
+          {/if}
           <form class="behavior-form" on:submit|preventDefault={createMacro}>
             <label for="macro-name">Macro name</label>
             <input
@@ -3899,7 +4136,10 @@
               <Button
                 variant="primary"
                 disabled={profileBusy || !macroSteps.length}
-                type="submit">Create and assign macro</Button
+                type="submit"
+                >{editingDeclaration && macroName === editingDeclaration
+                  ? "Update macro"
+                  : "Create and assign macro"}</Button
               >
             </div>
           </form>

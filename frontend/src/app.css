@@ -1518,15 +1518,61 @@ h1 {
   gap: 8px 14px;
   margin-bottom: 11px;
 }
+.key-inspector {
+  align-items: center;
+  border-bottom: 1px solid #e1e8dc;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-bottom: 9px;
+  min-height: 38px;
+  padding-bottom: 8px;
+}
+.key-inspector-actions {
+  margin-left: auto;
+}
+.key-inspector-actions .button {
+  min-height: 28px;
+  padding: 4px 9px;
+}
 .selected-key-context {
   align-items: baseline;
   display: flex;
-  gap: 6px;
-  white-space: nowrap;
+  flex: 1 1 320px;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  min-width: 0;
 }
 .selected-key-context strong {
-  color: #315541;
+  background: #e6eee0;
+  border: 1px solid #c7d6c0;
+  border-radius: 6px;
+  color: #234438;
   font-size: 12px;
+  padding: 2px 7px;
+}
+.key-inspector.empty .selected-key-context strong {
+  background: transparent;
+  border-color: transparent;
+  padding: 2px 0;
+}
+.key-inspector-behavior,
+.key-inspector-hint {
+  font-size: 13px;
+  margin: 0;
+}
+.key-inspector-behavior {
+  color: #18352c;
+  font-weight: 650;
+}
+.key-inspector-behavior small {
+  color: #59675d;
+  font-size: 12px;
+  font-weight: 500;
+  margin-left: 8px;
+}
+.key-inspector-hint {
+  color: #59675d;
 }
 .selected-key-context span {
   color: #73846b;
@@ -1540,15 +1586,11 @@ h1 {
 }
 .layer-tabs,
 .complex-actions,
-.palette-utility {
+.key-inspector-actions {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-}
-.layer-tabs {
-  border-left: 1px solid #dfe5d6;
-  padding-left: 12px;
 }
 .layer-tab,
 .complex-actions .button {
@@ -1640,11 +1682,6 @@ h1 {
   font-weight: 500;
   line-height: 1;
 }
-.palette-utility {
-  grid-column: 1 / -1;
-  justify-self: end;
-  margin-top: 4px;
-}
 .editor-page.compact-palette .key-palette {
   max-height: none;
   min-width: 0;
@@ -1692,13 +1729,6 @@ h1 {
 }
 .editor-page.compact-palette .palette-buttons .palette-key {
   flex: 0 0 52px;
-}
-.editor-page.compact-palette .palette-buttons .palette-utility {
-  flex: 0 0 auto;
-  grid-column: auto;
-  justify-self: auto;
-  margin: 0 0 0 6px;
-  white-space: nowrap;
 }
 .editor-page.compact-palette .palette-group-heading {
   display: none;
