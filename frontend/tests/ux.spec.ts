@@ -176,6 +176,20 @@ async function openWorkspace(page: Page, fixture: Partial<Fixture> = {}) {
                 }
               : {}),
             ExportProfile: async () => {},
+            IdentifyStart: async () => ({
+              id: "identify-1",
+              kind: "identify",
+              state: "waiting",
+              reason_code: "operation_waiting",
+              reason: "Waiting for a keypress.",
+            }),
+            IdentifyOperation: async () => ({
+              id: "identify-1",
+              kind: "identify",
+              state: "succeeded",
+              reason_code: "operation_succeeded",
+              reason: "A key press arrived from the selected keyboard.",
+            }),
             SaveProfile: async (value) => {
               draft = { ...value, draft_revision: value.draft_revision + 1 };
               return draft;
@@ -205,7 +219,11 @@ async function openWorkspace(page: Page, fixture: Partial<Fixture> = {}) {
     },
   );
   await page.goto("/");
-  await expect(page.getByText("Manager ready", { exact: true })).toBeVisible();
+  // The first load from the shared Vite dev server can be slow while many
+  // workers start at once.
+  await expect(page.getByText("Manager ready", { exact: true })).toBeVisible({
+    timeout: 20_000,
+  });
 }
 
 async function openEditor(page: Page, fixture: Partial<Fixture> = {}) {
@@ -983,4 +1001,37 @@ test("reports the last Apply plainly and keeps internals in a disclosure", async
   await expect(outcome.locator("p").first()).toContainText(
     "Edits made since then are not applied yet.",
   );
+});
+
+test("finishes identification with a way to configure the keyboard", async ({
+  page,
+}) => {
+  await openWorkspace(page);
+  await page.getByRole("button", { name: "Identify", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: /^Start/ }).click();
+  await expect(
+    dialog.getByRole("heading", { name: "Found it!" }),
+  ).toBeVisible();
+  await expect(dialog.locator(".operation-status")).toHaveText(
+    "Key press detected",
+  );
+  await dialog.getByRole("button", { name: "Edit draft" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator(".editor-key")).toHaveCount(tkl.keys.length);
+});
+
+test("keeps header controls compact and the version in About", async ({
+  page,
+}) => {
+  await openEditor(page);
+  for (const name of ["Undo", "Redo"]) {
+    const icon = page.getByRole("button", { name, exact: true }).locator("svg");
+    await expect(icon).toHaveCSS("width", "18px");
+  }
+  const preferences = page.getByRole("button", { name: "Preferences" });
+  await expect(preferences).toHaveCSS("border-top-style", "none");
+  await expect(page.getByText("test", { exact: true })).toHaveCount(0);
+  await preferences.click();
+  await expect(page.getByRole("dialog")).toContainText("Version test");
 });

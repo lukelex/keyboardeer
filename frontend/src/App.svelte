@@ -536,6 +536,8 @@
     !!workspace.snapshot &&
     (workspaceLive || workspace.stale);
   $: canIdentify = workspaceLive && deviceIdentification.available;
+  // `operation` only ever tracks an identification session.
+  $: identifyFound = operation?.state === "succeeded";
   $: devices = workspace.snapshot?.devices ?? [];
   // Device roles are manager-owned semantics. Keep an absent role visible for
   // compatibility with older managers, but never configure an explicit
@@ -2833,8 +2835,8 @@
     </div>
     <div class="header-actions">
       <Button
-        variant="secondary"
-        className="preferences-button on-dark"
+        variant="icon"
+        className="preferences-button"
         aria-label="Preferences"
         title="Preferences"
         on:click={() => {
@@ -2870,7 +2872,6 @@
             <h1 id="keyboards-title">Make yourself at home.</h1>
             <p>Your keyboards, ready for a little personal touch.</p>
           </div>
-          <span class="build-label">{info.version}</span>
         </div>
 
         {#if workspace.stale}
@@ -3508,7 +3509,7 @@
               on:click={undoEdit}
               disabled={!canUndo}
               aria-label="Undo"
-              title="Undo (Ctrl+Z)">↶</Button
+              title="Undo (Ctrl+Z)"><svg class="history-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></svg></Button
             >
             <Button
               variant="secondary"
@@ -3517,7 +3518,7 @@
               on:click={redoEdit}
               disabled={!canRedo}
               aria-label="Redo"
-              title="Redo (Ctrl+Shift+Z)">↷</Button
+              title="Redo (Ctrl+Shift+Z)"><svg class="history-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5" /><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" /></svg></Button
             >
           </div>
           <span
@@ -4128,6 +4129,7 @@
         </div>
         <section class="preference-about" aria-labelledby="about-title">
           <h3 id="about-title">About KeyboarDeer</h3>
+          <p class="preference-version">Version {info.version}</p>
           <p>
             KeyboarDeer edits your keyboard profiles; they are the source of
             truth, and the KMonad configuration is generated from them. The
@@ -4862,19 +4864,29 @@
           <h2 id="identify-title">Is this the one?</h2>
         </div>
         <article class="identify-card">
-          <div class="identify-art" aria-hidden="true">
+          <div
+            class="identify-art"
+            class:found={identifyFound}
+            aria-hidden="true"
+          >
             <div class="orbit first"></div>
             <div class="orbit second"></div>
-            <span>⌨</span>
+            <span>{identifyFound ? "✓" : "⌨"}</span>
           </div>
           <div class="identify-copy">
             <p class="eyebrow">{selectedDevice.display_name}</p>
             <h2>
-              {operation ? humanize(operation.state) : "Ready when you are."}
+              {identifyFound
+                ? "Found it!"
+                : operation
+                  ? humanize(operation.state)
+                  : "Ready when you are."}
             </h2>
             <p>
-              {operation?.reason ??
-                `Start, then press any key on this keyboard within ${identifyTimeoutMS / 1000} seconds. Only this keyboard's mapping pauses briefly.`}
+              {identifyFound
+                ? `That key press came from ${selectedDevice.display_name || "this keyboard"}.`
+                : (operation?.reason ??
+                  `Start, then press any key on this keyboard within ${identifyTimeoutMS / 1000} seconds. Only this keyboard's mapping pauses briefly.`)}
             </p>
             <div class="operation-status">
               <i></i><span>{identifyStatusText(operation)}</span>
@@ -4885,6 +4897,7 @@
                 <small>{operation.reason_code} · operation {operation.id}</small>
               </details>
             {/if}
+{#if !identifyFound}
             <div class="identify-timing">
               <label for="identify-timeout">Session length</label>
               <select
@@ -4902,9 +4915,24 @@
                 >
               {/if}
             </div>
+{/if}
             <div class="identify-actions">
+              {#if identifyFound}
+                <Button
+                  variant="primary"
+                  type="button"
+                  on:click={() => {
+                    const device = selectedDevice;
+                    closeIdentify();
+                    if (device) openDraft(device);
+                  }}
+                  >{profileForDevice(selectedDevice)
+                    ? "Edit draft"
+                    : "Set up this keyboard"}</Button
+                >
+              {/if}
               <Button
-                variant="primary"
+                variant={identifyFound ? "text" : "primary"}
                 on:click={startIdentify}
                 disabled={!canIdentify ||
                   identifyBusy ||

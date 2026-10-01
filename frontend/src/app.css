@@ -107,29 +107,26 @@ button:focus-visible {
   height: 7px;
   width: 7px;
 }
-.preferences-button {
+.app-header .preferences-button {
   align-items: center;
-  background: transparent;
-  border-color: transparent;
+  border-radius: 8px;
   color: #eaf1dd;
   display: inline-flex;
+  height: 38px;
   justify-content: center;
-  min-height: 42px;
-  padding: 8px;
-  width: 42px;
+  width: 38px;
 }
-.preferences-button:hover:not(:disabled) {
+.app-header .preferences-button:hover {
   background: rgb(255 255 255 / 9%);
-  border-color: transparent;
 }
 .preferences-button svg {
   fill: none;
-  height: 25px;
+  height: 22px;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.6;
-  width: 25px;
+  width: 22px;
 }
 .connection-status.ready i {
   background: #8fbd79;
@@ -159,8 +156,6 @@ button:focus-visible {
 .button.primary.danger-fill:hover:not(:disabled) {
   background: #8a3b24;
 }
-/* Secondary buttons sit on light surfaces everywhere except the dark app
-   header, which uses .on-dark. */
 .button.secondary {
   background: #fffefa;
   border-color: #829686;
@@ -180,14 +175,6 @@ button:focus-visible {
 .button.secondary.danger:hover:not(:disabled) {
   background: #fbefe9;
   border-color: #a1462f;
-}
-.button.secondary.on-dark {
-  background: transparent;
-  border-color: #a8bb9c;
-  color: #eaf1dd;
-}
-.button.secondary.on-dark:hover:not(:disabled) {
-  background: rgb(255 255 255 / 9%);
 }
 .button.text {
   background: transparent;
@@ -1018,10 +1005,20 @@ h1 {
   gap: 4px;
 }
 .history-button {
-  font-size: 15px;
-  line-height: 1;
-  min-height: 30px;
-  padding: 4px 9px;
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 32px;
+  padding: 4px 8px;
+}
+.history-icon {
+  fill: none;
+  height: 18px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  width: 18px;
 }
 .configuration-indicator {
   align-items: center;
@@ -1154,6 +1151,10 @@ h1 {
   place-items: center;
   position: relative;
 }
+.identify-art.found {
+  background: #d9ecd1;
+  color: #2f8a4b;
+}
 .identify-art span {
   position: relative;
   z-index: 1;
@@ -1237,6 +1238,9 @@ h1 {
 }
 .identify-actions .primary {
   min-width: 166px;
+}
+.identify-actions .button {
+  white-space: nowrap;
 }
 .inline-feedback {
   color: #9a5545;
@@ -2470,6 +2474,11 @@ h1 {
   border-top: 1px solid #dfe5d6;
   margin-top: 18px;
   padding-top: 14px;
+}
+.preference-about .preference-version {
+  color: #59675d;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
 }
 .preference-about h3 {
   font-size: 13px;
