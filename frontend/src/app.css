@@ -34,9 +34,6 @@ button:focus-visible {
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
 }
-.editor-mode footer {
-  display: none;
-}
 .editor-mode .app-header {
   min-height: 54px;
   padding: 7px clamp(22px, 6vw, 88px);
@@ -2441,12 +2438,48 @@ h1 {
 }
 .apply-status {
   border-top: 1px solid #dfe5d6;
-  color: #79684a;
+  color: #59675d;
   font-size: 12px;
   line-height: 1.45;
-  margin: 24px 0 0;
-  max-width: 580px;
-  padding-top: 16px;
+  margin: 20px auto 0;
+  max-width: 780px;
+  padding-top: 12px;
+}
+.apply-status strong {
+  color: #234438;
+}
+.technical-details {
+  font-size: 11px;
+  margin-top: 6px;
+}
+.technical-details summary {
+  color: #56745e;
+  cursor: pointer;
+  font-weight: 650;
+  width: max-content;
+}
+.technical-details p,
+.technical-details small {
+  color: #59675d;
+  display: block;
+  font-size: 11px;
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+.preference-about {
+  border-top: 1px solid #dfe5d6;
+  margin-top: 18px;
+  padding-top: 14px;
+}
+.preference-about h3 {
+  font-size: 13px;
+  margin: 0;
+}
+.preference-about p {
+  color: #566e5c;
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 6px 0 0;
 }
 .toast-region {
   bottom: 18px;
@@ -2509,14 +2542,6 @@ h1 {
   line-height: 1.45;
   margin: 10px 0 0;
   padding: 8px 11px;
-}
-footer {
-  border-top: 1px solid #e0e5d8;
-  color: #778478;
-  font-size: 11px;
-  line-height: 1.55;
-  padding: 19px clamp(22px, 6vw, 88px);
-  text-align: center;
 }
 @media (max-width: 960px) {
   .editor-title > span {

@@ -943,3 +943,44 @@ test("asks for a layout when detection is unavailable", async ({ page }) => {
   await page.getByLabel("Physical layout").selectOption(sixtyPercent.id);
   await expect(create).toBeEnabled();
 });
+
+test("reports the last Apply plainly and keeps internals in a disclosure", async ({
+  page,
+}) => {
+  await openEditor(page, {
+    profile: {
+      ...profile,
+      last_apply_operation: {
+        id: "op-9",
+        kind: "apply",
+        state: "succeeded",
+        reason_code: "operation_succeeded",
+        reason: "configuration persisted and activation confirmed",
+        configuration_revision: 7,
+      },
+      applied: {
+        draft_revision: 3,
+        configuration_revision: 7,
+        applied_at: "2026-09-30T09:00:00Z",
+        layers: profile.layers,
+        assignments: profile.assignments,
+      },
+    },
+  });
+  const outcome = page.locator(".apply-outcome");
+  await expect(outcome.locator("p").first()).toHaveText(
+    "Applied to the keyboard. The manager confirmed the new mapping is running.",
+  );
+  const details = outcome.getByText("Manager-reported active revision", {
+    exact: false,
+  });
+  await expect(details).toBeHidden();
+  await outcome.getByText("Technical details").click();
+  await expect(details).toBeVisible();
+
+  await page.locator('.editor-key[data-source-key="f"]').click();
+  await page.getByRole("button", { name: "Disable key" }).click();
+  await expect(outcome.locator("p").first()).toContainText(
+    "Edits made since then are not applied yet.",
+  );
+});

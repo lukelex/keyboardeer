@@ -1008,6 +1008,20 @@
     event.preventDefault();
     palette.scrollLeft += event.deltaY;
   }
+  function identifyStatusText(operation: Operation | null) {
+    if (!operation) return "Not started";
+    return (
+      {
+        queued: "Starting…",
+        running: "Waiting for a key press",
+        waiting: "Waiting for a key press",
+        succeeded: "Key press detected",
+        cancelled: "Cancelled",
+        failed: "Did not finish",
+        rejected: "The manager could not start identification",
+      }[operation.state] ?? humanize(operation.state)
+    );
+  }
   function terminal(state: string) {
     return [
       "succeeded",
@@ -2508,17 +2522,28 @@
     reason_code: "",
     reason: "",
   };
+  function applyOutcomeTitle(operation: Operation) {
+    return (
+      {
+        succeeded: "Applied to the keyboard.",
+        rejected: "Apply rejected.",
+        rolled_back: "Apply rolled back.",
+        failed: "Apply failed.",
+        running: "Applying…",
+        queued: "Applying…",
+        cancelled: "Apply cancelled.",
+        unknown: "Apply outcome unknown.",
+      }[operation.state] ?? `Apply ${humanize(operation.state).toLowerCase()}.`
+    );
+  }
   function applyOutcomeDetail(operation: Operation) {
-    const revision = operation.configuration_revision
-      ? ` for configuration revision ${operation.configuration_revision}`
-      : "";
     switch (operation.state) {
       case "succeeded":
-        return `The manager confirmed activation${revision}.`;
+        return "The manager confirmed the new mapping is running.";
       case "rejected":
         return "The manager rejected this apply. Nothing on the keyboard changed.";
       case "rolled_back":
-        return "The new mapping could not start, so the manager restored the previous mapping. See the active revision below.";
+        return "The new mapping could not start, so the manager restored the previous mapping.";
       case "failed":
         return operation.reason_code === "runtime_rollback_failed"
           ? "The new mapping could not start and the previous one could not be restored. Check the keyboard card for its current state."
@@ -2527,7 +2552,7 @@
       case "queued":
         return "The manager is applying this profile. It keeps going even if you close KeyboarDeer.";
       case "cancelled":
-        return "The manager cancelled this apply. Check the active revision below for the mapping that remains.";
+        return "The manager cancelled this apply; the previous mapping remains.";
       default:
         return "";
     }
@@ -2902,12 +2927,17 @@
               </h2>
               <p>{workspace.status.message}</p>
               <p class="notice-guidance">{managerGuidance(workspace.status)}</p>
-              {#if workspace.status.capability}<small
-                  >Required capability: {workspace.status.capability}</small
-                >{/if}
-              {#if workspace.status.endpoint}<small
-                  >Socket: {workspace.status.endpoint}</small
-                >{/if}
+              {#if workspace.status.capability || workspace.status.endpoint}
+                <details class="technical-details">
+                  <summary>Technical details</summary>
+                  {#if workspace.status.capability}<small
+                      >Required capability: {workspace.status.capability}</small
+                    >{/if}
+                  {#if workspace.status.endpoint}<small
+                      >Socket: {workspace.status.endpoint}</small
+                    >{/if}
+                </details>
+              {/if}
             </div>
           </section>
         {:else if !deviceDiscovery.available}
@@ -2936,7 +2966,8 @@
               <p>
                 Choose a keyboard, confirm its verified physical layout, then
                 edit a draft. Nothing changes on the keyboard until you review
-                and apply it.
+                and apply it. Applied mappings are run by the keyboard manager
+                service, so they keep working when KeyboarDeer is closed.
               </p>
               <ol>
                 <li>Choose a connected keyboard.</li>
@@ -3271,11 +3302,9 @@
                <span class="build-label">MANAGER-OWNED</span>
             </div>
             <p>
-               These mappings are currently owned outside KeyboarDeer. Runtime
-               details come from the manager. If the manager confirms that a
-               configuration can be represented without loss, you may adopt it
-               for managed lifecycle control; adoption does not visually import
-               arbitrary KMonad syntax.
+              The manager runs these from KMonad files you maintain yourself.
+              You can view their source, and adopt one when the manager can
+              represent it without loss.
             </p>
             <div class="external-configuration-list">
               {#each configurations.filter((configuration) => configuration.ownership === "external") as configuration (configuration.id)}
@@ -3320,10 +3349,6 @@
             </div>
           </section>
         {/if}
-        <p class="boundary-note">
-          KeyboarDeer does not inspect input devices or supervise mappings. The
-          manager owns those responsibilities.
-        </p>
       </section>
     {:else if view === "setup" && selectedDevice}
       <section class="setup-page" aria-labelledby="setup-title">
@@ -3551,21 +3576,20 @@
                   {#if currentPreview.validation.outcome === "rejected"}
                     {#if mappedPreviewIssues.length === 0}
                       <p>
-                        No keyboard mapping has been applied. No exact manager
-                        location matched one assignment, so KeyboarDeer will not
-                        guess a key or offer a targeted revert.
+                        Nothing was applied. The manager did not point to a
+                        specific key, so check the problem described below.
                       </p>
                     {:else}
                       <p>
-                        No keyboard mapping has been applied. The exact manager
-                        locations below are mapped to this draft only.
+                        Nothing was applied. The keys involved are marked on the
+                        keyboard; show or revert each one below.
                       </p>
                     {/if}
                   {:else if currentPreview.validation.outcome === "blocked"}
                     <p>
-                      This is an environmental blockage, not an invalid key
-                      assignment. Editing remains available while the manager or
-                      keyboard recovers.
+                      This is not a problem with your keys: the manager or
+                      keyboard could not check the draft. You can keep editing
+                      while it recovers.
                     </p>
                   {/if}
                   {#if currentPreview.validation.diagnostics?.length}
@@ -3716,21 +3740,32 @@
                 role="status"
               >
                 <p>
-                  Manager Apply: {humanize(shownApplyOperation.state)} —
-                  {shownApplyOperation.reason}
+                  <strong>{applyOutcomeTitle(shownApplyOperation)}</strong>
+                  {applyOutcomeDetail(shownApplyOperation)}
+                  {#if shownApplyOperation.state === "succeeded" && activeProfile.applied && applyDiff?.count}
+                    Edits made since then are not applied yet.
+                  {/if}
                 </p>
-                {#if applyOutcomeDetail(shownApplyOperation)}<p>
-                    {applyOutcomeDetail(shownApplyOperation)}
-                  </p>{/if}
+                <details class="technical-details">
+                  <summary>Technical details</summary>
+                  <p>
+                    Manager Apply: {humanize(shownApplyOperation.state)} —
+                    {shownApplyOperation.reason}
+                  </p>
+                  {#if linkedConfiguration}
+                    <p class="active-revision">
+                      Manager-reported active revision:
+                      {linkedConfiguration.active_revision || "none"} · desired
+                      revision
+                      {linkedConfiguration.desired_revision} · runtime:
+                      {runtimeHealthLabel(linkedConfiguration).toLowerCase()}.
+                    </p>
+                  {/if}
+                  {#if shownApplyOperation.id}<p>
+                      Operation {shownApplyOperation.id}
+                    </p>{/if}
+                </details>
               </div>
-            {/if}
-            {#if linkedConfiguration}
-              <p class="apply-status active-revision">
-                Manager-reported active revision:
-                {linkedConfiguration.active_revision || "none"} · desired revision
-                {linkedConfiguration.desired_revision} · runtime:
-                {runtimeHealthLabel(linkedConfiguration).toLowerCase()}.
-              </p>
             {/if}
           </div>
           <section
@@ -4091,6 +4126,16 @@
             interact with Git.</span
           >
         </div>
+        <section class="preference-about" aria-labelledby="about-title">
+          <h3 id="about-title">About KeyboarDeer</h3>
+          <p>
+            KeyboarDeer edits your keyboard profiles; they are the source of
+            truth, and the KMonad configuration is generated from them. The
+            separate kmonad-device-manager service finds keyboards, checks and
+            applies configurations, and keeps them running, even when this app
+            is closed.
+          </p>
+        </section>
         {#if preferencesNotice}<p class="preference-error" role="alert">
             {preferencesNotice}
           </p>{/if}
@@ -4519,10 +4564,8 @@
         </p>
         <h2 id="profiles-title">Profiles</h2>
         <p class="dialog-intro">
-          Each profile is a separate draft for this keyboard. Switching saves
-          nothing extra and applies nothing; use Apply to send a profile to the
-          keyboard. Import and export share portable behavior data, not runnable
-          device-specific .kbd files.
+          Each profile is a separate set of changes for this keyboard. Switching
+          profiles applies nothing; use Apply to send one to the keyboard.
         </p>
         <ul class="profile-list" aria-label="Profiles for this keyboard">
           {#each profilesForDevice(selectedDevice.id) as candidate (candidate.id)}
@@ -4831,13 +4874,17 @@
             </h2>
             <p>
               {operation?.reason ??
-                "Start a 15-second manager session, then press any key on this keyboard. Only the selected mapping may briefly pause."}
+                `Start, then press any key on this keyboard within ${identifyTimeoutMS / 1000} seconds. Only this keyboard's mapping pauses briefly.`}
             </p>
             <div class="operation-status">
-              <i></i><span
-                >{operation ? operation.reason_code : "Not started"}</span
-              >{#if operation}<small>Operation {operation.id}</small>{/if}
+              <i></i><span>{identifyStatusText(operation)}</span>
             </div>
+            {#if operation}
+              <details class="technical-details">
+                <summary>Technical details</summary>
+                <small>{operation.reason_code} · operation {operation.id}</small>
+              </details>
+            {/if}
             <div class="identify-timing">
               <label for="identify-timeout">Session length</label>
               <select
@@ -4953,8 +5000,4 @@
       {/each}
     </div>
   </div>
-  <footer>
-    Drafts remain your source of truth; the manager owns generated runtime
-    configurations.
-  </footer>
 </div>

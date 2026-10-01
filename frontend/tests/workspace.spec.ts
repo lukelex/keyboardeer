@@ -642,11 +642,12 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
     .getByRole("dialog")
     .getByRole("button", { name: "Apply to keyboard" })
     .click();
-  await expect(
-    page.getByText(
-      "Manager Apply: Succeeded — configuration persisted and activation confirmed",
-    ),
-  ).toBeVisible();
+  await expect(page.locator(".apply-outcome")).toContainText(
+    "Applied to the keyboard.",
+  );
+  await expect(page.locator(".apply-outcome")).toContainText(
+    "Manager Apply: Succeeded — configuration persisted and activation confirmed",
+  );
   await page.getByRole("button", { name: "More profile actions" }).click();
   await page.getByRole("menuitem", { name: "View .kbd" }).click();
   await expect(
@@ -970,7 +971,7 @@ test("reverts only an exactly mapped bad assignment to its persisted validated v
   await page.evaluate(() => (window as any).__setValidationMode("unmapped"));
   await page.locator('.palette-key[aria-label="Assign A (a)"]').click();
   await expect(page.locator(".preview-message")).toContainText(
-    "No exact manager location matched one assignment",
+    "The manager did not point to a specific key",
   );
   await expect(invalidKey).not.toHaveClass(/invalid-key/);
   await expect(
@@ -2395,11 +2396,12 @@ test("re-reviews a stale apply and safely rechecks an unconfirmed one", async ({
   );
   await expect(apply).toBeDisabled();
   await page.getByRole("button", { name: "Check apply outcome" }).click();
-  await expect(
-    page.getByText(
-      "Manager Apply: Succeeded — configuration persisted and activation confirmed",
-    ),
-  ).toBeVisible();
+  await expect(page.locator(".apply-outcome")).toContainText(
+    "Applied to the keyboard.",
+  );
+  await expect(page.locator(".apply-outcome")).toContainText(
+    "Manager Apply: Succeeded — configuration persisted and activation confirmed",
+  );
   expect(errors).toEqual([]);
 });
 
