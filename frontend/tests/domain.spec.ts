@@ -9,6 +9,7 @@ import {
 import { KeyCatalog } from "../src/domain/keyCatalog";
 import { KeyboardGrid } from "../src/domain/keyboardGrid";
 import { Keymap, editableState } from "../src/domain/keymap";
+import { recipeUnavailableReason, recipes } from "../src/domain/recipes";
 import type { GeometryTemplate, Profile } from "../src/platform/desktop";
 
 // Pure domain classes, tested without a browser page.
@@ -164,4 +165,64 @@ test("KeyboardGrid finds spatial neighbours on the physical layout", () => {
   expect(grid.neighbor("spc", "up")).toBe("b");
   expect(grid.neighbor("esc", "left")).toBeUndefined();
   expect(grid.neighbor("unknown", "up")).toBeUndefined();
+});
+
+test("recipes add ordinary assignments and explain missing keys", () => {
+  const empty = new Keymap(
+    { ...profile, assignments: [], aliases: {}, macros: {} },
+    catalog,
+  );
+  const recipe = (id: string) => recipes.find((item) => item.id === id)!;
+
+  const capsEsc = new Keymap(recipe("caps-esc-ctrl").apply(empty), catalog);
+  expect(
+    capsEsc.describe(capsEsc.behaviorAt("base", "caps"), "caps", "base"),
+  ).toBe("Tap: Esc · Hold: Left Ctrl · 200 ms");
+
+  // The navigation recipe reuses an existing "Navigation" layer.
+  const navigation = new Keymap(
+    recipe("navigation-layer").apply(empty),
+    catalog,
+  );
+  expect(navigation.layers.map((layer) => layer.name)).toEqual([
+    "Base",
+    "Navigation",
+    "Symbols",
+  ]);
+  expect(navigation.entrySummary("layer-nav")).toBe("via Space (hold)");
+  expect(navigation.behaviorAt("layer-nav", "h")).toEqual({
+    kind: "key",
+    key: "left",
+  });
+
+  // On a layout without the layer, the recipe adds it.
+  const plain = new Keymap(
+    { ...profile, layers: [{ id: "base", name: "Base" }], assignments: [] },
+    catalog,
+  );
+  const added = new Keymap(recipe("navigation-layer").apply(plain), catalog);
+  expect(added.layers.map((layer) => layer.id)).toEqual([
+    "base",
+    "layer-navigation",
+  ]);
+
+  // Recipes leave keys they do not name alone.
+  const homeRow = new Keymap(recipe("home-row-mods").apply(keymap), catalog);
+  expect(homeRow.behaviorAt("base", "caps")).toEqual(
+    keymap.behaviorAt("base", "caps"),
+  );
+  expect(homeRow.assignmentCount("base")).toBe(
+    keymap.assignmentCount("base") + 7,
+  );
+
+  const noCaps = {
+    ...profile,
+    geometry: { ...profile.geometry, source_keys: ["a"] },
+  };
+  expect(recipeUnavailableReason(recipe("caps-esc"), noCaps, catalog)).toBe(
+    "This layout has no Caps Lock key.",
+  );
+  expect(recipeUnavailableReason(recipe("caps-esc"), profile, catalog)).toBe(
+    "",
+  );
 });

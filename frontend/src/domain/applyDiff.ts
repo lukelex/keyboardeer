@@ -75,7 +75,10 @@ function diffRecords<T>(
  * removals in the applied order.
  */
 export function diffAgainstApplied(
-  applied: AppliedState | null | undefined,
+  applied:
+    | Pick<AppliedState, "layers" | "assignments" | "aliases" | "macros">
+    | null
+    | undefined,
   draft: Pick<Profile, "layers" | "assignments" | "aliases" | "macros">,
 ): ApplyDiff {
   const beforeAssignments = new Map(

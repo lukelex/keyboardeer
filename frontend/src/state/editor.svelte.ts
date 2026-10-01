@@ -7,6 +7,7 @@ import {
   isValidDeclarationName,
   Keymap,
 } from "../domain/keymap";
+import type { Recipe } from "../domain/recipes";
 import { count } from "../domain/text";
 import type { ValidationState } from "../domain/validation";
 import {
@@ -30,7 +31,13 @@ import type { ProfileLibrary } from "./library.svelte";
 import { PreviewValidator } from "./preview.svelte";
 import type { ToastCenter } from "./toasts.svelte";
 
-export type ComplexAction = "tap_hold" | "layer" | "alias" | "macro" | "layers";
+export type ComplexAction =
+  | "tap_hold"
+  | "layer"
+  | "alias"
+  | "macro"
+  | "layers"
+  | "recipes";
 export type DraftSaveState = "saved" | "saving" | "failed";
 /** A dialog-level validation message, shown inside the dialog. */
 export type EditResult = { ok: true } | { ok: false; error: string };
@@ -325,7 +332,8 @@ export class DraftEditor {
   }
 
   openDialog(kind: ComplexAction) {
-    if (!this.profile || (kind !== "layers" && !this.sourceKey)) {
+    const needsKey = kind !== "layers" && kind !== "recipes";
+    if (!this.profile || (needsKey && !this.sourceKey)) {
       this.#toasts.info(
         "Select a physical key before choosing a complex action.",
       );
@@ -383,6 +391,18 @@ export class DraftEditor {
       ),
     );
     return (await this.save(draft)) ? ok : failure("");
+  }
+
+  /** Adds a recipe's assignments to the draft as one undoable edit. */
+  async applyRecipe(recipe: Recipe): Promise<boolean> {
+    if (!this.keymap || this.#library.busy) return false;
+    const saved = await this.save(recipe.apply(this.keymap));
+    if (saved) {
+      this.#toasts.success(
+        `Added “${recipe.name}” to the draft. Undo removes it again.`,
+      );
+    }
+    return Boolean(saved);
   }
 
   // Layer edits

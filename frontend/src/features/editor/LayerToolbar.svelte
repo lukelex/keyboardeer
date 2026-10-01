@@ -79,6 +79,13 @@
     onclick={() => (helpOpen = !helpOpen)}>?</Button
   >
   <div class="complex-actions">
+    <Button
+      variant="secondary"
+      class="recipes-trigger"
+      onclick={() => editor.openDialog("recipes")}
+      title="Ready-made setups such as Caps Lock as Esc and Ctrl"
+      >Recipes</Button
+    >
     <Button variant="secondary" onclick={() => editor.openDialog("tap_hold")} disabled={noKey}
       >Tap &amp; hold</Button
     >

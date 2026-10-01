@@ -9,6 +9,7 @@
   import MacroDialog from "../editor/dialogs/MacroDialog.svelte";
   import ManageLayersDialog from "../editor/dialogs/ManageLayersDialog.svelte";
   import ProfilesDialog from "../editor/dialogs/ProfilesDialog.svelte";
+  import RecipesDialog from "../editor/dialogs/RecipesDialog.svelte";
   import RenderedConfigurationDialog from "../editor/dialogs/RenderedConfigurationDialog.svelte";
   import ShortcutsDialog from "../editor/dialogs/ShortcutsDialog.svelte";
   import TapHoldDialog from "../editor/dialogs/TapHoldDialog.svelte";
@@ -27,6 +28,7 @@
 {:else if editing && editor.dialog === "layer"}<LayerActionDialog />
 {:else if editing && editor.dialog === "alias"}<AliasDialog />
 {:else if editing && editor.dialog === "macro"}<MacroDialog />
+{:else if editing && editor.dialog === "recipes"}<RecipesDialog />
 {/if}
 {#if editing && app.profileManagerOpen && app.navigation.device}<ProfilesDialog />{/if}
 {#if editing && editor.apply.reviewOpen}<ApplyReviewDialog />{/if}

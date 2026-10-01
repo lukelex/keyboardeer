@@ -2786,3 +2786,74 @@ kbd {
   padding: 1px 6px;
   text-align: center;
 }
+.recipes-dialog {
+  max-width: 940px;
+}
+.recipe-body {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+}
+@media (max-width: 760px) {
+  .recipe-body {
+    grid-template-columns: 1fr;
+  }
+}
+.recipe-list {
+  display: grid;
+  gap: 6px;
+}
+.recipe {
+  background: #fffefa;
+  border: 1px solid #d4dfce;
+  border-radius: 9px;
+  color: #18352c;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 2px;
+  padding: 8px 11px;
+  text-align: left;
+}
+.recipe strong {
+  font-size: 13px;
+}
+.recipe small {
+  color: #59675d;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.recipe:hover {
+  border-color: #829686;
+}
+.recipe.selected {
+  background: #eaf3e3;
+  border-color: #608b61;
+  box-shadow: inset 3px 0 0 #2c6652;
+}
+.recipe-preview {
+  margin: 0;
+}
+.recipe-preview h3 {
+  color: #486453;
+  font-size: 13px;
+  margin: 0;
+}
+.recipe-preview .apply-review-list {
+  margin: 8px 0 0;
+  max-height: min(380px, 48dvh);
+}
+.inline-link {
+  background: none;
+  border: 0;
+  color: #2c6652;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+  padding: 0;
+  text-decoration: underline;
+}
+.complex-actions .recipes-trigger {
+  border-style: dashed;
+}

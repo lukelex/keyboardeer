@@ -1,8 +1,8 @@
 <script lang="ts">
   import Button from "../../../components/Button.svelte";
   import Dialog from "../../../components/Dialog.svelte";
-  import type { ChangeKind } from "../../../domain/applyDiff";
   import { useApp } from "../../../state/context";
+  import ChangeList from "../ChangeList.svelte";
 
   // What a new Apply changes compared with this profile's last Apply.
   const { editor } = useApp();
@@ -10,11 +10,6 @@
   const profile = $derived(editor.profile!);
   const keymap = $derived(editor.keymap!);
   const diff = $derived(editor.applyDiff);
-  const changeLabels: Record<ChangeKind, string> = {
-    added: "Added",
-    changed: "Changed",
-    removed: "Removed",
-  };
 </script>
 
 <Dialog
@@ -47,42 +42,7 @@
     </p>
   {/if}
   {#if diff?.count}
-    <ul class="apply-review-list" aria-label="Changes to apply">
-      {#each diff.layers as change (`layer-${change.id}`)}
-        <li data-change={change.kind}>
-          <span class="change-kind">{changeLabels[change.kind]}</span>
-          <strong>{change.name} layer</strong>
-          {#if change.beforeName}<span>Renamed from {change.beforeName}</span>{/if}
-        </li>
-      {/each}
-      {#each diff.declarations as change (`${change.type}-${change.name}`)}
-        <li data-change={change.kind}>
-          <span class="change-kind">{changeLabels[change.kind]}</span>
-          <strong>{change.type === "alias" ? "Alias @" : "Macro #"}{change.name}</strong>
-        </li>
-      {/each}
-      {#each diff.assignments as change (`${change.layerID}-${change.sourceKey}`)}
-        <li data-change={change.kind}>
-          <span class="change-kind">{changeLabels[change.kind]}</span>
-          <strong
-            >{keymap.layerName(change.layerID)} · {keymap.catalog.name(
-              change.sourceKey,
-            )}</strong
-          >
-          <span
-            >{#if change.kind !== "added"}{keymap.describe(
-                change.before,
-                change.sourceKey,
-                change.layerID,
-              )}{" → "}{/if}{keymap.describe(
-              change.after,
-              change.sourceKey,
-              change.layerID,
-            )}</span
-          >
-        </li>
-      {/each}
-    </ul>
+    <ChangeList diff={diff} {keymap} label="Changes to apply" />
   {:else}
     <p class="apply-review-empty">
       {profile.applied

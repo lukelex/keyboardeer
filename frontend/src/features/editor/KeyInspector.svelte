@@ -36,6 +36,7 @@
     alias: "alias",
     macro: "macro",
     layers: "layers",
+    recipes: "recipes",
   };
 </script>
 
@@ -64,6 +65,14 @@
       <p class="key-inspector-hint">
         Click a key, or press it on your keyboard, to change it. Press ? for
         keyboard shortcuts.
+        {#if !keymap.assignments.length}
+          <button
+            type="button"
+            class="inline-link"
+            onclick={() => editor.openDialog("recipes")}
+            >New to remapping? Start from a recipe.</button
+          >
+        {/if}
       </p>
     {/if}
   </div>

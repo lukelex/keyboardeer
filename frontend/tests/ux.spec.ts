@@ -1137,3 +1137,31 @@ test("edits from the keyboard: select, move, search, restore", async ({
   ).toBeVisible();
   await expect(page.locator(".selected-key")).toHaveCount(0);
 });
+
+test("previews a recipe and adds it as one undoable edit", async ({ page }) => {
+  await openEditor(page);
+  await page.getByRole("button", { name: "Recipes", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Recipes" });
+  await dialog.getByRole("radio", { name: /Home-row modifiers/ }).click();
+  const changes = dialog.getByRole("list", { name: "Recipe changes" });
+  await expect(changes.getByRole("listitem")).toHaveCount(8);
+  await expect(changes.getByRole("listitem").first()).toContainText("Base · A");
+  await expect(changes.getByRole("listitem").first()).toContainText(
+    "Tap: A · Hold: Left Super · 200 ms",
+  );
+  // A recipe the draft already contains has nothing to add.
+  await dialog.getByRole("radio", { name: /Esc on tap, Ctrl on hold/ }).click();
+  await expect(dialog).toContainText("This draft already does all of this.");
+  await expect(
+    dialog.getByRole("button", { name: "Add to draft" }),
+  ).toBeDisabled();
+
+  await dialog.getByRole("radio", { name: /Home-row modifiers/ }).click();
+  await dialog.getByRole("button", { name: "Add to draft" }).click();
+  await expect(dialog).toHaveCount(0);
+  const f = page.locator('.editor-key[data-source-key="f"]');
+  await expect(f.locator(".cap-hold")).toHaveText("↓ lctl");
+  // Undo removes the whole recipe in one step.
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(f.locator(".cap-hold")).toHaveCount(0);
+});
