@@ -474,7 +474,42 @@
   let identifyTimeoutMS = 15_000;
   let identifyDeadlineMS = 0;
   let identifyRemainingSeconds = 0;
-  let feedback = "";
+  // Results and errors that are not tied to one field appear as toasts:
+  // results dismiss themselves, errors stay until dismissed. Validation of a
+  // dialog's fields stays in that dialog (dialogError).
+  type Toast = {
+    id: number;
+    message: string;
+    tone: "success" | "info" | "error";
+  };
+  let toasts: Toast[] = [];
+  let nextToastID = 1;
+  const toastTimers = new Map<number, ReturnType<typeof setTimeout>>();
+  const toastDurationMS = 6000;
+  let dialogError = "";
+  // In the editor, toasts sit just above the palette, never over keys.
+  let paletteHeight = 0;
+  let identifyNotice = "";
+  function notify(message: string, tone: Toast["tone"]) {
+    // Repeating a message refreshes it instead of stacking duplicates.
+    const existing = toasts.find(
+      (toast) => toast.message === message && toast.tone === tone,
+    );
+    const id = existing?.id ?? nextToastID++;
+    if (!existing) toasts = [...toasts.slice(-3), { id, message, tone }];
+    clearTimeout(toastTimers.get(id));
+    if (tone !== "error") {
+      toastTimers.set(
+        id,
+        setTimeout(() => dismissToast(id), toastDurationMS),
+      );
+    }
+  }
+  function dismissToast(id: number) {
+    clearTimeout(toastTimers.get(id));
+    toastTimers.delete(id);
+    toasts = toasts.filter((toast) => toast.id !== id);
+  }
   let pollTimer: ReturnType<typeof setInterval> | undefined;
   let identifyCountdownTimer: ReturnType<typeof setInterval> | undefined;
   let stopWorkspaceEvents: (() => void) | undefined;
@@ -1037,14 +1072,12 @@
     if (!activeProfile || !currentPreview || profileBusy) return;
     const issue = diagnosticIssue(diagnosticID);
     if (!issue || !assignmentMatchesIssue(activeProfile, issue)) {
-      feedback =
-        "That recovery action is out of date. Check the current preview.";
+      notify("That recovery action is out of date. Check the current preview.", "error");
       return;
     }
     const recovery = recoveryForIssue(issue);
     if (!recovery?.available) {
-      feedback =
-        recovery?.reason ?? "No safe assignment recovery is available.";
+      notify(recovery?.reason ?? "No safe assignment recovery is available.", "error");
       return;
     }
     const restored = await saveDraft(
@@ -1053,7 +1086,7 @@
     if (restored) {
       selectedLayerID = issue.layerID;
       selectedSourceKey = issue.sourceKey;
-      feedback = `Restored ${issue.sourceKey} on ${layerName(issue.layerID)}. Other draft edits were kept; checking the whole draft again.`;
+      notify(`Restored ${issue.sourceKey} on ${layerName(issue.layerID)}. Other draft edits were kept; checking the whole draft again.`, "success");
     }
   }
   async function deleteConfiguration(configuration: Configuration) {
@@ -1068,13 +1101,12 @@
     });
     if (!confirmed || lifecycleBusyID) return;
     lifecycleBusyID = configuration.id;
-    feedback = "";
     try {
       const result = await DeleteConfiguration(configuration.id);
       await refresh();
-      feedback = `Removed “${configuration.name}” from the keyboard: ${result.reason}. Your profiles were kept.`;
+      notify(`Removed “${configuration.name}” from the keyboard: ${result.reason}. Your profiles were kept.`, "success");
     } catch (error) {
-      feedback = explain(error);
+      notify(explain(error), "error");
     } finally {
       lifecycleBusyID = "";
     }
@@ -1099,13 +1131,12 @@
       return;
     }
     lifecycleBusyID = configuration.id;
-    feedback = "";
     try {
       const result = await SetConfigurationEnabled(configuration.id, enabled);
       await refresh();
-      feedback = `Manager ${enabled ? "enabled" : "disabled"} bindings: ${result.reason}`;
+      notify(`Manager ${enabled ? "enabled" : "disabled"} bindings: ${result.reason}`, "success");
     } catch (error) {
-      feedback = explain(error);
+      notify(explain(error), "error");
     } finally {
       lifecycleBusyID = "";
     }
@@ -1160,7 +1191,7 @@
       profileRename = activeProfile.name;
       schedulePreview(activeProfile);
     } catch (error) {
-      feedback = explain(error);
+      notify(explain(error), "error");
     }
   }
   function uniqueProfileName(base: string) {
@@ -1185,7 +1216,7 @@
       profileBusy = false;
       await switchProfile(copy);
     } catch (error) {
-      feedback = explain(error);
+      notify(explain(error), "error");
     } finally {
       profileBusy = false;
     }
@@ -1195,10 +1226,9 @@
     profileBusy = true;
     try {
       await ExportProfile(activeProfile.id);
-      feedback =
-        "Portable profile exported. It contains behavior and layout data, not a runnable .kbd file.";
+      notify("Portable profile exported. It contains behavior and layout data, not a runnable .kbd file.", "success");
     } catch (error) {
-      feedback = explain(error);
+      notify(explain(error), "error");
     } finally {
       profileBusy = false;
     }
@@ -1207,12 +1237,11 @@
     const configurationID = activeProfile?.manager_configuration_id;
     if (!configurationID || rawConfigurationBusy) return;
     rawConfigurationBusy = true;
-    feedback = "";
     try {
       rawConfiguration = await ExportConfiguration(configurationID);
       rawConfigurationOpen = true;
     } catch (error) {
-      feedback = explain(error);
+      notify(explain(error), "error");
     } finally {
       rawConfigurationBusy = false;
     }
@@ -1223,9 +1252,9 @@
     rawConfigurationBusy = true;
     try {
       await SaveConfigurationExport(configurationID);
-      feedback = "Manager-rendered .kbd configuration saved.";
+      notify("Manager-rendered .kbd configuration saved.", "success");
     } catch (error) {
-      feedback = explain(error);
+      notify(explain(error), "error");
     } finally {
       rawConfigurationBusy = false;
     }
@@ -1251,7 +1280,7 @@
         configuration.content_revision ?? 0,
       );
     } catch (error) {
-      feedback = explain(error);
+      notify(explain(error), "error");
     } finally {
       externalContentBusy = false;
     }
@@ -1269,10 +1298,10 @@
     adoptingConfigurationID = configuration.id;
     try {
       const result = await AdoptConfiguration(configuration.id, configuration.name || "");
-      feedback = `Adoption ${humanize(result.state)}: ${result.reason || "The manager is processing the request."}`;
+      notify(`Adoption ${humanize(result.state)}: ${result.reason || "The manager is processing the request."}`, "info");
       await refresh();
     } catch (error) {
-      feedback = explain(error);
+      notify(explain(error), "error");
     } finally {
       adoptingConfigurationID = "";
     }
@@ -1293,9 +1322,9 @@
       pendingProfileFile = "";
       await ClearPendingKbdProfileFile().catch(() => {});
       await switchProfile(imported);
-      feedback = `Imported “${imported.name}” as a new draft for this keyboard.`;
+      notify(`Imported “${imported.name}” as a new draft for this keyboard.`, "success");
     } catch (error) {
-      feedback = explain(error);
+      notify(explain(error), "error");
     } finally {
       profileBusy = false;
     }
@@ -1343,7 +1372,7 @@
         backToDevices();
       }
     } catch (error) {
-      feedback = explain(error);
+      notify(explain(error), "error");
     } finally {
       profileBusy = false;
     }
@@ -1400,7 +1429,7 @@
   function acceptDetectedLayout(match: ScanMatch) {
     if (match.kind === "partial") return;
     selectedGeometryID = match.geometry_id;
-    feedback = `${match.name} selected from manager-attested keyboard capabilities. Confirm by creating the draft.`;
+    notify(`${match.name} selected from manager-attested keyboard capabilities. Confirm by creating the draft.`, "info");
   }
   function behaviorFor(sourceKey: string): ProfileBehavior | undefined {
     return activeProfile?.assignments?.find(
@@ -1603,7 +1632,6 @@
 
   async function refresh() {
     loading = true;
-    feedback = "";
     const workspaceBindingReady = await waitForDesktopBinding("Workspace");
     try {
       acceptWorkspaceUpdate(await Workspace());
@@ -1625,7 +1653,7 @@
         snapshot_at: previous.snapshot_at,
       };
       invalidatePreview(false);
-      feedback = explain(error);
+      notify(explain(error), "error");
     } finally {
       loading = false;
     }
@@ -1721,7 +1749,7 @@
     if (!canIdentify || !isConfigurable(device) || !isConnected(device)) return;
     selectedDevice = device;
     operation = null;
-    feedback = "";
+    identifyNotice = "";
     identifyOpen = true;
   }
   function closeIdentify() {
@@ -1737,7 +1765,10 @@
     const shell = node.closest<HTMLElement>(".app-shell");
     const background = shell
       ? Array.from(shell.children).filter(
-          (element): element is HTMLElement => element !== node.parentElement,
+          // Toasts stay reachable so an error can be read and dismissed.
+          (element): element is HTMLElement =>
+            element !== node.parentElement &&
+            !element.classList.contains("toast-region"),
         )
       : [];
     const previousInert = background.map((element) => element.inert);
@@ -1884,7 +1915,6 @@
   function openDraft(device: Device) {
     if (!canShowDevices || !isConfigurable(device)) return;
     selectedDevice = device;
-    feedback = "";
     profilePreview = null;
     const draft = profileForDevice(device);
     draftSaveState = "saved";
@@ -1917,7 +1947,6 @@
     )
       return;
     profileBusy = true;
-    feedback = "";
     try {
       activeProfile = await CreateProfile(
         selectedDevice.id,
@@ -1934,7 +1963,7 @@
       view = "editor";
       schedulePreview(activeProfile);
     } catch (error) {
-      feedback = explain(error);
+      notify(explain(error), "error");
     } finally {
       profileBusy = false;
     }
@@ -1978,7 +2007,6 @@
         : draft;
     profileBusy = true;
     draftSaveState = "saving";
-    feedback = "";
     invalidatePreview(false);
     previewBusy = true;
     try {
@@ -2003,7 +2031,7 @@
     } catch (error) {
       draftSaveState = "failed";
       previewBusy = false;
-      feedback = explain(error);
+      notify(explain(error), "error");
       return undefined;
     } finally {
       profileBusy = false;
@@ -2065,7 +2093,7 @@
   }
   function openBehaviorDialog(kind: ComplexAction) {
     if (!activeProfile || (kind !== "layers" && !selectedSourceKey)) {
-      feedback = "Select a physical key before choosing a complex action.";
+      notify("Select a physical key before choosing a complex action.", "info");
       return;
     }
     // A new action starts from what the key sends now, and a tap-hold from
@@ -2129,10 +2157,12 @@
         (kind === "layer" &&
           (current.kind === "hold_layer" || current.kind === "switch_layer")) ||
         !!editingDeclaration);
+    dialogError = "";
     behaviorDialog = kind;
   }
   function closeBehaviorDialog() {
     behaviorDialog = null;
+    dialogError = "";
   }
   async function assignTapHold() {
     if (
@@ -2168,15 +2198,14 @@
   }
   async function createAlias() {
     if (!activeProfile || !aliasKey || !declarationNameIsValid(aliasName)) {
-      feedback =
-        "Alias names must start with a letter and contain only letters, numbers, or hyphens.";
+      dialogError = "Alias names must start with a letter and contain only letters, numbers, or hyphens.";
       return;
     }
     if (
       aliasName !== editingDeclaration &&
       (activeProfile.aliases?.[aliasName] || activeProfile.macros?.[aliasName])
     ) {
-      feedback = "That alias or macro name is already in use.";
+      dialogError = "That alias or macro name is already in use.";
       return;
     }
     const draft = withSelectedBehavior(
@@ -2210,14 +2239,14 @@
       !declarationNameIsValid(macroName) ||
       !macroSteps.length
     ) {
-      feedback = "A macro needs a valid name and at least one key press.";
+      dialogError = "A macro needs a valid name and at least one key press.";
       return;
     }
     if (
       macroName !== editingDeclaration &&
       (activeProfile.aliases?.[macroName] || activeProfile.macros?.[macroName])
     ) {
-      feedback = "That alias or macro name is already in use.";
+      dialogError = "That alias or macro name is already in use.";
       return;
     }
     const draft = withSelectedBehavior(
@@ -2240,7 +2269,7 @@
     if (!activeProfile || !newLayerName.trim()) return;
     const name = newLayerName.trim();
     if (activeProfile.layers.some((layer) => layer.name === name)) {
-      feedback = "A layer with that name already exists.";
+      dialogError = "A layer with that name already exists.";
       return;
     }
     const stem =
@@ -2273,7 +2302,7 @@
         (layer) => layer.id !== selectedLayerID && layer.name === name,
       )
     ) {
-      feedback = "A layer with that name already exists.";
+      dialogError = "A layer with that name already exists.";
       return;
     }
     await saveDraft({
@@ -2302,7 +2331,7 @@
   }
   async function deleteSelectedLayer() {
     if (!activeProfile || selectedLayerID === "base") {
-      feedback = "The Base layer is always required.";
+      dialogError = "The Base layer is always required.";
       return;
     }
     const ownAssignments =
@@ -2311,7 +2340,7 @@
       ).length ?? 0;
     const references = layerEntryCount(selectedLayerID);
     if (ownAssignments || references) {
-      feedback = `Remove ${ownAssignments} assignment${ownAssignments === 1 ? "" : "s"} and ${references} layer action${references === 1 ? "" : "s"} before deleting this layer.`;
+      dialogError = `Remove ${ownAssignments} assignment${ownAssignments === 1 ? "" : "s"} and ${references} layer action${references === 1 ? "" : "s"} before deleting this layer.`;
       return;
     }
     if (
@@ -2411,7 +2440,7 @@
       const cleared = await DiscardPendingApply(activeProfile.id);
       acceptApplyResult({ profile: cleared, operation: emptyOperation });
     } catch (error) {
-      feedback = explain(error);
+      notify(explain(error), "error");
     }
   }
   const emptyOperation: Operation = {
@@ -2448,7 +2477,6 @@
   async function applyDraft() {
     if (!activeProfile || !canApply || applyBusy) return;
     applyBusy = true;
-    feedback = "";
     try {
       const result: ProfileApplyResult = await ApplyProfile(activeProfile.id);
       acceptApplyResult(result);
@@ -2461,7 +2489,7 @@
         applyReviewOpen = true;
       }
     } catch (error) {
-      feedback = explain(error);
+      notify(explain(error), "error");
     } finally {
       applyBusy = false;
     }
@@ -2471,12 +2499,11 @@
   async function checkPendingApply() {
     if (!activeProfile?.apply_pending || applyBusy) return;
     applyBusy = true;
-    feedback = "";
     try {
       acceptApplyResult(await ResumeApply(activeProfile.id));
       await refresh();
     } catch (error) {
-      feedback = explain(error);
+      notify(explain(error), "error");
     } finally {
       applyBusy = false;
     }
@@ -2531,7 +2558,7 @@
         activeProfile?.id === draft.id &&
         activeProfile.draft_revision === draft.draft_revision
       ) {
-        feedback = explain(error);
+        notify(explain(error), "error");
       }
     } finally {
       if (generation === previewGeneration) previewBusy = false;
@@ -2551,14 +2578,13 @@
         updateIdentifyCountdown();
       }
     } catch (error) {
-      feedback = explain(error);
+      notify(explain(error), "error");
       clearPolling();
     }
   }
   async function startIdentify() {
     if (!selectedDevice || !canIdentify || identifyBusy) return;
     identifyBusy = true;
-    feedback = "";
     try {
       operation = await IdentifyStart(selectedDevice.id, identifyTimeoutMS);
       clearPolling();
@@ -2567,7 +2593,7 @@
       pollTimer = setInterval(pollOperation, 700);
       identifyCountdownTimer = setInterval(updateIdentifyCountdown, 250);
     } catch (error) {
-      feedback = explain(error);
+      notify(explain(error), "error");
     } finally {
       identifyBusy = false;
     }
@@ -2579,7 +2605,7 @@
       operation = await IdentifyCancel(operation.id);
       clearPolling();
     } catch (error) {
-      feedback = explain(error);
+      notify(explain(error), "error");
     } finally {
       identifyBusy = false;
     }
@@ -2621,17 +2647,14 @@
       (device) => device.id === selectedDevice?.id,
     );
     if (!refreshedDevice) {
-      feedback =
-        "The selected keyboard is no longer reported by the manager. Identification may have ended.";
+      identifyNotice = "The selected keyboard is no longer reported by the manager. Identification may have ended.";
       return;
     }
     selectedDevice = refreshedDevice;
     if (refreshedDevice.runtime_conflict) {
-      feedback =
-        "The selected keyboard now has a runtime conflict. The manager may stop identification.";
+      identifyNotice = "The selected keyboard now has a runtime conflict. The manager may stop identification.";
     } else if (!isConnected(refreshedDevice)) {
-      feedback =
-        "The selected keyboard disconnected. The manager may stop identification.";
+      identifyNotice = "The selected keyboard disconnected. The manager may stop identification.";
     }
   }
 
@@ -2700,6 +2723,7 @@
     }
   }
   onDestroy(() => {
+    for (const timer of toastTimers.values()) clearTimeout(timer);
     clearPolling();
     if (previewTimer) clearTimeout(previewTimer);
     for (const timer of applyFollowTimers.values()) clearTimeout(timer);
@@ -3242,9 +3266,6 @@
           KeyboarDeer does not inspect input devices or supervise mappings. The
           manager owns those responsibilities.
         </p>
-        {#if feedback}<p class="inline-feedback" role="status">
-            {feedback}
-          </p>{/if}
       </section>
     {:else if view === "setup" && selectedDevice}
       <section class="setup-page" aria-labelledby="setup-title">
@@ -3333,9 +3354,6 @@
             >
           </div>
         </form>
-        {#if feedback}<p class="inline-feedback" role="status">
-            {feedback}
-          </p>{/if}
       </section>
     {:else if view === "editor" && activeProfile}
       <section
@@ -3643,11 +3661,12 @@
                 {runtimeHealthLabel(linkedConfiguration).toLowerCase()}.
               </p>
             {/if}
-            {#if feedback}<p class="inline-feedback" role="status">
-                {feedback}
-              </p>{/if}
           </div>
-          <section class="key-palette" aria-label="Basic key assignments">
+          <section
+            class="key-palette"
+            aria-label="Basic key assignments"
+            bind:clientHeight={paletteHeight}
+          >
             <div
               class="key-inspector"
               class:empty={!selectedSourceKey}
@@ -3889,9 +3908,6 @@
                 </p>
               </div>
             </section>
-            {#if feedback}<p class="inline-feedback" role="status">
-                {feedback}
-              </p>{/if}
           </div>
         {/if}
       </section>
@@ -3991,6 +4007,9 @@
           title="Close">×</Button
         >
         <p class="eyebrow">COMPLEX ACTION · {selectedSourceKey}</p>
+        {#if dialogError}
+          <p class="dialog-error" role="alert">{dialogError}</p>
+        {/if}
         {#if behaviorDialog === "layers"}
           <h2 id="behavior-dialog-title">Manage layers</h2>
           <p class="dialog-intro">
@@ -4735,8 +4754,8 @@
             </div>
           </div>
         </article>
-        {#if feedback}<p class="inline-feedback" role="status">
-            {feedback}
+        {#if identifyNotice}<p class="inline-feedback" role="status">
+            {identifyNotice}
           </p>{/if}
         <section class="quiet-tip">
           <strong>A brief pause, just for this keyboard.</strong>
@@ -4779,6 +4798,38 @@
       </dialog>
     </div>
   {/if}
+  <div
+    class="toast-region"
+    aria-label="Notifications"
+    style:bottom={editorOpen && paletteHeight ? `${paletteHeight + 12}px` : null}
+  >
+    <div role="status" aria-live="polite">
+      {#each toasts.filter((toast) => toast.tone !== "error") as toast (toast.id)}
+        <p class="toast" data-tone={toast.tone}>
+          <span>{toast.message}</span>
+          <button
+            type="button"
+            class="toast-dismiss"
+            aria-label="Dismiss notification"
+            on:click={() => dismissToast(toast.id)}>×</button
+          >
+        </p>
+      {/each}
+    </div>
+    <div role="alert">
+      {#each toasts.filter((toast) => toast.tone === "error") as toast (toast.id)}
+        <p class="toast" data-tone="error">
+          <span>{toast.message}</span>
+          <button
+            type="button"
+            class="toast-dismiss"
+            aria-label="Dismiss error"
+            on:click={() => dismissToast(toast.id)}>×</button
+          >
+        </p>
+      {/each}
+    </div>
+  </div>
   <footer>
     Drafts remain your source of truth; the manager owns generated runtime
     configurations.

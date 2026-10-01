@@ -150,6 +150,7 @@ async function openWorkspace(page: Page, fixture: Partial<Fixture> = {}) {
             Profiles: async () => [draft],
             SelectedProfiles: async () => ({ [draft.device_id]: draft.id }),
             Geometries: async () => [geometry],
+            ExportProfile: async () => {},
             SaveProfile: async (value) => {
               draft = { ...value, draft_revision: value.draft_revision + 1 };
               return draft;
@@ -357,7 +358,7 @@ test("keeps the editor header to one uncluttered row", async ({ page }) => {
   const menu = page.getByRole("menu", { name: "More profile actions" });
   await expect(menu).toBeVisible();
   await expect(
-    menu.getByRole("menuitem", { name: /Export profile/ }),
+    menu.getByRole("menuitem", { name: /View \.kbd/ }),
   ).toBeDisabled();
   await page.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
@@ -755,4 +756,52 @@ test("confirms destructive actions in one dialog above the current one", async (
   await expect(confirm).toHaveCount(0);
   await expect(page.getByRole("dialog", { name: "Profiles" })).toBeVisible();
   await expect(deleteProfile).toBeFocused();
+});
+
+test("shows results as toasts and keeps dialog validation in the dialog", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await openEditor(page);
+  // A failing action leaves an error toast until it is dismissed.
+  await page.locator(".profile-switcher").click();
+  await page.getByRole("menuitem", { name: "Duplicate this profile" }).click();
+  const errorToast = page
+    .locator(".toast-region")
+    .getByRole("alert")
+    .locator(".toast");
+  await expect(errorToast).toContainText(
+    "Wails binding DuplicateProfile is unavailable.",
+  );
+  await page.clock.runFor(30_000);
+  await expect(errorToast).toHaveCount(1);
+  await errorToast.getByRole("button", { name: "Dismiss error" }).click();
+  await expect(errorToast).toHaveCount(0);
+
+  // Field validation appears inside the dialog that caused it.
+  await page.locator('.editor-key[data-source-key="a"]').click();
+  const dialog = page.getByRole("dialog");
+  await page.getByRole("button", { name: "Alias", exact: true }).click();
+  await dialog.getByLabel("Alias name").fill("home");
+  await dialog.getByRole("button", { name: "Create and assign alias" }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.locator('.editor-key[data-source-key="s"]').click();
+  await page.getByRole("button", { name: "Alias", exact: true }).click();
+  await dialog.getByLabel("Alias name").fill("home");
+  await dialog.getByRole("button", { name: "Create and assign alias" }).click();
+  await expect(dialog.getByRole("alert")).toHaveText(
+    "That alias or macro name is already in use.",
+  );
+  await page.keyboard.press("Escape");
+
+  // A successful result dismisses itself.
+  await page.getByRole("button", { name: "More profile actions" }).click();
+  await page.getByRole("menuitem", { name: "Export profile…" }).click();
+  const resultToast = page
+    .locator(".toast-region")
+    .getByRole("status")
+    .locator(".toast");
+  await expect(resultToast).toContainText("Portable profile exported.");
+  await page.clock.runFor(7_000);
+  await expect(resultToast).toHaveCount(0);
 });

@@ -2390,6 +2390,68 @@ h1 {
   max-width: 580px;
   padding-top: 16px;
 }
+.toast-region {
+  bottom: 18px;
+  display: grid;
+  gap: 8px;
+  max-width: min(440px, calc(100vw - 32px));
+  pointer-events: none;
+  position: fixed;
+  right: 16px;
+  z-index: 60;
+}
+.toast-region > div {
+  display: grid;
+  gap: 8px;
+}
+.toast {
+  align-items: flex-start;
+  background: #14382e;
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgb(12 35 27 / 28%);
+  color: #fff9e9;
+  display: flex;
+  font-size: 13px;
+  gap: 10px;
+  line-height: 1.45;
+  margin: 0;
+  padding: 10px 10px 10px 14px;
+  pointer-events: auto;
+}
+.toast[data-tone="error"] {
+  background: #fbefe9;
+  border: 1px solid #e3b9a8;
+  border-left: 4px solid #a1462f;
+  color: #6b2b18;
+}
+.toast span {
+  flex: 1;
+}
+.toast-dismiss {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  opacity: 0.8;
+  padding: 2px 6px;
+}
+.toast-dismiss:hover {
+  background: rgb(255 255 255 / 12%);
+  opacity: 1;
+}
+.dialog-error {
+  background: #fbefe9;
+  border: 1px solid #e3b9a8;
+  border-radius: 8px;
+  color: #8a3b24;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 10px 0 0;
+  padding: 8px 11px;
+}
 footer {
   border-top: 1px solid #e0e5d8;
   color: #778478;
