@@ -1291,3 +1291,26 @@ test("shows every layer in a printable overview", async ({ page }) => {
   await page.emulateMedia({ media: "screen" });
   await expect(page.locator(".app-header")).toBeVisible();
 });
+
+test("keeps buttons readable in dark mode", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await openEditor(page);
+  // The light page background is replaced, not merely overlaid.
+  await expect(page.locator("html")).toHaveCSS(
+    "background-color",
+    "rgb(18, 26, 23)",
+  );
+  await expectReadableButtons(page, ".editor-page");
+  await page.locator('[data-source-key="caps"]').click();
+  await page.getByRole("button", { name: "Edit tap & hold" }).click();
+  await expectReadableButtons(page, "dialog");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Preferences" }).click();
+  // Choosing Light overrides the system preference immediately.
+  await page.getByText("Light", { exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(page.locator("html")).toHaveCSS(
+    "background-color",
+    "rgb(247, 245, 237)",
+  );
+});

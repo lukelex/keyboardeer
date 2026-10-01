@@ -2,9 +2,15 @@
   import Button from "../../components/Button.svelte";
   import Dialog from "../../components/Dialog.svelte";
   import { useApp } from "../../state/context";
+  import type { Theme } from "../../state/navigation.svelte";
 
   const app = useApp();
   const preferences = app.preferences;
+  const themes: [Theme, string][] = [
+    ["system", "Match system"],
+    ["light", "Light"],
+    ["dark", "Dark"],
+  ];
 </script>
 
 <Dialog
@@ -19,6 +25,23 @@
   <p class="dialog-intro">
     Choose where KeyboarDeer keeps your editable keyboard profiles.
   </p>
+  <fieldset class="preference-setting appearance-setting">
+    <legend>Appearance</legend>
+    <div class="segmented" role="radiogroup" aria-label="Appearance">
+      {#each themes as [value, label] (value)}
+        <label class={[app.theme === value && "selected"]}
+          ><input
+            type="radio"
+            name="theme"
+            {value}
+            checked={app.theme === value}
+            onchange={() => app.setTheme(value)}
+          />{label}</label
+        >
+      {/each}
+    </div>
+    <small>Applies right away, on this computer.</small>
+  </fieldset>
   <div class="preference-setting">
     <label class="preference-toggle"
       ><input type="checkbox" bind:checked={preferences.syncEnabled} /><span

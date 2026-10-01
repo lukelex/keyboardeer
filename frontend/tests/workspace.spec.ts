@@ -631,7 +631,7 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   const indicator = page.locator(".configuration-indicator");
   await expect(indicator).toHaveAttribute("data-state", "valid");
   await expect(indicator).toHaveAccessibleName("Valid configuration");
-  await expect(indicator).toHaveCSS("color", "rgb(53, 107, 67)");
+  await expect(indicator).toHaveCSS("color", "rgb(47, 106, 67)");
   await expect(indicator.locator("i")).toHaveCSS(
     "background-color",
     "rgb(47, 138, 75)",

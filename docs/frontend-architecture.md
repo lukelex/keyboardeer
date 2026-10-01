@@ -70,3 +70,18 @@ opens.
 - Put rules in `domain/` and test them directly in `tests/domain.spec.ts`.
   Test behaviour through the UI in `tests/ux.spec.ts` and
   `tests/workspace.spec.ts`.
+
+## Colour and theming
+
+`app.css` defines semantic colour tokens on `:root`, grouped as surfaces
+(`--page`, `--surface`, `--surface-tint`, `--surface-selected`, …), text
+(`--text`, `--text-muted`, `--text-danger`, …), borders (`--border`,
+`--border-control`, …) and status colours (`--status-success`, …). Rules use
+tokens, never literal colours, except on permanently dark surfaces (the
+header, toasts and code blocks), which look the same in both themes.
+
+Dark values apply when the system prefers dark, unless the person chose Light
+in Preferences (`html[data-theme="light"]`), or when they chose Dark
+(`html[data-theme="dark"]`). Keep text tokens at WCAG AA (4.5:1) against the
+surfaces they sit on in both themes; `tests/ux.spec.ts` checks button contrast
+in light and dark mode.

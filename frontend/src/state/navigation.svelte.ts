@@ -1,6 +1,7 @@
 import type { Device } from "../platform/desktop";
 
 export type View = "devices" | "setup" | "editor";
+export type Theme = "system" | "light" | "dark";
 
 /** Where the person is: which screen, and which keyboard it is about. */
 export class Navigation {
@@ -35,6 +36,20 @@ export interface UISnapshot {
 export class LocalSettings {
   readonly #uiStateKey = "keyboardeer-ui-state";
   readonly #firstRunKey = "keyboardeer-first-run-complete";
+  readonly #themeKey = "keyboardeer-theme";
+
+  get theme(): Theme {
+    try {
+      const value = localStorage.getItem(this.#themeKey);
+      return value === "light" || value === "dark" ? value : "system";
+    } catch {
+      return "system";
+    }
+  }
+
+  set theme(theme: Theme) {
+    this.#write(this.#themeKey, theme);
+  }
 
   readUI(): UISnapshot {
     try {

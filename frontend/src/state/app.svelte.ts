@@ -16,6 +16,7 @@ import { ProfileLibrary } from "./library.svelte";
 import {
   LocalSettings,
   Navigation,
+  type Theme,
   type UISnapshot,
 } from "./navigation.svelte";
 import { PreferencesStore } from "./preferences.svelte";
@@ -58,6 +59,8 @@ export class KeyboarDeer {
   profileManagerOpen = $state(false);
   shortcutsOpen = $state(false);
   overviewOpen = $state(false);
+  /** System, light or dark appearance; stored on this computer. */
+  theme = $state<Theme>(this.settings.theme);
   /** Height of the editor palette, so toasts never cover keys. */
   paletteHeight = $state(0);
   editorOpen = $derived(
@@ -83,6 +86,11 @@ export class KeyboarDeer {
     const stopPersisting = $effect.root(() => {
       $effect(() => {
         if (this.#restored) this.settings.writeUI(this.#snapshot());
+      });
+      $effect(() => {
+        const root = document.documentElement;
+        if (this.theme === "system") delete root.dataset.theme;
+        else root.dataset.theme = this.theme;
       });
     });
     // The device view never waits on optional local-profile bindings: a
@@ -122,6 +130,11 @@ export class KeyboarDeer {
     if (!device) return;
     this.dismissFirstRun();
     this.openDevice(device);
+  }
+
+  setTheme(theme: Theme) {
+    this.theme = theme;
+    this.settings.theme = theme;
   }
 
   dismissFirstRun() {
