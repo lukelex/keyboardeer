@@ -548,6 +548,40 @@
       blocked: "Validation blocked",
       unchecked: "Draft not validated",
     }[validationState] ?? `Validation ${humanize(validationState)}`;
+  $: validationText =
+    {
+      checking: "Checking…",
+      valid: "Valid configuration",
+      rejected: "Invalid configuration",
+      blocked: "Validation blocked",
+      unchecked: "Not validated",
+    }[validationState] ?? humanize(validationState);
+  $: candidateValidation =
+    capabilities.find((item) => item.name === "candidate_validation") ??
+    unavailableCapability("candidate_validation");
+  // Why Apply is unavailable, in priority order. Empty while Apply is possible
+  // or while the current draft is still being checked.
+  $: applyBlockedReason = !activeProfile
+    ? ""
+    : !workspaceLive
+      ? "the manager is not connected."
+      : !managedConfigurations.available
+        ? `the manager cannot apply configurations: ${managedConfigurations.reason}`
+        : !selectedDevice || !isConnected(selectedDevice)
+          ? "the keyboard is disconnected."
+          : selectedDevice.runtime_conflict
+            ? "another configuration conflicts with this keyboard."
+            : activeProfile.apply_pending
+              ? "an earlier Apply is still unresolved."
+              : !candidateValidation.available
+                ? `the manager cannot validate drafts: ${candidateValidation.reason}`
+                : validationState === "rejected"
+                  ? "the draft is invalid. Fix the problems below."
+                  : validationState === "blocked"
+                    ? "validation is blocked. See the problem below."
+                    : "";
+  let problemsHidden = false;
+  $: if (validationState === "valid") problemsHidden = false;
   $: canApply =
     !!activeProfile &&
     workspaceLive &&
@@ -3004,7 +3038,7 @@
             role="img"
             aria-label={validationLabel}
             title={validationLabel}
-            ><i></i>{#if validationState === "valid"}Valid configuration{/if}</span
+            ><i></i><span aria-hidden="true">{validationText}</span></span
           >
           <Button
             variant="primary"
@@ -3014,31 +3048,42 @@
             disabled={!canApply || applyBusy}
             title={canApply
               ? "Apply this validated draft to the keyboard"
-              : "Apply requires a current valid manager preview, a connected keyboard, and the managed-configurations capability."}
+              : applyBlockedReason
+                ? `Apply unavailable: ${applyBlockedReason}`
+                : "Waiting for the manager to check this draft."}
             >{applyBusy ? "Applying…" : "Apply to keyboard"}</Button
           >
         </div>
         {#if activeGeometry}
           <div class="editor-scroll-region">
-              <div
-                class="keyboard-editor"
-                id="keyboard-layer-panel"
-                role="tabpanel"
-                aria-labelledby={`layer-tab-${selectedLayerID}`}
-                aria-label={activeGeometry.name}
+            {#if applyBlockedReason && !applyBusy}
+              <p class="apply-blocked" role="status">
+                <strong>Apply unavailable:</strong>
+                {applyBlockedReason}
+              </p>
+            {/if}
+            {#if currentPreview && currentPreview.validation.outcome !== "valid"}
+              <section
+                class:blocked={currentPreview.validation.outcome === "blocked"}
+                class="preview-message"
+                aria-labelledby="problems-title"
               >
-              {#if currentPreview && currentPreview.validation.outcome !== "valid"}
-                <aside
-                  class:blocked={currentPreview.validation.outcome ===
-                    "blocked"}
-                  class="preview-message"
-                  aria-live="polite"
-                >
-                  <strong
-                    >Preview {humanize(
-                      currentPreview.validation.outcome,
-                    )}</strong
+                <div class="problems-heading">
+                  <strong id="problems-title"
+                    >{currentPreview.validation.outcome === "blocked"
+                      ? "Validation blocked"
+                      : `${currentPreview.validation.diagnostics?.length || 1} problem${(currentPreview.validation.diagnostics?.length ?? 1) === 1 ? "" : "s"} in this draft`}</strong
                   >
+                  <Button
+                    variant="text"
+                    type="button"
+                    aria-expanded={!problemsHidden}
+                    aria-controls="problems-body"
+                    on:click={() => (problemsHidden = !problemsHidden)}
+                    >{problemsHidden ? "Show details" : "Hide details"}</Button
+                  >
+                </div>
+                <div id="problems-body" hidden={problemsHidden} aria-live="polite">
                   <p>{currentPreview.validation.reason}</p>
                   {#if currentPreview.validation.outcome === "rejected"}
                     {#if mappedPreviewIssues.length === 0}
@@ -3101,8 +3146,16 @@
                       {/each}
                     </ul>
                   {/if}
-                </aside>
-              {/if}
+                </div>
+              </section>
+            {/if}
+              <div
+                class="keyboard-editor"
+                id="keyboard-layer-panel"
+                role="tabpanel"
+                aria-labelledby={`layer-tab-${selectedLayerID}`}
+                aria-label={activeGeometry.name}
+              >
               {#each activeRows as row}
                 <div class="keyboard-row">
                   {#each activeGeometry.keys.filter((key) => key.row === row) as key (key.id)}

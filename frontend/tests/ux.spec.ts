@@ -4,6 +4,7 @@ import type {
   GeometryTemplate,
   ManagerWorkspace,
   Profile,
+  ProfilePreview,
 } from "../src/desktop";
 
 // A copy of the verified US ANSI TKL template from internal/geometry, so the
@@ -120,15 +121,23 @@ const profile: Profile = {
   updated_at: "2026-09-30T09:14:00Z",
 };
 
+const validPreview: ProfilePreview["validation"] = {
+  outcome: "valid",
+  reason_code: "validation_succeeded",
+  reason: "Valid",
+  diagnostics: null,
+};
+
 type Fixture = {
   workspace: ManagerWorkspace;
   geometry: GeometryTemplate;
   profile: Profile;
+  validation: ProfilePreview["validation"];
 };
 
 async function openEditor(page: Page, fixture: Partial<Fixture> = {}) {
   await page.addInitScript(
-    ({ workspace, geometry, profile }: Fixture) => {
+    ({ workspace, geometry, profile, validation }: Fixture) => {
       let draft = profile;
       localStorage.setItem("keyboardeer-first-run-complete", "1");
       window.runtime = { EventsOn: () => () => {} };
@@ -150,19 +159,21 @@ async function openEditor(page: Page, fixture: Partial<Fixture> = {}) {
               device_id: draft.device_id,
               manager_server_id: "server-1",
               state_revision: 1,
-              validation: {
-                outcome: "valid",
-                reason_code: "validation_succeeded",
-                reason: "Valid",
-                diagnostics: null,
-              },
+              validation,
+              candidate_digest: "sha256:fixture",
               source_map: [],
             }),
           },
         },
       };
     },
-    { workspace, geometry: tkl, profile, ...fixture },
+    {
+      workspace,
+      geometry: tkl,
+      profile,
+      validation: validPreview,
+      ...fixture,
+    },
   );
   await page.goto("/");
   await page.getByRole("button", { name: "Edit draft" }).click();
@@ -345,4 +356,60 @@ test("keeps the editor header to one uncluttered row", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
   await expect(more).toBeFocused();
+});
+
+test("names the validation state and why Apply is unavailable", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await openEditor(page, {
+    validation: {
+      outcome: "rejected",
+      reason_code: "validation_rejected",
+      reason: "KMonad rejected the rendered configuration.",
+      diagnostics: [
+        {
+          id: "diagnostic-1",
+          severity: "error",
+          reason_code: "unknown_key",
+          summary: "Unknown key name in deflayer nav",
+          remediation: "Choose a key from the palette.",
+        },
+      ],
+    },
+  });
+  const indicator = page.locator(".configuration-indicator");
+  await expect(indicator).toHaveAttribute("data-state", "rejected");
+  await expect(indicator).toHaveText("Invalid configuration");
+  await expect(page.locator(".editor-apply")).toBeDisabled();
+  await expect(page.locator(".apply-blocked")).toHaveText(
+    "Apply unavailable: the draft is invalid. Fix the problems below.",
+  );
+  const problems = page.locator(".preview-message");
+  await expect(problems).toContainText("1 problem in this draft");
+  await expect(problems).toContainText("Unknown key name in deflayer nav");
+  // The problems strip sits above the keyboard instead of covering keys.
+  const strip = await problems.boundingBox();
+  const keyboard = await page.locator(".keyboard-editor").boundingBox();
+  expect(strip!.y + strip!.height).toBeLessThanOrEqual(keyboard!.y);
+  await problems.getByRole("button", { name: "Hide details" }).click();
+  await expect(problems.getByText("Unknown key name")).toBeHidden();
+  await problems.getByRole("button", { name: "Show details" }).click();
+  await expect(problems.getByText("Unknown key name")).toBeVisible();
+});
+
+test("explains that a disconnected keyboard blocks Apply", async ({ page }) => {
+  const disconnected = structuredClone(workspace);
+  disconnected.snapshot!.devices![0].availability = "disconnected";
+  await openEditor(page, { workspace: disconnected });
+  await expect(page.locator(".configuration-indicator")).toHaveText(
+    "Valid configuration",
+  );
+  await expect(page.locator(".apply-blocked")).toHaveText(
+    "Apply unavailable: the keyboard is disconnected.",
+  );
+  await expect(page.locator(".editor-apply")).toHaveAttribute(
+    "title",
+    "Apply unavailable: the keyboard is disconnected.",
+  );
 });
