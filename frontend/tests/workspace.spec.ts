@@ -402,7 +402,9 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   await expect(
     page.locator(".layer-tabs").getByRole("tab", { name: "Navigation" }),
   ).toBeVisible();
-  await expect(page.getByText("Layer entry and exit")).toBeVisible();
+  await expect(
+    page.locator(".layer-tabs").getByRole("tab", { name: "Navigation" }),
+  ).toHaveAccessibleDescription("No entry key yet");
   await page
     .getByRole("button", { name: "Close complex action dialog" })
     .click();
@@ -464,13 +466,17 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
     .locator(".layer-tabs")
     .getByRole("tab", { name: "Navigation" })
     .click();
+  // Keys that fall through on an overlay show the Base legend, dimmed.
   await page.getByRole("button", { name: "Pass through", exact: true }).click();
+  await expect(page.locator(".editor-key").first()).toHaveClass(
+    /fallthrough-key/,
+  );
   await expect(page.locator(".editor-key").first().locator("small")).toHaveText(
-    "Pass through",
+    baseLayerMapping,
   );
   await page.getByRole("button", { name: "Restore original" }).click();
-  await expect(page.locator(".editor-key").first().locator("small")).toHaveText(
-    "Pass through",
+  await expect(page.locator(".editor-key").first()).toHaveClass(
+    /fallthrough-key/,
   );
   await page.locator(".layer-tabs").getByRole("tab", { name: "Base" }).click();
   await page.getByRole("button", { name: "Manage" }).click();

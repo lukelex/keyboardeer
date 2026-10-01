@@ -805,3 +805,40 @@ test("shows results as toasts and keeps dialog validation in the dialog", async 
   await page.clock.runFor(7_000);
   await expect(resultToast).toHaveCount(0);
 });
+
+test("shows how each layer is reached and what falls through", async ({
+  page,
+}) => {
+  await openEditor(page, {
+    profile: {
+      ...profile,
+      layers: [...profile.layers, { id: "layer-sym", name: "Symbols" }],
+    },
+  });
+  const tabs = page.getByRole("tablist", { name: "Keymap layers" });
+  const navigation = tabs.getByRole("tab", { name: "Navigation" });
+  await expect(navigation).toContainText("via Space (hold)");
+  await expect(navigation).toHaveAccessibleDescription(
+    "Entered via Space (hold)",
+  );
+  const symbols = tabs.getByRole("tab", { name: "Symbols" });
+  await expect(symbols).toContainText("no entry key");
+  await expect(symbols).toHaveClass(/unreachable/);
+
+  // The explainer is available on demand instead of always taking space.
+  await expect(page.getByText("How layers work", { exact: true })).toHaveCount(
+    0,
+  );
+  await page.getByRole("button", { name: "How layers work" }).click();
+  await expect(page.locator("#layer-help")).toContainText(
+    "Base is always active",
+  );
+
+  await navigation.click();
+  const a = page.locator('.editor-key[data-source-key="a"]');
+  await expect(a).toHaveClass(/fallthrough-key/);
+  await expect(a.locator("small")).toHaveText("a");
+  const h = page.locator('.editor-key[data-source-key="h"]');
+  await expect(h).not.toHaveClass(/fallthrough-key/);
+  await expect(h.locator("small")).toHaveText("left");
+});

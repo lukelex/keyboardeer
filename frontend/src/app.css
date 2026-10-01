@@ -1441,9 +1441,8 @@ h1 {
   border: 1px solid #d9e6d2;
   border-radius: 10px;
   color: #4c6656;
-  margin: 20px auto 0;
-  max-width: 780px;
-  padding: 12px 15px;
+  margin: 0 0 9px;
+  padding: 10px 13px;
 }
 .layer-guidance strong {
   font-size: 12px;
@@ -1452,12 +1451,6 @@ h1 {
   font-size: 12px;
   line-height: 1.5;
   margin: 5px 0 0;
-}
-.layer-guidance small {
-  color: #956d30;
-  display: block;
-  font-size: 11px;
-  margin-top: 6px;
 }
 .keyboard-row {
   display: flex;
@@ -1539,6 +1532,17 @@ h1 {
 .editor-key.disabled-key.selected-key {
   border-color: #527858;
   box-shadow: inset 0 0 0 1px #527858;
+}
+.editor-key.fallthrough-key {
+  background: #f6f8f3;
+  border-style: dashed;
+}
+.editor-key.fallthrough-key strong,
+.editor-key.fallthrough-key small {
+  color: #5a695e;
+}
+.editor-key.fallthrough-key small {
+  font-style: italic;
 }
 .editor-key.flashing-key {
   animation: key-flash 240ms ease-out;
@@ -1681,7 +1685,38 @@ h1 {
 }
 .layer-tab.unreachable {
   border-color: #d1b775;
+}
+.layer-tab[role="tab"] {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+.layer-tab small {
+  color: #59675d;
+  font-size: 11px;
+  font-weight: 550;
+}
+.layer-tab small.layer-tab-warning {
   color: #86662c;
+  font-weight: 700;
+}
+.layer-help-toggle {
+  border-radius: 50%;
+  min-width: 28px;
+  padding: 4px;
+}
+.layer-help-toggle[aria-expanded="true"] {
+  background: #d9ecd1;
+  border-color: #608b61;
+}
+.visually-hidden {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
 }
 .complex-actions {
   margin-left: auto;

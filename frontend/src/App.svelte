@@ -489,6 +489,7 @@
   let dialogError = "";
   // In the editor, toasts sit just above the palette, never over keys.
   let paletteHeight = 0;
+  let layerHelpOpen = false;
   let identifyNotice = "";
   function notify(message: string, tone: Toast["tone"]) {
     // Repeating a message refreshes it instead of stacking duplicates.
@@ -669,6 +670,20 @@
       .filter((assignment) => assignment.layer_id === selectedLayerID)
       .map((assignment) => [assignment.source_key, assignment.behavior]),
   );
+  $: baseLayerBehaviors = Object.fromEntries(
+    (activeProfile?.assignments ?? [])
+      .filter((assignment) => assignment.layer_id === "base")
+      .map((assignment) => [assignment.source_key, assignment.behavior]),
+  );
+  // On an overlay layer, a key with nothing set falls through; its cap shows
+  // the Base legend, dimmed, instead of repeating "Pass through".
+  function keyFallsThrough(sourceKey: string) {
+    const behavior = selectedLayerBehaviors[sourceKey];
+    return (
+      selectedLayerID !== "base" &&
+      (!behavior || behavior.kind === "transparent")
+    );
+  }
   $: selectedKey = activeGeometry?.keys.find(
     (key) => key.source_key === selectedSourceKey,
   );
@@ -1441,9 +1456,9 @@
   function behaviorLabel(
     behavior: ProfileBehavior | undefined,
     sourceKey: string,
+    layerID = selectedLayerID,
   ) {
-    if (!behavior)
-      return selectedLayerID === "base" ? sourceKey : "Pass through";
+    if (!behavior) return layerID === "base" ? sourceKey : "Pass through";
     if (behavior.kind === "key") return behavior.key ?? sourceKey;
     if (behavior.kind === "transparent") return "Pass through";
     if (behavior.kind === "disabled") return "No output";
@@ -1592,6 +1607,29 @@
         behaviorTargetsLayer(assignment.behavior, layerID),
       ).length ?? 0
     );
+  }
+  // How a layer is entered, as short labels such as "Space (hold)".
+  function layerEntryLabels(layerID: string) {
+    return (activeProfile?.assignments ?? []).flatMap((assignment) => {
+      const behavior = assignment.behavior;
+      const key = keyName(assignment.source_key);
+      if (behavior.kind === "hold_layer" && behavior.target === layerID)
+        return [`${key} (hold)`];
+      if (behavior.kind === "switch_layer" && behavior.target === layerID)
+        return [`${key} (switch)`];
+      if (
+        behavior.kind === "tap_hold" &&
+        behavior.hold?.kind === "hold_layer" &&
+        behavior.hold.target === layerID
+      )
+        return [`${key} (hold)`];
+      return behaviorTargetsLayer(behavior, layerID) ? [key] : [];
+    });
+  }
+  function layerEntrySummary(layerID: string) {
+    const labels = layerEntryLabels(layerID);
+    if (!labels.length) return "";
+    return `via ${labels[0]}${labels.length > 1 ? ` +${labels.length - 1}` : ""}`;
   }
   function layerIsReachable(layerID: string) {
     return layerID === "base" || layerEntryCount(layerID) > 0;
@@ -3542,7 +3580,7 @@
                   {#each activeGeometry.keys.filter((key) => key.row === row) as key (key.id)}
                     <Button
                       variant="key"
-                      className={`${selectedLayerBehaviors[key.source_key]?.kind === "disabled" ? "disabled-key " : ""}${selectedSourceKey === key.source_key ? "selected-key " : ""}${mappedPreviewIssues.some((issue) => issue.layerID === selectedLayerID && issue.sourceKey === key.source_key) ? "invalid-key " : ""}${flashingSourceKey === key.source_key ? "flashing-key" : ""}`}
+                      className={`${keyFallsThrough(key.source_key) ? "fallthrough-key " : ""}${selectedLayerBehaviors[key.source_key]?.kind === "disabled" ? "disabled-key " : ""}${selectedSourceKey === key.source_key ? "selected-key " : ""}${mappedPreviewIssues.some((issue) => issue.layerID === selectedLayerID && issue.sourceKey === key.source_key) ? "invalid-key " : ""}${flashingSourceKey === key.source_key ? "flashing-key" : ""}`}
                       style={`width: ${key.width * 42}px; margin-left: ${(key.gap_before ?? 0) * 42}px`}
                       data-issue-key
                       data-layer-id={selectedLayerID}
@@ -3562,33 +3600,22 @@
                       aria-pressed={selectedSourceKey === key.source_key}
                     >
                       <strong>{key.label}</strong><small
-                        >{behaviorLabel(
-                          selectedLayerBehaviors[key.source_key],
-                          key.source_key,
-                        )}</small
+                        >{keyFallsThrough(key.source_key)
+                          ? behaviorLabel(
+                              baseLayerBehaviors[key.source_key],
+                              key.source_key,
+                              "base",
+                            )
+                          : behaviorLabel(
+                              selectedLayerBehaviors[key.source_key],
+                              key.source_key,
+                            )}</small
                       >
                     </Button>
                   {/each}
                 </div>
               {/each}
             </div>
-            {#if activeProfile.layers.length > 1}
-              <section
-                class="layer-guidance"
-                aria-labelledby="layer-guidance-title"
-              >
-                <strong id="layer-guidance-title">Layer entry and exit</strong>
-                <p>
-                  Assign a <b>Hold layer</b> or <b>Switch layer</b> action on a reachable
-                  key to enter an overlay. Hold layers end when that key is released.
-                  Switched layers remain active until another Switch layer action—normally
-                  one targeting Base—changes them.
-                </p>
-                {#each activeProfile.layers.filter((layer) => !layerIsReachable(layer.id)) as layer (layer.id)}
-                  <small>{layer.name} has no entry action yet.</small>
-                {/each}
-              </section>
-            {/if}
             {#if activeProfile.apply_pending?.idempotency_supported || activeProfile.apply_pending?.operation_id}
               <div class="apply-status apply-pending" role="status">
                 {#if activeProfile.apply_pending.operation_id}
@@ -3749,6 +3776,22 @@
                 </div>
               {/if}
             </div>
+            {#if layerHelpOpen}
+              <section
+                class="layer-guidance"
+                id="layer-help"
+                aria-labelledby="layer-guidance-title"
+              >
+                <strong id="layer-guidance-title">How layers work</strong>
+                <p>
+                  Base is always active. Give a key a <b>Hold layer</b> or
+                  <b>Switch layer</b> action to enter another layer: a held layer
+                  ends when that key is released; a switched layer stays until
+                  another Switch layer action (normally one targeting Base). Keys
+                  with nothing set on a layer fall through to the layer below.
+                </p>
+              </section>
+            {/if}
             <div class="palette-toolbar">
               <div
                 class="layer-tabs"
@@ -3767,10 +3810,30 @@
                     aria-selected={selectedLayerID === layer.id}
                     tabindex={selectedLayerID === layer.id ? 0 : -1}
                     on:click={() => (selectedLayerID = layer.id)}
-                    title={layerIsReachable(layer.id)
-                      ? `${layer.name} layer`
-                      : `${layer.name} has no entry action`}
-                    >{layer.name}</Button
+                    aria-describedby={`layer-tab-${layer.id}-entry`}
+                    title={layer.id === "base"
+                      ? "Base layer: active by default"
+                      : layerIsReachable(layer.id)
+                        ? `${layer.name} layer, entered ${layerEntrySummary(layer.id)}`
+                        : `${layer.name} has no entry key yet. Assign a layer action to reach it.`}
+                    ><span>{layer.name}</span>{#if layer.id !== "base"}<small
+                        aria-hidden="true"
+                        class:layer-tab-warning={!layerIsReachable(layer.id)}
+                        >{layerIsReachable(layer.id)
+                          ? layerEntrySummary(layer.id)
+                          : "⚠ no entry key"}</small
+                      >{/if}</Button
+                  >
+                {/each}
+              </div>
+              <div class="visually-hidden">
+                {#each activeProfile.layers as layer (layer.id)}
+                  <span id={`layer-tab-${layer.id}-entry`}
+                    >{layer.id === "base"
+                      ? "Active by default"
+                      : layerIsReachable(layer.id)
+                        ? `Entered ${layerEntrySummary(layer.id)}`
+                        : "No entry key yet"}</span
                   >
                 {/each}
               </div>
@@ -3779,6 +3842,16 @@
                 className="layer-tab"
                 on:click={() => openBehaviorDialog("layers")}
                 title="Manage layers">Manage</Button
+              >
+              <Button
+                variant="secondary"
+                className="layer-tab layer-help-toggle"
+                type="button"
+                aria-expanded={layerHelpOpen}
+                aria-controls="layer-help"
+                aria-label="How layers work"
+                title="How layers work"
+                on:click={() => (layerHelpOpen = !layerHelpOpen)}>?</Button
               >
               <div class="complex-actions">
                 <Button
@@ -4200,6 +4273,12 @@
           <p class="dialog-intro">
             Hold a layer temporarily, or switch to it until another layer action
             changes the active layer.
+          </p>
+          <p class="timing-explanation">
+            <strong>Layer entry and exit:</strong> a held layer ends when this key
+            is released. A switched layer stays active until another Switch layer
+            action, normally one targeting Base, changes it, so give that layer a
+            way back.
           </p>
           <form
             class="behavior-form"
