@@ -6,6 +6,7 @@ import type {
   ManagerWorkspace,
   Profile,
   ProfilePreview,
+  ScanMatch,
 } from "../src/desktop";
 
 // A copy of the verified US ANSI TKL template from internal/geometry, so the
@@ -134,11 +135,21 @@ type Fixture = {
   geometry: GeometryTemplate;
   profile: Profile;
   validation: ProfilePreview["validation"];
+  extraGeometries: GeometryTemplate[];
+  /** When set, the desktop offers layout detection with these matches. */
+  scanMatches: ScanMatch[] | null;
 };
 
 async function openWorkspace(page: Page, fixture: Partial<Fixture> = {}) {
   await page.addInitScript(
-    ({ workspace, geometry, profile, validation }: Fixture) => {
+    ({
+      workspace,
+      geometry,
+      profile,
+      validation,
+      extraGeometries,
+      scanMatches,
+    }: Fixture) => {
       let draft = profile;
       localStorage.setItem("keyboardeer-first-run-complete", "1");
       window.runtime = { EventsOn: () => () => {} };
@@ -149,7 +160,21 @@ async function openWorkspace(page: Page, fixture: Partial<Fixture> = {}) {
             Workspace: async () => workspace,
             Profiles: async () => [draft],
             SelectedProfiles: async () => ({ [draft.device_id]: draft.id }),
-            Geometries: async () => [geometry],
+            Geometries: async () => [geometry, ...extraGeometries],
+            ...(scanMatches
+              ? {
+                  InputScan: async (deviceID: string) => ({
+                    device_id: deviceID,
+                    token_namespace: "kmonad-v1",
+                    keys: geometry.keys.map((key) => key.source_key),
+                    unmapped_count: 0,
+                    generation: 1,
+                    digest: "sha256:scan",
+                    observed_at: "2026-10-01T00:00:00Z",
+                  }),
+                  MatchInputScan: async () => scanMatches,
+                }
+              : {}),
             ExportProfile: async () => {},
             SaveProfile: async (value) => {
               draft = { ...value, draft_revision: value.draft_revision + 1 };
@@ -174,6 +199,8 @@ async function openWorkspace(page: Page, fixture: Partial<Fixture> = {}) {
       geometry: tkl,
       profile,
       validation: validPreview,
+      extraGeometries: [],
+      scanMatches: null,
       ...fixture,
     },
   );
@@ -841,4 +868,78 @@ test("shows how each layer is reached and what falls through", async ({
   const h = page.locator('.editor-key[data-source-key="h"]');
   await expect(h).not.toHaveClass(/fallthrough-key/);
   await expect(h.locator("small")).toHaveText("left");
+});
+
+const withSpareKeyboard = structuredClone(workspace);
+withSpareKeyboard.snapshot!.devices!.push({
+  ...workspace.snapshot!.devices![0],
+  id: "device-2",
+  display_name: "Spare keyboard",
+  configured_by: null,
+});
+const sixtyPercent: GeometryTemplate = {
+  ...tkl,
+  id: "us-ansi-60-fixture",
+  name: "US ANSI 60%",
+  description: "A smaller fixture layout",
+  keys: tkl.keys.filter((key) => key.row > 0 && key.row < 6).slice(0, 61),
+};
+
+test("detects the layout during setup and explains the candidates", async ({
+  page,
+}) => {
+  await openWorkspace(page, {
+    workspace: withSpareKeyboard,
+    extraGeometries: [sixtyPercent],
+    scanMatches: [
+      {
+        geometry_id: tkl.id,
+        name: tkl.name,
+        kind: "exact",
+        missing: 0,
+        extra: 0,
+      },
+      {
+        geometry_id: sixtyPercent.id,
+        name: sixtyPercent.name,
+        kind: "superset",
+        missing: 0,
+        extra: 23,
+      },
+    ],
+  });
+  await page.getByRole("button", { name: "Set up", exact: true }).click();
+  await expect(page.getByLabel("Profile name")).toHaveValue(
+    "Spare keyboard profile",
+  );
+  await expect(page.getByLabel("Physical layout")).toHaveValue(tkl.id);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Detected" }),
+  ).toHaveText(
+    `✓ Detected: this keyboard reports exactly the keys of ${tkl.name}.`,
+  );
+  await expect(page.locator(".setup-layout-preview rect")).toHaveCount(
+    tkl.keys.length,
+  );
+  const candidate = page.getByRole("button", { name: /US ANSI 60%/ });
+  await expect(candidate).toContainText(
+    "Close: your keyboard has 23 keys this layout doesn't include",
+  );
+  await candidate.click();
+  await expect(page.getByLabel("Physical layout")).toHaveValue(sixtyPercent.id);
+  await expect(candidate).toHaveAttribute("aria-pressed", "true");
+});
+
+test("asks for a layout when detection is unavailable", async ({ page }) => {
+  await openWorkspace(page, {
+    workspace: withSpareKeyboard,
+    extraGeometries: [sixtyPercent],
+  });
+  await page.getByRole("button", { name: "Set up", exact: true }).click();
+  // No layout is carried over or defaulted from the catalog order.
+  await expect(page.getByLabel("Physical layout")).toHaveValue("");
+  const create = page.getByRole("button", { name: "Create draft" });
+  await expect(create).toBeDisabled();
+  await page.getByLabel("Physical layout").selectOption(sixtyPercent.id);
+  await expect(create).toBeEnabled();
 });

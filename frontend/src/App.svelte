@@ -369,6 +369,8 @@
   let profiles: Profile[] = [];
   let geometries: GeometryTemplate[] = [];
   let selectedGeometryID = "";
+  // True once the person picks a layout, so detection never overrides them.
+  let geometryChosen = false;
   let inputScan: InputScanState | null = null;
   let inputScanMatches: ScanMatch[] = [];
   let inputScanBusy = false;
@@ -623,6 +625,9 @@
   $: renderedPaletteKeys = compactPalette
     ? compactPaletteKeys
     : visiblePaletteKeys;
+  $: selectedGeometry = geometries.find(
+    (geometry) => geometry.id === selectedGeometryID,
+  );
   $: keyboardHeightNeeded =
     activeRows.length * keyboardRowHeight + keyboardFrameHeight;
   $: compactPalette =
@@ -1395,18 +1400,28 @@
   function newProfileForDevice() {
     if (!selectedDevice) return;
     closeProfiles();
-    activeProfile = null;
     profilePreview = null;
+    enterSetup(selectedDevice);
+  }
+  // Opens the setup form for a keyboard. The layout is never carried over
+  // from another keyboard: it is detected from manager-attested key
+  // capabilities when possible, and otherwise chosen explicitly.
+  function enterSetup(device: Device, geometryID = "") {
+    selectedDevice = device;
+    activeProfile = null;
     inputScan = null;
     inputScanMatches = [];
     inputScanNotice = "";
+    geometryChosen = !!geometryID;
+    selectedGeometryID =
+      geometryID || (geometries.length === 1 ? geometries[0].id : "");
     profileName = uniqueProfileName(
-      selectedDevice.display_name
-        ? `${selectedDevice.display_name} profile`
-        : "Keyboard profile",
+      device.display_name ? `${device.display_name} profile` : "Keyboard profile",
     );
-    selectedGeometryID ||= geometries[0]?.id ?? "";
     view = "setup";
+    if (isConnected(device) && hasDesktopBinding("InputScan")) {
+      void detectLayout();
+    }
   }
   function dismissFirstRun() {
     firstRunOpen = false;
@@ -1420,6 +1435,7 @@
   }
   async function detectLayout() {
     if (!selectedDevice || inputScanBusy) return;
+    const scannedDeviceID = selectedDevice.id;
     inputScanBusy = true;
     inputScanNotice = "";
     inputScan = null;
@@ -1431,9 +1447,12 @@
       }
       inputScan = scan;
       inputScanMatches = await MatchInputScan(scan.keys);
-      if (!inputScanMatches.some((match) => match.kind === "exact")) {
+      const exact = inputScanMatches.find((match) => match.kind === "exact");
+      if (exact && !geometryChosen && selectedDevice?.id === scannedDeviceID) {
+        selectedGeometryID = exact.geometry_id;
+      } else if (!exact) {
         inputScanNotice =
-          "No exact verified layout was found. Review the candidates below or choose a layout manually.";
+          "No verified layout matches this keyboard exactly. Choose the closest candidate below, or pick a layout from the list.";
       }
     } catch (error) {
       inputScanNotice = explain(error);
@@ -1444,7 +1463,20 @@
   function acceptDetectedLayout(match: ScanMatch) {
     if (match.kind === "partial") return;
     selectedGeometryID = match.geometry_id;
-    notify(`${match.name} selected from manager-attested keyboard capabilities. Confirm by creating the draft.`, "info");
+    geometryChosen = true;
+  }
+  function scanMatchDescription(match: ScanMatch) {
+    const keys = (count: number) => `${count} key${count === 1 ? "" : "s"}`;
+    switch (match.kind) {
+      case "exact":
+        return "Exact match";
+      case "superset":
+        return `Close: your keyboard has ${keys(match.extra)} this layout doesn't include`;
+      case "subset":
+        return `Close: ${keys(match.missing)} in this layout weren't reported by your keyboard`;
+      default:
+        return `Doesn't fit: ${keys(match.missing)} not reported, ${keys(match.extra)} not in this layout`;
+    }
   }
   function behaviorFor(sourceKey: string): ProfileBehavior | undefined {
     return activeProfile?.assignments?.find(
@@ -1699,7 +1731,6 @@
   async function loadLocalDrafts() {
     try {
       geometries = await Geometries();
-      selectedGeometryID ||= geometries[0]?.id ?? "";
     } catch {
       // Browser preview deliberately has no desktop persistence bindings.
     }
@@ -1729,17 +1760,14 @@
     );
     if (!device) return;
     selectedDevice = device;
-    if (
-      saved.geometryID &&
-      geometries.some((item) => item.id === saved.geometryID)
-    ) {
-      selectedGeometryID = saved.geometryID;
-    }
     if (saved.view === "setup") {
-      profileName = device.display_name
-        ? `${device.display_name} draft`
-        : "Keyboard draft";
-      view = "setup";
+      enterSetup(
+        device,
+        saved.geometryID &&
+          geometries.some((item) => item.id === saved.geometryID)
+          ? saved.geometryID
+          : "",
+      );
       return;
     }
     if (saved.view !== "editor") return;
@@ -1966,15 +1994,7 @@
       schedulePreview(draft);
       return;
     }
-    activeProfile = null;
-    inputScan = null;
-    inputScanMatches = [];
-    inputScanNotice = "";
-    profileName = device.display_name
-      ? `${device.display_name} draft`
-      : "Keyboard draft";
-    selectedGeometryID ||= geometries[0]?.id ?? "";
-    view = "setup";
+    enterSetup(device);
   }
   async function createDraft() {
     if (
@@ -3317,7 +3337,7 @@
           <span class="build-label">LOCAL DRAFT</span>
         </div>
         <form class="setup-card" on:submit|preventDefault={createDraft}>
-          <label for="profile-name">Draft name</label>
+          <label for="profile-name">Profile name</label>
           <input
             id="profile-name"
             bind:value={profileName}
@@ -3325,60 +3345,84 @@
             required
           />
           <label for="geometry">Physical layout</label>
-          <select id="geometry" bind:value={selectedGeometryID} required>
+          <select
+            id="geometry"
+            bind:value={selectedGeometryID}
+            on:change={() => (geometryChosen = true)}
+            required
+          >
+            {#if !selectedGeometryID}
+              <option value="" disabled>Choose a layout</option>
+            {/if}
             {#each geometries as geometry (geometry.id)}
               <option value={geometry.id}>{geometry.name}</option>
             {/each}
           </select>
-          {#if geometries.find((geometry) => geometry.id === selectedGeometryID)}
-            <p class="field-help">
-              {geometries.find((geometry) => geometry.id === selectedGeometryID)
-                ?.description}
-            </p>
+          {#if selectedGeometry}
+            <div class="setup-layout-preview">
+              <KeyboardPreview geometry={selectedGeometry} />
+            </div>
+            <p class="field-help">{selectedGeometry.description}</p>
           {/if}
-          <div class="layout-detection">
-            <Button
-              variant="secondary"
-              type="button"
-              on:click={detectLayout}
-              disabled={inputScanBusy ||
-                !hasDesktopBinding("InputScan") ||
-                !isConnected(selectedDevice)}
-              >{inputScanBusy ? "Scanning keyboard…" : "Detect layout"}</Button
-            >
-            {#if !hasDesktopBinding("InputScan")}
-              <p class="field-help">Layout detection requires the desktop manager connection.</p>
-            {/if}
-            {#if inputScan}
-              <p class="field-help">
-                Manager attested {inputScan.keys.length} key tokens
-                {#if inputScan.unmapped_count}and {inputScan.unmapped_count} additional unmapped keys{/if}.
-                Evidence generation {inputScan.generation}.
+          <div class="layout-detection" aria-live="polite">
+            {#if inputScanBusy}
+              <p class="field-help" role="status">
+                Checking which keys this keyboard reports…
               </p>
-              <div class="layout-candidates" aria-live="polite">
-                <p class="eyebrow">VERIFIED CANDIDATES</p>
-                {#each inputScanMatches as match (match.geometry_id)}
+            {:else if inputScanMatches.some((match) => match.kind === "exact" && match.geometry_id === selectedGeometryID)}
+              <p class="layout-detected" role="status">
+                ✓ Detected: this keyboard reports exactly the keys of {selectedGeometry?.name}.
+              </p>
+            {/if}
+            {#if inputScan && inputScanMatches.length}
+              <p class="eyebrow">VERIFIED CANDIDATES</p>
+              <div class="layout-candidates">
+                {#each inputScanMatches.filter((match) => match.kind !== "partial") as match (match.geometry_id)}
                   <button
                     class="layout-candidate"
                     class:selected={match.geometry_id === selectedGeometryID}
                     type="button"
-                    disabled={match.kind === "partial"}
+                    aria-pressed={match.geometry_id === selectedGeometryID}
                     on:click={() => acceptDetectedLayout(match)}
                   >
                     <span>
                       <strong>{match.name}</strong>
-                      <small>{match.kind} · {match.missing} missing · {match.extra} extra</small>
+                      <small>{scanMatchDescription(match)}</small>
                     </span>
-                    <span>{match.geometry_id === selectedGeometryID ? "Selected" : "Choose"}</span>
+                    <span
+                      >{match.geometry_id === selectedGeometryID
+                        ? "Selected"
+                        : "Choose"}</span
+                    >
                   </button>
                 {/each}
               </div>
             {/if}
-            {#if inputScanNotice}<p class="inline-feedback" role="status">{inputScanNotice}</p>{/if}
+            {#if inputScanNotice}<p class="inline-feedback" role="status">
+                {inputScanNotice}
+              </p>{/if}
+            {#if hasDesktopBinding("InputScan")}
+              <Button
+                variant="text"
+                type="button"
+                className="layout-detect-again"
+                on:click={detectLayout}
+                disabled={inputScanBusy || !isConnected(selectedDevice)}
+                title={isConnected(selectedDevice)
+                  ? "Ask the manager which keys this keyboard reports"
+                  : "Connect the keyboard to detect its layout"}
+                >{inputScan ? "Detect again" : "Detect layout"}</Button
+              >
+            {:else}
+              <p class="field-help">
+                Layout detection needs the desktop app's manager connection.
+              </p>
+            {/if}
           </div>
           <p class="boundary-note">
-            Layout selection is explicit. KeyboarDeer does not guess a physical
-            layout from the keyboard’s name.
+            KeyboarDeer suggests a layout only from the keys the manager reports,
+            never from the keyboard's name, and you confirm it by creating the
+            profile.
           </p>
           <div class="setup-actions">
             <Button variant="secondary" type="button" on:click={backToDevices}

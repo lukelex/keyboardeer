@@ -1303,6 +1303,29 @@ h1 {
   margin-top: 12px;
   padding-top: 16px;
 }
+.setup-layout-preview {
+  background: #e6eee0;
+  border-radius: 10px;
+  margin-top: 4px;
+  padding: 12px 16px;
+}
+.setup-layout-preview .keyboard-preview {
+  margin: 0 auto;
+  max-width: 420px;
+}
+.layout-detected {
+  background: #edf3e8;
+  border-radius: 7px;
+  color: #2f6a43;
+  font-size: 13px;
+  font-weight: 650;
+  margin: 0;
+  padding: 8px 11px;
+}
+.layout-detect-again {
+  justify-self: start;
+  padding-left: 0;
+}
 .layout-candidates {
   display: grid;
   gap: 6px;

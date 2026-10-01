@@ -515,7 +515,7 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
     .locator('.palette-buttons button[aria-label="Assign Caps Lock (caps)"]')
     .click();
   await expect(
-    page.getByRole("heading", { name: "Unconfigured keyboard draft" }),
+    page.getByRole("heading", { name: "Unconfigured keyboard profile" }),
   ).toBeVisible();
   await expect(page.locator(".editor-key").first().locator("small")).toHaveText(
     "caps",
