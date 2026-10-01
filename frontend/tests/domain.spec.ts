@@ -87,11 +87,17 @@ test("Keymap describes behaviors and finds layer entries through declarations", 
   expect(
     keymap.describe(keymap.behaviorAt("base", "caps"), "caps", "base"),
   ).toBe("Tap: Esc · Hold: Navigation layer · 180 ms");
-  expect(keymap.capLegend("base", "caps")).toBe("Tap esc / hold Navigation");
+  expect(keymap.capLegend("base", "caps")).toEqual({
+    text: "esc",
+    hold: "Navigation",
+  });
   // Overlay keys with nothing set, or explicitly transparent, show Base.
   expect(keymap.fallsThrough("layer-nav", "j")).toBe(true);
-  expect(keymap.capLegend("layer-nav", "z")).toBe("z");
-  expect(keymap.capLegend("layer-nav", "h")).toBe("left");
+  expect(keymap.capLegend("layer-nav", "z")).toEqual({ text: "z" });
+  expect(keymap.capLegend("layer-nav", "h")).toEqual({ text: "left" });
+  expect(keymap.isRemapped("base", "caps")).toBe(true);
+  expect(keymap.isRemapped("layer-nav", "j")).toBe(false);
+  expect(keymap.isRemapped("base", "z")).toBe(false);
   // Symbols is reachable only through alias → macro → switch_layer.
   expect(keymap.isReachable("layer-sym")).toBe(true);
   expect(keymap.entrySummary("layer-nav")).toBe("via Caps Lock (hold)");

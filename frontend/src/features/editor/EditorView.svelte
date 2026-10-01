@@ -2,6 +2,7 @@
   import { browserCodeToSourceKey } from "../../domain/keys";
   import { useApp } from "../../state/context";
   import ApplyStatus from "./ApplyStatus.svelte";
+  import ChangesBar from "./ChangesBar.svelte";
   import EditorHeader from "./EditorHeader.svelte";
   import EditorPalette from "./EditorPalette.svelte";
   import KeyboardCanvas from "./KeyboardCanvas.svelte";
@@ -75,6 +76,7 @@
       {/if}
       <ProblemsPanel />
       <KeyboardCanvas {flashingKey} />
+      <ChangesBar />
       <ApplyStatus />
     </div>
     <EditorPalette {compact} />

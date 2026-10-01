@@ -65,9 +65,6 @@
     <p>
       <strong>{applyOutcomeTitle(outcome)}</strong>
       {applyOutcomeDetail(outcome)}
-      {#if outcome.state === "succeeded" && profile.applied && editor.applyDiff?.count}
-        Edits made since then are not applied yet.
-      {/if}
     </p>
     <details class="technical-details">
       <summary>Technical details</summary>

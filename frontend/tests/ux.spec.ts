@@ -998,8 +998,8 @@ test("reports the last Apply plainly and keeps internals in a disclosure", async
 
   await page.locator('.editor-key[data-source-key="f"]').click();
   await page.getByRole("button", { name: "Disable key" }).click();
-  await expect(outcome.locator("p").first()).toContainText(
-    "Edits made since then are not applied yet.",
+  await expect(page.locator(".changes-bar")).toContainText(
+    "1 key change since the last Apply.",
   );
 });
 
@@ -1034,4 +1034,47 @@ test("keeps header controls compact and the version in About", async ({
   await expect(page.getByText("test", { exact: true })).toHaveCount(0);
   await preferences.click();
   await expect(page.getByRole("dialog")).toContainText("Version test");
+});
+
+test("marks remapped keys and the changes not yet applied", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await openEditor(page, {
+    profile: {
+      ...profile,
+      applied: {
+        draft_revision: 2,
+        configuration_revision: 7,
+        applied_at: "2026-09-29T18:00:00Z",
+        layers: profile.layers,
+        assignments: [profile.assignments![0], profile.assignments![2]],
+      },
+    },
+  });
+  const caps = page.locator('.editor-key[data-source-key="caps"]');
+  const space = page.locator('.editor-key[data-source-key="spc"]');
+  // Tap-hold caps show both actions instead of a truncated sentence.
+  await expect(caps.locator("small")).toHaveText("esc↓ lctl");
+  await expect(space.locator(".cap-hold")).toHaveText("↓ Navigation");
+  await expect(caps).toHaveClass(/remapped-key/);
+  await expect(
+    page.locator('.editor-key[data-source-key="a"]'),
+  ).not.toHaveClass(/remapped-key/);
+  // Only Space differs from the last Apply.
+  const bar = page.locator(".changes-bar");
+  await expect(bar).toContainText("1 key change since the last Apply.");
+  await expect(page.locator(".changed-key")).toHaveCount(0);
+  await bar.getByRole("button", { name: "Show on keyboard" }).click();
+  await expect(page.locator(".changed-key")).toHaveCount(1);
+  await expect(space).toHaveAttribute("data-change", "added");
+  await page.locator('[data-source-key="caps"]').click();
+  await page.getByRole("button", { name: "Disable key" }).click();
+  await expect(caps).toHaveAttribute("data-change", "changed");
+  await expect(bar).toContainText("2 key changes since the last Apply.");
+  await page
+    .getByRole("tablist", { name: "Keymap layers" })
+    .getByRole("tab", { name: "Navigation" })
+    .click();
+  await expect(bar).toContainText("Changes are on Base.");
 });

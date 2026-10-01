@@ -1,4 +1,4 @@
-import { diffAgainstApplied } from "../domain/applyDiff";
+import { diffAgainstApplied, type ChangeKind } from "../domain/applyDiff";
 import { isConnected } from "../domain/devices";
 import { KeyCatalog } from "../domain/keyCatalog";
 import {
@@ -60,6 +60,8 @@ export class DraftEditor {
   dialog = $state<ComplexAction | null>(null);
   /** Collapses the problems strip until the draft is valid again. */
   problemsHidden = $state(false);
+  /** Highlights keys whose behavior differs from the last Apply. */
+  showChanges = $state(false);
 
   readonly history = new DraftHistory();
   readonly preview: PreviewValidator;
@@ -116,6 +118,14 @@ export class DraftEditor {
       ? diffAgainstApplied(this.profile.applied, this.profile)
       : null,
   );
+  /** Unapplied key changes, keyed by layer and source key. */
+  unappliedChanges = $derived.by(() => {
+    const changes = new Map<string, ChangeKind>();
+    for (const change of this.applyDiff?.assignments ?? []) {
+      changes.set(`${change.layerID}\u0000${change.sourceKey}`, change.kind);
+    }
+    return changes;
+  });
   /** The manager runs a different revision than this profile last applied. */
   appliedRevisionDrift = $derived(
     !!this.profile?.applied?.configuration_revision &&
@@ -447,6 +457,16 @@ export class DraftEditor {
       this.profile,
       issue,
       this.currentPreview.manager_server_id,
+    );
+  }
+
+  changeAt(layerID: string, sourceKey: string): ChangeKind | undefined {
+    return this.unappliedChanges.get(`${layerID}\u0000${sourceKey}`);
+  }
+
+  layerHasChanges(layerID: string) {
+    return (this.applyDiff?.assignments ?? []).some(
+      (change) => change.layerID === layerID,
     );
   }
 

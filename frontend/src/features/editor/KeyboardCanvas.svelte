@@ -21,10 +21,16 @@
     <div class="keyboard-row">
       {#each geometry.keys.filter((key) => key.row === row) as key (key.id)}
         {@const behavior = keymap.behaviorAt(editor.layerID, key.source_key)}
+        {@const legend = keymap.capLegend(editor.layerID, key.source_key)}
+        {@const change = editor.showChanges
+          ? editor.changeAt(editor.layerID, key.source_key)
+          : undefined}
         <Button
           variant="key"
           class={[
             keymap.fallsThrough(editor.layerID, key.source_key) && "fallthrough-key",
+            keymap.isRemapped(editor.layerID, key.source_key) && "remapped-key",
+            change && "changed-key",
             behavior?.kind === "disabled" && "disabled-key",
             editor.sourceKey === key.source_key && "selected-key",
             editor.isInvalidKey(key.source_key) && "invalid-key",
@@ -34,6 +40,7 @@
           data-issue-key
           data-layer-id={editor.layerID}
           data-source-key={key.source_key}
+          data-change={change}
           title={behavior?.kind === "disabled"
             ? `Disabled on ${editor.activeLayer?.name ?? "current"} layer: this key sends no input and blocks lower layers.`
             : `${key.label}: ${keymap.describe(behavior, key.source_key, editor.layerID)}`}
@@ -41,7 +48,9 @@
           aria-pressed={editor.sourceKey === key.source_key}
         >
           <strong>{key.label}</strong><small
-            >{keymap.capLegend(editor.layerID, key.source_key)}</small
+            >{legend.text}{#if legend.hold}<span class="cap-hold"
+                ><span aria-hidden="true">↓</span> {legend.hold}</span
+              >{/if}</small
           >
         </Button>
       {/each}

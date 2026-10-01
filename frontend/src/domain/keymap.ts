@@ -10,6 +10,12 @@ import { humanize } from "./text";
 export const baseLayerID = "base";
 export const defaultTapHoldTimeoutMS = 200;
 
+export interface CapLegend {
+  text: string;
+  /** The hold action of a tap-hold key. */
+  hold?: string;
+}
+
 export type EditableState = Pick<
   Profile,
   "layers" | "assignments" | "aliases" | "macros"
@@ -101,15 +107,29 @@ export class Keymap {
     );
   }
 
-  /** The short legend on an editor keycap; falling-through keys show Base. */
-  capLegend(layerID: string, sourceKey: string): string {
-    return this.fallsThrough(layerID, sourceKey)
-      ? this.label(
-          this.behaviorAt(baseLayerID, sourceKey),
-          sourceKey,
-          baseLayerID,
-        )
-      : this.label(this.behaviorAt(layerID, sourceKey), sourceKey, layerID);
+  /**
+   * The short legend on an editor keycap; falling-through keys show Base.
+   * Tap-hold keys get a second line for the hold action.
+   */
+  capLegend(layerID: string, sourceKey: string): CapLegend {
+    const shown = this.fallsThrough(layerID, sourceKey) ? baseLayerID : layerID;
+    const behavior = this.behaviorAt(shown, sourceKey);
+    if (behavior?.kind === "tap_hold") {
+      return {
+        text: this.label(behavior.tap, sourceKey, shown),
+        hold:
+          behavior.hold?.kind === "hold_layer"
+            ? this.layerName(behavior.hold.target)
+            : this.label(behavior.hold, sourceKey, shown),
+      };
+    }
+    return { text: this.label(behavior, sourceKey, shown) };
+  }
+
+  /** Whether the layer explicitly changes what the key does. */
+  isRemapped(layerID: string, sourceKey: string): boolean {
+    const behavior = this.behaviorAt(layerID, sourceKey);
+    return !!behavior && behavior.kind !== "transparent";
   }
 
   label(

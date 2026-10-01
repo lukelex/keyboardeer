@@ -35,6 +35,7 @@
           "layer-tab",
           editor.layerID === layer.id && "active",
           !reachable && "unreachable",
+          editor.showChanges && editor.layerHasChanges(layer.id) && "has-changes",
         ]}
         role="tab"
         id={`layer-tab-${layer.id}`}

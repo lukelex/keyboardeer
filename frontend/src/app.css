@@ -1487,6 +1487,7 @@ h1 {
 }
 .editor-key {
   align-items: flex-start;
+  position: relative;
   background: #fffdf8;
   border: 1px solid #cbd9c3;
   border-radius: 7px;
@@ -1592,6 +1593,96 @@ h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.editor-key:has(.cap-hold) {
+  padding-bottom: 2px;
+  padding-top: 3px;
+}
+.editor-key:has(.cap-hold) strong,
+.editor-key:has(.cap-hold) small {
+  line-height: 1.05;
+}
+.editor-key .cap-hold {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* A dot marks keys this layer changes (disabled keys show their × instead). */
+.editor-key.remapped-key {
+  border-color: #8fae8a;
+}
+.editor-key.remapped-key:not(.disabled-key)::after {
+  background: #2c6652;
+  border-radius: 50%;
+  content: "";
+  height: 6px;
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 6px;
+}
+.editor-key.changed-key {
+  box-shadow: 0 0 0 2px var(--change-color);
+}
+.editor-key[data-change="added"],
+.changes-legend i[data-change="added"] {
+  --change-color: #2f8a4b;
+}
+.editor-key[data-change="changed"],
+.changes-legend i[data-change="changed"] {
+  --change-color: #b8862f;
+}
+.editor-key[data-change="removed"],
+.changes-legend i[data-change="removed"] {
+  --change-color: #b5543b;
+}
+.changes-bar {
+  align-items: center;
+  color: #59675d;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 6px 12px;
+  margin: 14px auto 0;
+  max-width: 780px;
+}
+.changes-toggle {
+  background: transparent;
+  border: 1px solid #829686;
+  border-radius: 999px;
+  color: #18352c;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+  padding: 3px 10px;
+}
+.changes-toggle[aria-pressed="true"] {
+  background: #d9ecd1;
+  border-color: #608b61;
+}
+.changes-legend {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+}
+.changes-legend i {
+  border: 2px solid var(--change-color);
+  border-radius: 3px;
+  display: inline-block;
+  height: 10px;
+  margin-left: 6px;
+  width: 10px;
+}
+.changes-elsewhere {
+  color: #6f5a32;
+  font-weight: 650;
+}
+.layer-tab.has-changes::after {
+  background: #b8862f;
+  border-radius: 50%;
+  content: "";
+  height: 6px;
+  width: 6px;
 }
 .key-palette {
   background: #fffdf8;
