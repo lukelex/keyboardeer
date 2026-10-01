@@ -27,3 +27,21 @@ export function onDesktopEvent(
 ): () => void {
   return window.runtime?.EventsOn?.(name, callback) ?? (() => {});
 }
+
+/** Opens a link in the person's browser (the webview cannot navigate away). */
+export function openExternal(url: string) {
+  if (window.runtime?.BrowserOpenURL) window.runtime.BrowserOpenURL(url);
+  else window.open(url, "_blank", "noopener");
+}
+
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    if (window.runtime?.ClipboardSetText) {
+      return await window.runtime.ClipboardSetText(text);
+    }
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}

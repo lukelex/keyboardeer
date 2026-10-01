@@ -3233,3 +3233,30 @@ kbd {
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
+.manager-steps {
+  color: var(--text-warning);
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 8px 0;
+  padding-left: 22px;
+}
+.manager-notice .inline-link {
+  color: var(--text-warning);
+}
+.manager-endpoint {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+.manager-endpoint code {
+  background: var(--surface-warning-strong);
+  border-radius: 5px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  padding: 1px 6px;
+}
+.manager-notice .check-again,
+.empty-state .check-again {
+  margin-top: 10px;
+}

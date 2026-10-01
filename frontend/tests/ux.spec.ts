@@ -1440,3 +1440,58 @@ test("switches bindings off unless a trial Apply is kept", async ({ page }) => {
     "are off, so the keyboard types normally",
   );
 });
+
+test("explains a missing manager and checks again on request", async ({
+  page,
+}) => {
+  await page.addInitScript((ready) => {
+    let calls = 0;
+    const copies: string[] = [];
+    (window as unknown as { __copies: string[] }).__copies = copies;
+    window.runtime = {
+      EventsOn: () => () => {},
+      ClipboardSetText: async (text) => {
+        copies.push(text);
+        return true;
+      },
+    };
+    window.go = {
+      main: {
+        App: {
+          Info: async () => ({ name: "KeyboarDeer", version: "test" }),
+          // Offline at first; the manager is running by the second check.
+          Workspace: async () =>
+            ++calls === 1
+              ? {
+                  status: {
+                    state: "unavailable",
+                    message: "The manager socket is not accepting connections.",
+                    endpoint: "/run/user/1000/kmonad-device-manager/api.sock",
+                  },
+                }
+              : ready,
+          Profiles: async () => [],
+          Geometries: async () => [],
+        },
+      },
+    };
+  }, workspace);
+  await page.goto("/");
+  const notice = page.locator('.manager-notice[data-state="unavailable"]');
+  await expect(notice).toContainText(
+    "Install KMonad Device Manager v1.2.0 or newer",
+  );
+  await expect(notice.locator("code")).toHaveText(
+    "/run/user/1000/kmonad-device-manager/api.sock",
+  );
+  await notice.getByRole("button", { name: "Copy path" }).click();
+  await expect(notice.getByRole("button", { name: "Copied" })).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { __copies: string[] }).__copies,
+    ),
+  ).toEqual(["/run/user/1000/kmonad-device-manager/api.sock"]);
+  await notice.getByRole("button", { name: "Check again" }).click();
+  await expect(page.getByText("Manager ready", { exact: true })).toBeVisible();
+  await expect(notice).toHaveCount(0);
+});

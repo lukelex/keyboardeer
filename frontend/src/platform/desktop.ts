@@ -361,6 +361,8 @@ declare global {
         eventName: string,
         callback: (payload: unknown) => void,
       ) => () => void;
+      BrowserOpenURL?: (url: string) => void;
+      ClipboardSetText?: (text: string) => Promise<boolean>;
     };
   }
 }

@@ -4,6 +4,7 @@
   import DeviceCard from "./DeviceCard.svelte";
   import ExternalConfigurations from "./ExternalConfigurations.svelte";
   import FirstRunCard from "./FirstRunCard.svelte";
+  import CheckAgainButton from "./CheckAgainButton.svelte";
   import IdentifyIcon from "./IdentifyIcon.svelte";
   import ManagerNotice from "./ManagerNotice.svelte";
   import ProfileFileNotices from "./ProfileFileNotices.svelte";
@@ -57,8 +58,10 @@
       <span aria-hidden="true">⌨</span>
       <h2>A little quiet here.</h2>
       <p>
-        The manager has not reported a keyboard yet. Connect one, then refresh.
+        The manager has not reported a keyboard yet. Connect one and it appears
+        here by itself.
       </p>
+      <CheckAgainButton />
     </section>
   {:else if connection.canShowDevices}
     <div class="device-list">
