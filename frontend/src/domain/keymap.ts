@@ -10,6 +10,14 @@ import { humanize } from "./text";
 export const baseLayerID = "base";
 export const defaultTapHoldTimeoutMS = 200;
 
+/** A key that produces some output, and how. */
+export interface OutputSource {
+  layerID: string;
+  sourceKey: string;
+  /** "sends" for a plain remap; "unchanged" for an unmapped Base key. */
+  role: "sends" | "unchanged" | "tap" | "hold" | "alias" | "macro";
+}
+
 export interface CapLegend {
   text: string;
   /** The hold action of a tap-hold key. */
@@ -294,6 +302,59 @@ export class Keymap {
     const labels = this.entryLabels(layerID);
     if (!labels.length) return "";
     return `via ${labels[0]}${labels.length > 1 ? ` +${labels.length - 1}` : ""}`;
+  }
+
+  /**
+   * Every key on every layer that produces `output`: plain remaps, the tap
+   * or hold half of a tap-hold, aliases, macro steps, and Base keys that are
+   * left unchanged.
+   */
+  findOutput(output: string): OutputSource[] {
+    const found: OutputSource[] = [];
+    const sends = (
+      behavior: ProfileBehavior | undefined,
+      seen = new Set<string>(),
+    ): boolean => {
+      if (!behavior) return false;
+      if (behavior.kind === "key") return behavior.key === output;
+      if (
+        behavior.kind === "alias" &&
+        behavior.target &&
+        !seen.has(behavior.target)
+      ) {
+        seen.add(behavior.target);
+        return sends(this.profile.aliases?.[behavior.target], seen);
+      }
+      return false;
+    };
+    for (const assignment of this.assignments) {
+      const { behavior, layer_id: layerID, source_key: sourceKey } = assignment;
+      const at = (role: OutputSource["role"]) =>
+        found.push({ layerID, sourceKey, role });
+      if (behavior.kind === "key" && behavior.key === output) at("sends");
+      else if (behavior.kind === "tap_hold") {
+        if (sends(behavior.tap)) at("tap");
+        if (sends(behavior.hold)) at("hold");
+      } else if (behavior.kind === "alias" && sends(behavior)) at("alias");
+      else if (
+        behavior.kind === "macro" &&
+        this.profile.macros?.[behavior.target ?? ""]?.some((step) =>
+          sends(step),
+        )
+      )
+        at("macro");
+    }
+    if (
+      this.profile.geometry.source_keys.includes(output) &&
+      !this.behaviorAt(baseLayerID, output)
+    ) {
+      found.push({
+        layerID: baseLayerID,
+        sourceKey: output,
+        role: "unchanged",
+      });
+    }
+    return found;
   }
 
   hasDeclaration(name: string): boolean {

@@ -226,3 +226,22 @@ test("recipes add ordinary assignments and explain missing keys", () => {
     "",
   );
 });
+
+test("Keymap finds every key that sends an output", () => {
+  const sendsEsc = new Keymap(
+    keymap.withBehavior("layer-nav", "q", { kind: "key", key: "esc" }),
+    catalog,
+  ).findOutput("esc");
+  expect(sendsEsc).toEqual([
+    { layerID: "base", sourceKey: "caps", role: "tap" },
+    { layerID: "layer-nav", sourceKey: "q", role: "sends" },
+    { layerID: "base", sourceKey: "esc", role: "unchanged" },
+  ]);
+  // A remapped Base key no longer counts as sending itself.
+  expect(keymap.findOutput("a")).toEqual([]);
+  // The TKL's own Left arrow also sends Left.
+  expect(keymap.findOutput("left")).toEqual([
+    { layerID: "layer-nav", sourceKey: "h", role: "sends" },
+    { layerID: "base", sourceKey: "left", role: "unchanged" },
+  ]);
+});

@@ -1200,3 +1200,35 @@ test("selects several keys and changes them in one step", async ({ page }) => {
   await key("r").click();
   await expect(page.locator(".selected-key")).toHaveCount(1);
 });
+
+test("shows which keys send an output key", async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await openEditor(page);
+  const status = page.locator(".output-lookup");
+  await page.locator('.palette-key[aria-label="Assign Esc (esc)"]').hover();
+  await expect(status).toHaveText(
+    "Esc is sent by CAPS (tap) on Base, ESC on Base.",
+  );
+  await expect(page.locator(".found-key")).toHaveCount(2);
+  await expect(page.locator('.editor-key[data-source-key="caps"]')).toHaveClass(
+    /found-key/,
+  );
+  // A search that narrows to one key looks it up as well.
+  await page.mouse.move(0, 0);
+  await page.getByLabel("Search keys", { exact: true }).fill("left arrow");
+  await expect(status).toHaveText(
+    "Left arrow is sent by H on Navigation, Left on Base.",
+  );
+  await expect(page.locator(".found-key")).toHaveAttribute(
+    "data-source-key",
+    "left",
+  );
+  await page
+    .getByRole("tablist", { name: "Keymap layers" })
+    .getByRole("tab", { name: "Navigation" })
+    .click();
+  await expect(page.locator(".found-key")).toHaveAttribute(
+    "data-source-key",
+    "h",
+  );
+});

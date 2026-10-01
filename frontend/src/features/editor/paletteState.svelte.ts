@@ -4,6 +4,8 @@ import type { PaletteCategory } from "../../domain/keyCatalog";
 export class PaletteState {
   search = $state("");
   category = $state<PaletteCategory>("all");
+  /** The output key being looked up (hovered or focused in the palette). */
+  inspecting = $state("");
 
   /** Starts a new search across every category. */
   startSearch(text: string) {

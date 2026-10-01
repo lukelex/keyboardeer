@@ -21,6 +21,21 @@
   let flashTimer: ReturnType<typeof setTimeout> | undefined;
   const compact = $derived(usesCompactPalette(viewportHeight, editor.rows.length));
   const grid = $derived(editor.geometry ? new KeyboardGrid(editor.geometry) : null);
+  // The output being looked up: a hovered or focused palette key, or the
+  // only match of the palette search.
+  const lookup = $derived.by(() => {
+    if (palette.inspecting) return palette.inspecting;
+    const matches = palette.search.trim() ? editor.catalog.search(palette.search) : [];
+    return matches.length === 1 ? matches[0].source_key : "";
+  });
+  const findings = $derived(lookup && editor.keymap ? editor.keymap.findOutput(lookup) : []);
+  const foundHere = $derived(
+    new Set(
+      findings
+        .filter((finding) => finding.layerID === editor.layerID)
+        .map((finding) => finding.sourceKey),
+    ),
+  );
   const layoutKeys = $derived(
     new Set(editor.geometry?.keys.map((key) => key.source_key) ?? []),
   );
@@ -129,11 +144,11 @@
         </p>
       {/if}
       <ProblemsPanel />
-      <KeyboardCanvas {flashingKey} />
+      <KeyboardCanvas {flashingKey} found={foundHere} />
       <ChangesBar />
       <ApplyStatus />
     </div>
-    <EditorPalette {compact} {palette} />
+    <EditorPalette {compact} {palette} {lookup} {findings} />
   {:else}
     <div class="editor-scroll-region">
       <section class="manager-notice" data-state="incomplete">

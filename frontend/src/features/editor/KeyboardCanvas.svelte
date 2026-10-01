@@ -4,7 +4,10 @@
 
   // The physical keyboard for the selected layer. Each cap shows its label
   // and a short legend for what it does; the tooltip has the full sentence.
-  let { flashingKey = "" }: { flashingKey?: string } = $props();
+  let {
+    flashingKey = "",
+    found = new Set<string>(),
+  }: { flashingKey?: string; found?: ReadonlySet<string> } = $props();
   const { editor } = useApp();
   const geometry = $derived(editor.geometry!);
   const keymap = $derived(editor.keymap!);
@@ -35,6 +38,7 @@
             editor.selectedKeys.includes(key.source_key) && "selected-key",
             editor.isInvalidKey(key.source_key) && "invalid-key",
             flashingKey === key.source_key && "flashing-key",
+            found.has(key.source_key) && "found-key",
           ]}
           style={`width: ${key.width * 42}px; margin-left: ${(key.gap_before ?? 0) * 42}px`}
           data-issue-key

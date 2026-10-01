@@ -2857,3 +2857,16 @@ kbd {
 .complex-actions .recipes-trigger {
   border-style: dashed;
 }
+.editor-key.found-key {
+  background: #fdf3d8;
+  border-color: #b8862f;
+  box-shadow: 0 0 0 2px rgb(184 134 47 / 45%);
+}
+.palette-search .output-lookup {
+  color: #6f5a32;
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
