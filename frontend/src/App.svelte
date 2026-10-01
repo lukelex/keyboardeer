@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import Button from "./components/Button.svelte";
+  import Menu, { type MenuItem } from "./components/Menu.svelte";
   import { formatKMonad } from "./kmonadFormat";
   import {
     applyAssignmentRecovery,
@@ -556,6 +557,76 @@
     !selectedDevice?.runtime_conflict &&
     currentPreview?.validation.outcome === "valid" &&
     !activeProfile.apply_pending;
+  $: rawConfigurationUnavailable = !activeProfile?.manager_configuration_id
+    ? "Apply this profile first"
+    : !workspaceLive
+      ? "The manager is not connected"
+      : !configurationExport.available
+        ? configurationExport.reason
+        : "";
+  $: profileMenuItems = [
+    ...(selectedDevice ? profilesForDevice(selectedDevice.id) : []).map(
+      (candidate): MenuItem => ({
+        label: candidate.name,
+        hint: candidate.manager_configuration_id
+          ? "Applied to keyboard"
+          : "Draft only",
+        checked: candidate.id === activeProfile?.id,
+        disabled: profileBusy,
+        onSelect: () => void switchProfile(candidate),
+      }),
+    ),
+    { separator: true },
+    {
+      label: "New profile",
+      disabled: profileBusy,
+      onSelect: newProfileForDevice,
+    },
+    {
+      label: "Duplicate this profile",
+      disabled: profileBusy,
+      onSelect: () => void duplicateActiveProfile(),
+    },
+    {
+      label: "Rename or delete…",
+      onSelect: openProfiles,
+    },
+  ] satisfies MenuItem[];
+  $: moreMenuItems = [
+    {
+      label: "View .kbd",
+      hint: rawConfigurationUnavailable,
+      disabled:
+        !!rawConfigurationUnavailable ||
+        rawConfigurationBusy ||
+        !hasDesktopBinding("ExportConfiguration"),
+      onSelect: () => void viewRawConfiguration(),
+    },
+    {
+      label: "Save .kbd…",
+      hint: rawConfigurationUnavailable,
+      disabled:
+        !!rawConfigurationUnavailable ||
+        rawConfigurationBusy ||
+        !hasDesktopBinding("SaveConfigurationExport"),
+      onSelect: () => void saveRawConfiguration(),
+    },
+    { separator: true },
+    {
+      label: "Export profile…",
+      disabled: profileBusy || !hasDesktopBinding("ExportProfile"),
+      onSelect: () => void exportActiveProfile(),
+    },
+    {
+      label: pendingProfileFile ? "Import opened file" : "Import profile…",
+      disabled:
+        profileBusy ||
+        !hasDesktopBinding(
+          pendingProfileFile ? "ImportProfileFromPath" : "ImportProfile",
+        ),
+      onSelect: () => void importProfileForDevice(),
+    },
+  ] satisfies MenuItem[];
   function humanize(value: string) {
     return value
       .replace(/_/g, " ")
@@ -2876,56 +2947,34 @@
         aria-labelledby="editor-title"
       >
         <div class="editor-heading">
-          <nav aria-label="Editor breadcrumb">
+          <nav class="editor-nav" aria-label="Editor breadcrumb">
             <Button variant="link" on:click={backToDevices}
               >← All keyboards</Button
             >
-            <Button
-              variant="secondary"
-              className="profiles-trigger"
-              type="button"
-              on:click={openProfiles}
-              title="Switch, rename, duplicate, or delete profiles"
-              >Profiles{selectedDevice &&
-              profilesForDevice(selectedDevice.id).length > 1
-                ? ` (${profilesForDevice(selectedDevice.id).length})`
-                : ""}</Button
-            >
-            <Button
-              variant="secondary"
-              className="profiles-trigger"
-              type="button"
-              on:click={viewRawConfiguration}
-              disabled={rawConfigurationBusy ||
-                !activeProfile.manager_configuration_id ||
-                !workspaceLive ||
-                !configurationExport.available ||
-                !hasDesktopBinding("ExportConfiguration")}
-              title={!activeProfile.manager_configuration_id
-                ? "Apply this profile before viewing its manager-rendered KMonad configuration."
-                : !configurationExport.available
-                  ? configurationExport.reason
-                  : "View the manager-rendered KMonad configuration for this keyboard."}
-              >{rawConfigurationBusy ? "Loading .kbd…" : "View .kbd"}</Button
-            >
-            <Button
-              variant="secondary"
-              className="profiles-trigger"
-              type="button"
-              on:click={saveRawConfiguration}
-              disabled={rawConfigurationBusy ||
-                !activeProfile.manager_configuration_id ||
-                !workspaceLive ||
-                !configurationExport.available ||
-                !hasDesktopBinding("SaveConfigurationExport")}
-              title="Save the manager-rendered, device-bound .kbd artifact."
-              >{rawConfigurationBusy ? "Saving .kbd…" : "Save .kbd"}</Button
-            >
           </nav>
           <div class="editor-title">
-            <h1 id="editor-title">{activeProfile.name}</h1>
+            <h1 id="editor-title">
+              <Menu
+                items={profileMenuItems}
+                label="Profiles for this keyboard"
+                triggerClass="profile-switcher"
+                title="Switch, add, or manage profiles"
+                ><span class="profile-switcher-name">{activeProfile.name}</span
+                ><span class="profile-switcher-chevron" aria-hidden="true"
+                  >▾</span
+                ></Menu
+              >
+            </h1>
             <span>{selectedDevice?.display_name ?? "Keyboard"}</span>
           </div>
+          <Menu
+            items={moreMenuItems}
+            label="More profile actions"
+            triggerLabel="More profile actions"
+            triggerClass="button secondary more-actions"
+            title="Export, import, and generated .kbd files"
+            >⋯</Menu
+          >
           <span class="draft-status" data-state={draftSaveState} role="status"
             >{draftStatusText}</span
           >

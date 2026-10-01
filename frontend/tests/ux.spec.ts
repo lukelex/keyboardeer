@@ -288,8 +288,61 @@ test("keeps every dialog and setup button readable", async ({ page }) => {
   await expectReadableButtons(page, "dialog");
   await page.keyboard.press("Escape");
   await expectReadableButtons(page, ".editor-page");
-  await page.getByRole("button", { name: /^Profiles/ }).click();
+  await page.locator(".profile-switcher").click();
+  await expectReadableButtons(page, ".editor-heading");
+  await page.getByRole("menuitem", { name: "Rename or delete…" }).click();
   await expectReadableButtons(page, "dialog");
   await page.getByRole("button", { name: "New profile" }).click();
   await expectReadableButtons(page, ".setup-page");
+});
+
+test("keeps the editor header to one uncluttered row", async ({ page }) => {
+  for (const width of [1180, 760]) {
+    await page.setViewportSize({ width, height: 820 });
+    if (width === 1180) await openEditor(page);
+    const boxes = await page
+      .locator(".editor-heading > *")
+      .evaluateAll((elements) =>
+        elements
+          .filter((element) => element.getClientRects().length > 0)
+          .map((element) => {
+            const box = element.getBoundingClientRect();
+            return {
+              name: element.className,
+              left: box.left,
+              right: box.right,
+              top: box.top,
+              bottom: box.bottom,
+            };
+          }),
+      );
+    for (const [index, box] of boxes.entries()) {
+      expect(box.right, box.name).toBeLessThanOrEqual(width);
+      for (const other of boxes.slice(index + 1)) {
+        const overlaps =
+          box.left < other.right - 1 &&
+          other.left < box.right - 1 &&
+          box.top < other.bottom - 1 &&
+          other.top < box.bottom - 1;
+        expect(overlaps, `${box.name} overlaps ${other.name}`).toBe(false);
+      }
+    }
+    if (width === 1180) {
+      const centers = boxes.map((box) => (box.top + box.bottom) / 2);
+      expect(Math.max(...centers) - Math.min(...centers)).toBeLessThan(12);
+    }
+  }
+
+  // The overflow menu is keyboard operable and explains disabled actions.
+  const more = page.getByRole("button", { name: "More profile actions" });
+  await more.focus();
+  await page.keyboard.press("ArrowDown");
+  const menu = page.getByRole("menu", { name: "More profile actions" });
+  await expect(menu).toBeVisible();
+  await expect(
+    menu.getByRole("menuitem", { name: /Export profile/ }),
+  ).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await expect(more).toBeFocused();
 });

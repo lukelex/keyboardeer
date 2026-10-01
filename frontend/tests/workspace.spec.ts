@@ -613,7 +613,8 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
       "Manager Apply: Succeeded — configuration persisted and activation confirmed",
     ),
   ).toBeVisible();
-  await page.getByRole("button", { name: "View .kbd" }).click();
+  await page.getByRole("button", { name: "More profile actions" }).click();
+  await page.getByRole("menuitem", { name: "View .kbd" }).click();
   await expect(
     page.getByRole("heading", { name: "KMonad configuration" }),
   ).toBeVisible();
@@ -2150,7 +2151,9 @@ test("switches, renames, duplicates, and deletes profiles per keyboard", async (
   ).toBeVisible();
   const capsBehavior = page.locator(".editor-key").first().locator("small");
 
-  await page.getByRole("button", { name: "Profiles", exact: true }).click();
+  const profileSwitcher = page.locator(".profile-switcher");
+  await profileSwitcher.click();
+  await page.getByRole("menuitem", { name: "Rename or delete…" }).click();
   await page.getByRole("button", { name: "Duplicate", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Typing copy", level: 1 }),
@@ -2161,15 +2164,24 @@ test("switches, renames, duplicates, and deletes profiles per keyboard", async (
     page.getByRole("heading", { name: "Gaming", level: 1 }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Close profiles" }).click();
+  await profileSwitcher.click();
+  await expect(page.getByRole("menuitemradio")).toHaveText([
+    /Typing/,
+    /Gaming/,
+  ]);
   await expect(
-    page.getByRole("button", { name: "Profiles (2)", exact: true }),
-  ).toBeVisible();
+    page.getByRole("menuitemradio", { name: /Gaming/ }),
+  ).toHaveAttribute("aria-checked", "true");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(profileSwitcher).toBeFocused();
 
   await page.locator(".editor-key").first().click();
   await page.getByRole("button", { name: "Disable selected key" }).click();
   await expect(capsBehavior).toHaveText("No output");
 
-  await page.getByRole("button", { name: "Profiles (2)", exact: true }).click();
+  await profileSwitcher.click();
+  await page.getByRole("menuitem", { name: "Rename or delete…" }).click();
   await page.getByRole("button", { name: "Open Typing" }).click();
   await expect(
     page.getByRole("heading", { name: "Typing", level: 1 }),

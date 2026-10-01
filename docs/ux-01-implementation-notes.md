@@ -18,6 +18,11 @@ how it is verified.
   `ArrowDown` move focus and activate the next/previous tab (wrapping at the
   ends). Arrow *Up*/*Down* are accepted as horizontal equivalents for
   right-to-left/top-to-bottom preferences.
+- Header menus (the profile switcher and "More profile actions") follow the
+  WAI-ARIA menu button pattern in `components/Menu.svelte`: `ArrowDown`/
+  `ArrowUp` open the menu and move between items, `Home`/`End` jump, `Escape`
+  closes and returns focus to the trigger, and `Tab` or a click outside closes
+  it. Disabled items stay visible with a hint that explains why.
 - Dialog keyboard support: `manageDialog` moves initial focus to the first
   focusable element (or `[autofocus]`), traps `Tab`/`Shift+Tab` inside the
   dialog, and every modal closes on `Escape` via the window-level
