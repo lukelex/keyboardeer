@@ -10,6 +10,9 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 5175,
     strictPort: true,
+    // Compile the whole module graph at startup, so the first page loads
+    // (including parallel test workers) never wait on on-demand transforms.
+    warmup: { clientFiles: ["./src/main.ts"] },
   },
   build: {
     outDir: "dist",
