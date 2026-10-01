@@ -50,8 +50,11 @@ how it is verified.
   buttons and small labels; the Playwright suite asserts the computed ratios.
 - Typography and spacing use fluid `clamp()` values so type scales with the
   window, and the layout compacts at `max-width: 680px`.
-- Small windows (the CSS-pixel equivalent of 200% zoom at a 1280-wide window)
-  switch to the compact palette (`viewport-height ≤ 720`): the palette becomes
+- The keyboard always keeps its natural height. The grouped palette is used
+  only when the window has room for the keyboard plus a palette of
+  `max(380px, 45dvh)` (which then scrolls internally); otherwise, and always at
+  `viewport-height ≤ 720` (the CSS-pixel equivalent of 200% zoom at a
+  1280-wide window), the editor switches to the compact palette: the palette becomes
   a horizontal strip whose key rows and category tabs scroll within their own
   boxes, and the editor heading wraps instead of clipping. The editor grid now
   uses `grid-template-columns: minmax(0, 1fr)` with `min-width: 0` on the

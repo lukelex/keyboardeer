@@ -80,6 +80,15 @@
   const draftHistoryLimit = 100;
   const defaultTapHoldTimeoutMS = 200;
   const compactPaletteHeight = 720;
+  // The keyboard always gets its natural height first. Full-palette mode is
+  // used only when the remaining window height fits the grouped palette
+  // (whose CSS height is capped to the same value); otherwise the compact,
+  // category-tabbed strip is shown. These are the full-mode CSS dimensions.
+  const editorChromeHeight = 110;
+  const keyboardRowHeight = 47;
+  const keyboardFrameHeight = 123;
+  const fullPaletteMinHeight = 380;
+  const fullPaletteViewportShare = 0.45;
   const paletteIcons: Record<string, string> = {
     bspc: "⌫",
     tab: "⇥",
@@ -423,8 +432,16 @@
   $: renderedPaletteKeys = compactPalette
     ? compactPaletteKeys
     : visiblePaletteKeys;
+  $: keyboardHeightNeeded =
+    activeRows.length * keyboardRowHeight + keyboardFrameHeight;
   $: compactPalette =
-    viewportHeight > 0 && viewportHeight <= compactPaletteHeight;
+    viewportHeight > 0 &&
+    (viewportHeight <= compactPaletteHeight ||
+      viewportHeight - editorChromeHeight - keyboardHeightNeeded <
+        Math.max(
+          fullPaletteMinHeight,
+          viewportHeight * fullPaletteViewportShare,
+        ));
   $: activeHistory = activeProfile ? draftHistory[activeProfile.id] : undefined;
   $: canUndo =
     !!activeHistory?.past.length &&

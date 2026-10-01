@@ -1,0 +1,602 @@
+{
+  "id": "us-ansi-tkl-v1",
+  "name": "US ANSI TKL",
+  "description": "Standard tenkeyless ANSI layout from KMonad\u2019s documented source template.",
+  "keys": [
+    {
+      "id": "us-ansi-tkl-v1-0-0",
+      "label": "ESC",
+      "source_key": "esc",
+      "row": 0,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-0-1",
+      "label": "F1",
+      "source_key": "f1",
+      "row": 0,
+      "width": 1,
+      "gap_before": 2
+    },
+    {
+      "id": "us-ansi-tkl-v1-0-2",
+      "label": "F2",
+      "source_key": "f2",
+      "row": 0,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-0-3",
+      "label": "F3",
+      "source_key": "f3",
+      "row": 0,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-0-4",
+      "label": "F4",
+      "source_key": "f4",
+      "row": 0,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-0-5",
+      "label": "F5",
+      "source_key": "f5",
+      "row": 0,
+      "width": 1,
+      "gap_before": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-0-6",
+      "label": "F6",
+      "source_key": "f6",
+      "row": 0,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-0-7",
+      "label": "F7",
+      "source_key": "f7",
+      "row": 0,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-0-8",
+      "label": "F8",
+      "source_key": "f8",
+      "row": 0,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-0-9",
+      "label": "F9",
+      "source_key": "f9",
+      "row": 0,
+      "width": 1,
+      "gap_before": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-0-10",
+      "label": "F10",
+      "source_key": "f10",
+      "row": 0,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-0-11",
+      "label": "F11",
+      "source_key": "f11",
+      "row": 0,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-0-12",
+      "label": "F12",
+      "source_key": "f12",
+      "row": 0,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-1-0",
+      "label": "`",
+      "source_key": "grv",
+      "row": 1,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-1-1",
+      "label": "1",
+      "source_key": "1",
+      "row": 1,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-1-2",
+      "label": "2",
+      "source_key": "2",
+      "row": 1,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-1-3",
+      "label": "3",
+      "source_key": "3",
+      "row": 1,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-1-4",
+      "label": "4",
+      "source_key": "4",
+      "row": 1,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-1-5",
+      "label": "5",
+      "source_key": "5",
+      "row": 1,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-1-6",
+      "label": "6",
+      "source_key": "6",
+      "row": 1,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-1-7",
+      "label": "7",
+      "source_key": "7",
+      "row": 1,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-1-8",
+      "label": "8",
+      "source_key": "8",
+      "row": 1,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-1-9",
+      "label": "9",
+      "source_key": "9",
+      "row": 1,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-1-10",
+      "label": "0",
+      "source_key": "0",
+      "row": 1,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-1-11",
+      "label": "-",
+      "source_key": "-",
+      "row": 1,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-1-12",
+      "label": "=",
+      "source_key": "=",
+      "row": 1,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-1-13",
+      "label": "Backspace",
+      "source_key": "bspc",
+      "row": 1,
+      "width": 2
+    },
+    {
+      "id": "us-ansi-tkl-v1-1-14",
+      "label": "Ins",
+      "source_key": "ins",
+      "row": 1,
+      "width": 1,
+      "gap_before": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-1-15",
+      "label": "Home",
+      "source_key": "home",
+      "row": 1,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-1-16",
+      "label": "PgUp",
+      "source_key": "pgup",
+      "row": 1,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-2-0",
+      "label": "TAB",
+      "source_key": "tab",
+      "row": 2,
+      "width": 1.5
+    },
+    {
+      "id": "us-ansi-tkl-v1-2-1",
+      "label": "Q",
+      "source_key": "q",
+      "row": 2,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-2-2",
+      "label": "W",
+      "source_key": "w",
+      "row": 2,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-2-3",
+      "label": "E",
+      "source_key": "e",
+      "row": 2,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-2-4",
+      "label": "R",
+      "source_key": "r",
+      "row": 2,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-2-5",
+      "label": "T",
+      "source_key": "t",
+      "row": 2,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-2-6",
+      "label": "Y",
+      "source_key": "y",
+      "row": 2,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-2-7",
+      "label": "U",
+      "source_key": "u",
+      "row": 2,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-2-8",
+      "label": "I",
+      "source_key": "i",
+      "row": 2,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-2-9",
+      "label": "O",
+      "source_key": "o",
+      "row": 2,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-2-10",
+      "label": "P",
+      "source_key": "p",
+      "row": 2,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-2-11",
+      "label": "[",
+      "source_key": "[",
+      "row": 2,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-2-12",
+      "label": "]",
+      "source_key": "]",
+      "row": 2,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-2-13",
+      "label": "\\",
+      "source_key": "\\",
+      "row": 2,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-2-14",
+      "label": "Del",
+      "source_key": "del",
+      "row": 2,
+      "width": 1,
+      "gap_before": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-2-15",
+      "label": "End",
+      "source_key": "end",
+      "row": 2,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-2-16",
+      "label": "PgDn",
+      "source_key": "pgdn",
+      "row": 2,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-3-0",
+      "label": "CAPS",
+      "source_key": "caps",
+      "row": 3,
+      "width": 1.8
+    },
+    {
+      "id": "us-ansi-tkl-v1-3-1",
+      "label": "A",
+      "source_key": "a",
+      "row": 3,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-3-2",
+      "label": "S",
+      "source_key": "s",
+      "row": 3,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-3-3",
+      "label": "D",
+      "source_key": "d",
+      "row": 3,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-3-4",
+      "label": "F",
+      "source_key": "f",
+      "row": 3,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-3-5",
+      "label": "G",
+      "source_key": "g",
+      "row": 3,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-3-6",
+      "label": "H",
+      "source_key": "h",
+      "row": 3,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-3-7",
+      "label": "J",
+      "source_key": "j",
+      "row": 3,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-3-8",
+      "label": "K",
+      "source_key": "k",
+      "row": 3,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-3-9",
+      "label": "L",
+      "source_key": "l",
+      "row": 3,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-3-10",
+      "label": ";",
+      "source_key": ";",
+      "row": 3,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-3-11",
+      "label": "'",
+      "source_key": "'",
+      "row": 3,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-3-12",
+      "label": "Enter",
+      "source_key": "ret",
+      "row": 3,
+      "width": 2.2
+    },
+    {
+      "id": "us-ansi-tkl-v1-4-0",
+      "label": "Shift",
+      "source_key": "lsft",
+      "row": 4,
+      "width": 2.2
+    },
+    {
+      "id": "us-ansi-tkl-v1-4-1",
+      "label": "Z",
+      "source_key": "z",
+      "row": 4,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-4-2",
+      "label": "X",
+      "source_key": "x",
+      "row": 4,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-4-3",
+      "label": "C",
+      "source_key": "c",
+      "row": 4,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-4-4",
+      "label": "V",
+      "source_key": "v",
+      "row": 4,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-4-5",
+      "label": "B",
+      "source_key": "b",
+      "row": 4,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-4-6",
+      "label": "N",
+      "source_key": "n",
+      "row": 4,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-4-7",
+      "label": "M",
+      "source_key": "m",
+      "row": 4,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-4-8",
+      "label": ",",
+      "source_key": ",",
+      "row": 4,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-4-9",
+      "label": ".",
+      "source_key": ".",
+      "row": 4,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-4-10",
+      "label": "/",
+      "source_key": "/",
+      "row": 4,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-4-11",
+      "label": "Shift",
+      "source_key": "rsft",
+      "row": 4,
+      "width": 2.8
+    },
+    {
+      "id": "us-ansi-tkl-v1-4-12",
+      "label": "Up",
+      "source_key": "up",
+      "row": 4,
+      "width": 1,
+      "gap_before": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-5-0",
+      "label": "Ctrl",
+      "source_key": "lctl",
+      "row": 5,
+      "width": 1.3
+    },
+    {
+      "id": "us-ansi-tkl-v1-5-1",
+      "label": "Super",
+      "source_key": "lmet",
+      "row": 5,
+      "width": 1.3
+    },
+    {
+      "id": "us-ansi-tkl-v1-5-2",
+      "label": "Alt",
+      "source_key": "lalt",
+      "row": 5,
+      "width": 1.3
+    },
+    {
+      "id": "us-ansi-tkl-v1-5-3",
+      "label": "Space",
+      "source_key": "spc",
+      "row": 5,
+      "width": 6
+    },
+    {
+      "id": "us-ansi-tkl-v1-5-4",
+      "label": "Alt",
+      "source_key": "ralt",
+      "row": 5,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-5-5",
+      "label": "Super",
+      "source_key": "rmet",
+      "row": 5,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-5-6",
+      "label": "Menu",
+      "source_key": "cmp",
+      "row": 5,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-5-7",
+      "label": "Ctrl",
+      "source_key": "rctl",
+      "row": 5,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-5-8",
+      "label": "Left",
+      "source_key": "left",
+      "row": 5,
+      "width": 1,
+      "gap_before": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-5-9",
+      "label": "Down",
+      "source_key": "down",
+      "row": 5,
+      "width": 1
+    },
+    {
+      "id": "us-ansi-tkl-v1-5-10",
+      "label": "Right",
+      "source_key": "rght",
+      "row": 5,
+      "width": 1
+    }
+  ]
+}
