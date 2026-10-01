@@ -2254,7 +2254,7 @@
     <div class="header-actions">
       <Button
         variant="secondary"
-        className="preferences-button"
+        className="preferences-button on-dark"
         aria-label="Preferences"
         title="Preferences"
         on:click={() => {
@@ -2572,7 +2572,7 @@
                           {/if}
                           <Button
                             variant="secondary"
-                            className="configuration-delete"
+                            className="configuration-delete danger"
                             type="button"
                             on:click={() => deleteConfiguration(configuration)}
                             disabled={!!lifecycleBusyID ||
@@ -3574,6 +3574,7 @@
                   : selectedLayerAssignments || selectedLayerReferences
                     ? `Remove ${selectedLayerAssignments} assignment(s) and ${selectedLayerReferences} layer action(s) first.`
                     : "Delete this empty, unreferenced layer."}
+                className="danger"
                 on:click={deleteSelectedLayer}>Delete layer</Button
               >
             </div>
@@ -3915,7 +3916,7 @@
           >
           <Button
             variant="secondary"
-            className="profile-delete"
+            className="profile-delete danger"
             type="button"
             on:click={deleteActiveProfile}
             disabled={profileBusy || !!activeProfile.apply_pending}

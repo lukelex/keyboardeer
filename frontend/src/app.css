@@ -54,25 +54,6 @@ button:focus-visible {
 .editor-mode .brand small {
   display: none;
 }
-.editor-page .button.secondary {
-  background: #fffefa;
-  border-color: #829686;
-  color: #18352c;
-}
-.editor-page .button.secondary:hover:not(:disabled) {
-  background: #e6eee0;
-  border-color: #56745e;
-}
-.editor-page .button.secondary:active:not(:disabled) {
-  background: #d9e7d3;
-}
-.editor-page .button:disabled {
-  background: #edf0ea;
-  border-color: #c7d0c4;
-  color: #59675d;
-  filter: none;
-  opacity: 1;
-}
 .app-header {
   align-items: center;
   background: #14382e;
@@ -172,10 +153,38 @@ button:focus-visible {
   background: #2c6652;
   color: #fffdf6;
 }
+.button.primary:hover:not(:disabled) {
+  background: #235644;
+}
+/* Secondary buttons sit on light surfaces everywhere except the dark app
+   header, which uses .on-dark. */
 .button.secondary {
+  background: #fffefa;
+  border-color: #829686;
+  color: #18352c;
+}
+.button.secondary:hover:not(:disabled) {
+  background: #e6eee0;
+  border-color: #56745e;
+}
+.button.secondary:active:not(:disabled) {
+  background: #d9e7d3;
+}
+.button.secondary.danger:not(:disabled) {
+  border-color: #d3a594;
+  color: #a1462f;
+}
+.button.secondary.danger:hover:not(:disabled) {
+  background: #fbefe9;
+  border-color: #a1462f;
+}
+.button.secondary.on-dark {
   background: transparent;
   border-color: #a8bb9c;
   color: #eaf1dd;
+}
+.button.secondary.on-dark:hover:not(:disabled) {
+  background: rgb(255 255 255 / 9%);
 }
 .button.text {
   background: transparent;
@@ -188,10 +197,18 @@ button:focus-visible {
   cursor: pointer;
   padding: 0;
 }
-.button:disabled {
+/* body raises specificity above component rules that style enabled buttons
+   (palette keys, layer tabs), so every disabled button looks the same. */
+body .button:disabled {
+  background: #edf0ea;
+  border-color: #c7d0c4;
+  color: #59675d;
   cursor: not-allowed;
-  filter: saturate(0.3);
-  opacity: 0.42;
+}
+body .button.text:disabled {
+  background: transparent;
+  border-color: transparent;
+  color: #7d887f;
 }
 main {
   margin: 0 auto;
@@ -612,7 +629,6 @@ h1 {
   margin: 8px 0 0;
 }
 .external-open {
-  color: #35604c !important;
   margin-top: 13px;
 }
 .external-detail-list {
@@ -831,7 +847,6 @@ h1 {
   gap: 4px;
 }
 .history-button {
-  color: #35604c !important;
   font-size: 15px;
   line-height: 1;
   min-height: 30px;
@@ -1153,10 +1168,6 @@ h1 {
   gap: 10px;
   justify-content: flex-end;
   margin-top: 12px;
-}
-.setup-actions .secondary,
-.palette-buttons .secondary {
-  color: #35604c;
 }
 .keyboard-editor {
   background: #e6eee0;
@@ -1508,9 +1519,6 @@ h1 {
   font-weight: 500;
   line-height: 1;
 }
-.palette-disable {
-  color: #35604c !important;
-}
 .palette-utility {
   grid-column: 1 / -1;
   justify-self: end;
@@ -1584,9 +1592,6 @@ h1 {
 .editor-page.compact-palette .keyboard-row {
   gap: 3px;
   margin-bottom: 3px;
-}
-.palette-restore {
-  color: #556e5d !important;
 }
 .behavior-dialog-backdrop {
   align-items: center;
@@ -1845,7 +1850,6 @@ h1 {
   gap: 10px;
 }
 .profiles-trigger {
-  color: #35604c !important;
   min-height: 30px;
   padding: 4px 10px;
   white-space: nowrap;
@@ -1918,12 +1922,8 @@ h1 {
   margin-top: 8px;
 }
 .configuration-actions .button {
-  color: #35604c;
   min-height: 28px;
   padding: 4px 10px;
-}
-.configuration-delete {
-  color: #a1462f !important;
 }
 .configuration-delete-warning {
   background: #fbefe9;
@@ -1934,9 +1934,6 @@ h1 {
   line-height: 1.45;
   margin: 8px 0 0;
   padding: 7px 9px;
-}
-.profile-delete {
-  color: #a1462f !important;
 }
 .layer-manager-list {
   display: grid;
@@ -1979,9 +1976,6 @@ h1 {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 8px;
-}
-.layer-manager-actions .button:last-child {
-  color: #914f42;
 }
 .apply-status {
   border-top: 1px solid #dfe5d6;
@@ -2061,7 +2055,6 @@ footer {
   margin: 0;
 }
 .apply-pending .button {
-  color: #35604c;
   min-height: 30px;
   padding: 4px 10px;
 }
@@ -2091,6 +2084,5 @@ footer {
   color: #796239;
 }
 .legacy-discard {
-  color: #35604c !important;
   margin-top: 6px;
 }

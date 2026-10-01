@@ -221,3 +221,75 @@ for (const [width, height, compact] of [
     await expect(page.getByRole("dialog")).toBeVisible();
   });
 }
+
+// Returns the contrast of every visible button's label against the first
+// opaque background behind it, split into enabled and disabled buttons.
+async function buttonContrasts(page: Page, scope: string) {
+  return page.locator(scope).evaluate((root) => {
+    const channels = (color: string) =>
+      (color.match(/[\d.]+/g) ?? []).map(Number);
+    const luminance = (color: string) => {
+      const [r, g, b] = channels(color).map((value) => {
+        const channel = value / 255;
+        return channel <= 0.04045
+          ? channel / 12.92
+          : ((channel + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const background = (element: Element | null): string => {
+      for (let node = element; node; node = node.parentElement) {
+        const color = getComputedStyle(node).backgroundColor;
+        const alpha = channels(color)[3];
+        if (color !== "transparent" && (alpha === undefined || alpha > 0.9))
+          return color;
+      }
+      return "rgb(255, 255, 255)";
+    };
+    return [...root.querySelectorAll<HTMLButtonElement>("button.button")]
+      .filter((button) => button.getClientRects().length > 0)
+      .map((button) => {
+        const [high, low] = [
+          luminance(getComputedStyle(button).color),
+          luminance(background(button)),
+        ].sort((a, b) => b - a);
+        return {
+          label: button.textContent?.trim() ?? "",
+          disabled: button.disabled,
+          ratio: Math.round(((high + 0.05) / (low + 0.05)) * 100) / 100,
+        };
+      });
+  });
+}
+
+async function expectReadableButtons(page: Page, scope: string) {
+  const contrasts = await buttonContrasts(page, scope);
+  expect(contrasts.length).toBeGreaterThan(0);
+  for (const { label, disabled, ratio } of contrasts) {
+    expect(
+      ratio,
+      `${disabled ? "disabled" : "enabled"} “${label}” in ${scope}`,
+    ).toBeGreaterThanOrEqual(disabled ? 3 : 4.5);
+  }
+}
+
+test("keeps every dialog and setup button readable", async ({ page }) => {
+  await openEditor(page);
+  await page.locator('[data-source-key="caps"]').click();
+  for (const opener of ["Tap & hold", "Layer action", "Alias", "Macro"]) {
+    await page.getByRole("button", { name: opener, exact: true }).click();
+    await expectReadableButtons(page, "dialog");
+    await page.keyboard.press("Escape");
+  }
+  await page.getByRole("button", { name: "Manage", exact: true }).click();
+  await expectReadableButtons(page, "dialog");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Apply to keyboard" }).click();
+  await expectReadableButtons(page, "dialog");
+  await page.keyboard.press("Escape");
+  await expectReadableButtons(page, ".editor-page");
+  await page.getByRole("button", { name: /^Profiles/ }).click();
+  await expectReadableButtons(page, "dialog");
+  await page.getByRole("button", { name: "New profile" }).click();
+  await expectReadableButtons(page, ".setup-page");
+});
