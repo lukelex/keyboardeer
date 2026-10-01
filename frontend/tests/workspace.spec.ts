@@ -254,6 +254,9 @@ test("null Go slices support editing, previewing, and explicitly applying a draf
   await expect(configurationState).toContainText("Desired");
   await expect(configurationState).toContainText("Active");
   await expect(configurationState).toContainText("Healthy");
+  await expect(configurationState.getByText("Desired")).toBeHidden();
+  await configurationState.getByText("Details").click();
+  await expect(configurationState.getByText("Desired")).toBeVisible();
   const identify = page.getByRole("button", { name: "Identify", exact: true });
   await expect(identify).toBeEnabled();
   await expect(identify).toHaveAttribute("title", "Identify this keyboard");
@@ -2582,6 +2585,7 @@ test("removes a managed mapping from the keyboard with confirmation", async ({
   await expect(page.locator(".configuration-state")).toContainText(
     "Managed fixture",
   );
+  await page.locator(".configuration-state").getByText("Details").click();
   await page.getByRole("button", { name: "Remove from keyboard" }).click();
   await expect(page.getByRole("alert")).toContainText(
     "Your KeyboarDeer profiles are kept",
@@ -2784,12 +2788,10 @@ test("explains unavailable and conflicting keyboard states", async ({
       "Latest manager operation: Failed — Review the manager diagnostic before changing this mapping.",
     ),
   ).toBeVisible();
-  await page
-    .getByRole("button", { name: "View external configuration details" })
-    .click();
+  await page.getByRole("button", { name: "View source" }).click();
   await expect(
-    page.getByRole("heading", { name: "External configurations" }),
-  ).toHaveCount(2);
+    page.getByRole("dialog").getByRole("heading", { name: "Existing remap" }),
+  ).toBeVisible();
   await expect(
     page.getByText("Raw KMonad source is unavailable", { exact: true }),
   ).toBeVisible();

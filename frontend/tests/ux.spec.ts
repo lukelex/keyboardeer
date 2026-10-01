@@ -136,7 +136,7 @@ type Fixture = {
   validation: ProfilePreview["validation"];
 };
 
-async function openEditor(page: Page, fixture: Partial<Fixture> = {}) {
+async function openWorkspace(page: Page, fixture: Partial<Fixture> = {}) {
   await page.addInitScript(
     ({ workspace, geometry, profile, validation }: Fixture) => {
       let draft = profile;
@@ -177,6 +177,11 @@ async function openEditor(page: Page, fixture: Partial<Fixture> = {}) {
     },
   );
   await page.goto("/");
+  await expect(page.getByText("Manager ready", { exact: true })).toBeVisible();
+}
+
+async function openEditor(page: Page, fixture: Partial<Fixture> = {}) {
+  await openWorkspace(page, fixture);
   await page.getByRole("button", { name: "Edit draft" }).click();
   await expect(page.locator(".editor-key")).toHaveCount(tkl.keys.length);
 }
@@ -709,4 +714,25 @@ test("reviews only the changes since the last Apply", async ({ page }) => {
     "Changed Base · Caps Lock Sends Esc → Tap: Esc · Hold: Left Ctrl · 200 ms",
     "Removed Navigation · J Sends Down arrow → Passes through to the layer below",
   ]);
+});
+
+test("summarises each keyboard's mapping in one line", async ({ page }) => {
+  await openWorkspace(page);
+  const configuration = page.getByRole("region", {
+    name: "Configuration Home row mods",
+  });
+  await expect(configuration.locator(".configuration-summary")).toHaveText(
+    /Home row mods\s*Healthy/,
+  );
+  // Revisions and lifecycle actions wait behind a disclosure.
+  await expect(configuration.getByText("Desired")).toBeHidden();
+  await expect(
+    configuration.getByRole("button", { name: "Remove from keyboard" }),
+  ).toBeHidden();
+  await configuration.getByText("Details").click();
+  await expect(configuration.getByText("Desired")).toBeVisible();
+  // A keyboard with a profile shows its layout instead of a generic glyph.
+  await expect(page.locator(".device-card .keyboard-preview rect")).toHaveCount(
+    tkl.keys.length,
+  );
 });

@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from "svelte";
   import Button from "./components/Button.svelte";
   import KeyIcon, { keyIconPaths } from "./components/KeyIcon.svelte";
+  import KeyboardPreview from "./components/KeyboardPreview.svelte";
   import KeyPicker, { type KeyPickerGroup } from "./components/KeyPicker.svelte";
   import Menu, { type MenuItem } from "./components/Menu.svelte";
   import { diffAgainstApplied, type ChangeKind } from "./applyDiff";
@@ -437,6 +438,8 @@
   let rawConfigurationOpen = false;
   let rawConfigurationBusy = false;
   let externalContent: ConfigurationContentState | null = null;
+  // The external configuration whose source dialog is open.
+  let externalConfiguration: Configuration | null = null;
   let externalContentBusy = false;
   let adoptingConfigurationID = "";
   const firstRunStorageKey = "keyboardeer-first-run-complete";
@@ -1076,6 +1079,13 @@
         profile.id === selectedProfiles[device.id] &&
         profile.device_id === device.id,
     ) ?? profilesForDevice(device.id)[0];
+  let geometryForDevice: (device: Device) => GeometryTemplate | undefined;
+  $: geometryForDevice = (device: Device) => {
+    const geometryID = profileForDevice(device)?.geometry.id;
+    return geometryID
+      ? geometries.find((geometry) => geometry.id === geometryID)
+      : undefined;
+  };
   function openProfiles() {
     if (!activeProfile) return;
     profileRename = activeProfile.name;
@@ -1176,6 +1186,17 @@
       feedback = explain(error);
     } finally {
       rawConfigurationBusy = false;
+    }
+  }
+  function openExternalSource(configuration: Configuration) {
+    externalConfiguration = configuration;
+    externalContent = null;
+    externalOpen = true;
+    if (
+      configuration.content_revision &&
+      hasDesktopBinding("ConfigurationContent")
+    ) {
+      void viewExternalContent(configuration);
     }
   }
   async function viewExternalContent(configuration: Configuration) {
@@ -2886,7 +2907,11 @@
                 class:attention={deviceState(device) !== "connected"}
                 class="device-card"
               >
-                <div class="device-glyph" aria-hidden="true">⌨</div>
+                {#if geometryForDevice(device)}
+                  <div class="device-preview">
+                    <KeyboardPreview geometry={geometryForDevice(device)!} />
+                  </div>
+                {/if}
                 <div class="device-copy">
                   <div class="device-title">
                     <h2>{device.display_name || "Unnamed keyboard"}</h2>
@@ -2920,72 +2945,89 @@
                       class:unhealthy={!configuration.runtime.healthy &&
                         configuration.enabled}
                       class="configuration-state"
+                      aria-label={`Configuration ${configuration.name || "Unnamed configuration"}`}
                     >
-                      <strong
-                        >{configuration.name || "Unnamed configuration"}</strong
-                      >
-                      <span
-                        >{humanize(configuration.ownership)} configuration</span
-                      >
-                      <dl>
-                        <div>
-                          <dt>Desired</dt>
-                          <dd>{configuration.desired_revision}</dd>
-                        </div>
-                        <div>
-                          <dt>Active</dt>
-                          <dd>{configuration.active_revision}</dd>
-                        </div>
-                        <div>
-                          <dt>Runtime</dt>
-                          <dd>{runtimeHealthLabel(configuration)}</dd>
-                        </div>
-                      </dl>
-                      <small>{runtimeHealthDetail(configuration)}</small>
-                      {#if lastOperation}<small class="configuration-operation"
-                          >Latest manager operation: {humanize(
-                            lastOperation.state,
-                          )}
-                          — {lastOperation.reason}</small
-                        >{/if}
-                      {#if configuration.ownership === "managed"}
-                        {#if confirmConfigurationDeleteID === configuration.id}
-                          <p class="configuration-delete-warning" role="alert">
-                            This stops the mapping on this keyboard and removes
-                            it from the manager. Your KeyboarDeer profiles are
-                            kept and can be applied again.
-                          </p>
-                        {/if}
-                        <div class="configuration-actions">
+                      <p class="configuration-summary">
+                        <i aria-hidden="true"></i>
+                        <strong
+                          >{configuration.name ||
+                            "Unnamed configuration"}</strong
+                        >
+                        <span>{runtimeHealthLabel(configuration)}</span>
+                        {#if configuration.ownership === "external"}<span
+                            class="configuration-owner">Manager-owned</span
+                          >{/if}
+                      </p>
+                      {#if configuration.enabled && !configuration.runtime.healthy}
+                        <small>{runtimeHealthDetail(configuration)}</small>
+                      {/if}
+                      <details class="configuration-details">
+                        <summary>Details</summary>
+                        <dl>
+                          <div>
+                            <dt>Desired</dt>
+                            <dd>{configuration.desired_revision}</dd>
+                          </div>
+                          <div>
+                            <dt>Active</dt>
+                            <dd>{configuration.active_revision}</dd>
+                          </div>
+                          <div>
+                            <dt>Runtime</dt>
+                            <dd>{humanize(configuration.runtime.phase)}</dd>
+                          </div>
+                        </dl>
+                        <small>{runtimeHealthDetail(configuration)}</small>
+                        {#if lastOperation}<small
+                            class="configuration-operation"
+                            >Latest manager operation: {humanize(
+                              lastOperation.state,
+                            )}
+                            — {lastOperation.reason}</small
+                          >{/if}
+                        {#if configuration.ownership === "managed"}
                           {#if confirmConfigurationDeleteID === configuration.id}
+                            <p
+                              class="configuration-delete-warning"
+                              role="alert"
+                            >
+                              This stops the mapping on this keyboard and
+                              removes it from the manager. Your KeyboarDeer
+                              profiles are kept and can be applied again.
+                            </p>
+                          {/if}
+                          <div class="configuration-actions">
+                            {#if confirmConfigurationDeleteID === configuration.id}
+                              <Button
+                                variant="secondary"
+                                type="button"
+                                on:click={() =>
+                                  (confirmConfigurationDeleteID = "")}
+                                >Keep mapping</Button
+                              >
+                            {/if}
                             <Button
                               variant="secondary"
+                              className="configuration-delete danger"
                               type="button"
                               on:click={() =>
-                                (confirmConfigurationDeleteID = "")}
-                              >Keep mapping</Button
+                                deleteConfiguration(configuration)}
+                              disabled={!!lifecycleBusyID ||
+                                !workspaceLive ||
+                                !managedConfigurations.available}
+                              title={managedConfigurations.available
+                                ? "Stop this mapping and remove it from the manager"
+                                : managedConfigurations.reason}
+                              >{lifecycleBusyID === configuration.id
+                                ? "Removing…"
+                                : confirmConfigurationDeleteID ===
+                                    configuration.id
+                                  ? "Confirm: remove from keyboard"
+                                  : "Remove from keyboard"}</Button
                             >
-                          {/if}
-                          <Button
-                            variant="secondary"
-                            className="configuration-delete danger"
-                            type="button"
-                            on:click={() => deleteConfiguration(configuration)}
-                            disabled={!!lifecycleBusyID ||
-                              !workspaceLive ||
-                              !managedConfigurations.available}
-                            title={managedConfigurations.available
-                              ? "Stop this mapping and remove it from the manager"
-                              : managedConfigurations.reason}
-                            >{lifecycleBusyID === configuration.id
-                              ? "Removing…"
-                              : confirmConfigurationDeleteID ===
-                                  configuration.id
-                                ? "Confirm: remove from keyboard"
-                                : "Remove from keyboard"}</Button
-                          >
-                        </div>
-                      {/if}
+                          </div>
+                        {/if}
+                      </details>
                     </section>
                   {/each}
                 </div>
@@ -3072,7 +3114,6 @@
             aria-label="Unavailable keyboard inventory"
           >
             <article class="device-card">
-              <div class="device-glyph" aria-hidden="true">⌨</div>
               <div class="device-copy">
                 <div class="device-title">
                   <h2>Keyboard inventory</h2>
@@ -3125,45 +3166,42 @@
                 {@const lastOperation =
                   operationForConfiguration(configuration)}
                 <article class="external-configuration">
-                  <div>
+                  <div class="external-configuration-heading">
                     <h3>
                       {configuration.name || "Unnamed external configuration"}
                     </h3>
                     <span>{runtimeHealthLabel(configuration)}</span>
                   </div>
-                  <dl>
-                    <div>
-                      <dt>Runtime</dt>
-                      <dd>{humanize(configuration.runtime.phase)}</dd>
-                    </div>
-                    <div>
-                      <dt>Desired / active</dt>
-                      <dd>
-                        {configuration.desired_revision} / {configuration.active_revision}
-                      </dd>
-                    </div>
-                  </dl>
-                   <p>{runtimeHealthDetail(configuration)}</p>
+                  <p>{runtimeHealthDetail(configuration)}</p>
                   {#if lastOperation}<small
                       >Latest manager operation: {humanize(lastOperation.state)}
                       — {lastOperation.reason}</small
-                     >{/if}
-                   <Button
-                     variant="secondary"
-                     type="button"
-                     on:click={() => adoptExternalConfiguration(configuration)}
-                     disabled={adoptingConfigurationID !== "" || !configurationAdoption.available || !hasDesktopBinding("AdoptConfiguration")}
-                     >{adoptingConfigurationID === configuration.id ? "Adopting…" : "Adopt as managed"}</Button
-                   >
-                 </article>
+                    >{/if}
+                  <div class="external-configuration-actions">
+                    <Button
+                      variant="secondary"
+                      type="button"
+                      on:click={() => openExternalSource(configuration)}
+                      >View source</Button
+                    >
+                    <Button
+                      variant="secondary"
+                      type="button"
+                      on:click={() => adoptExternalConfiguration(configuration)}
+                      disabled={adoptingConfigurationID !== "" ||
+                        !configurationAdoption.available ||
+                        !hasDesktopBinding("AdoptConfiguration")}
+                      title={configurationAdoption.available
+                        ? "Hand this configuration to KeyboarDeer's managed lifecycle"
+                        : configurationAdoption.reason}
+                      >{adoptingConfigurationID === configuration.id
+                        ? "Adopting…"
+                        : "Adopt as managed"}</Button
+                    >
+                  </div>
+                </article>
               {/each}
             </div>
-            <Button
-              variant="secondary"
-              className="external-open"
-              on:click={() => (externalOpen = true)}
-              >View external configuration details</Button
-            >
           </section>
         {/if}
         <p class="boundary-note">
@@ -4514,7 +4552,7 @@
       </dialog>
     </div>
   {/if}
-  {#if externalOpen}
+  {#if externalOpen && externalConfiguration}
     <div class="behavior-dialog-backdrop">
       <dialog
         class="behavior-dialog external-dialog"
@@ -4527,60 +4565,39 @@
           variant="icon"
           className="behavior-dialog-close"
           on:click={() => (externalOpen = false)}
-          aria-label="Close external configuration details"
+          aria-label="Close external configuration source"
           title="Close">×</Button
         >
-         <p class="eyebrow">MANAGER-SUPERVISED · EXTERNAL</p>
-        <h2 id="external-dialog-title">External configurations</h2>
+        <p class="eyebrow">MANAGER-OWNED · EXTERNAL</p>
+        <h2 id="external-dialog-title">
+          {externalConfiguration.name || "Unnamed external configuration"}
+        </h2>
         <p class="dialog-intro">
-           These configurations are not KeyboarDeer profiles. Their runtime state
-           is reported by the manager. Adoption is an explicit ownership hand-off
-           and only succeeds when the manager can represent the source losslessly.
+          This configuration is not a KeyboarDeer profile; the manager runs it
+          as-is. Adopting it hands its lifecycle to KeyboarDeer only when the
+          manager can represent it without loss.
         </p>
-        <div class="external-detail-list">
-          {#each configurations.filter((configuration) => configuration.ownership === "external") as configuration (configuration.id)}
-            {@const lastOperation = operationForConfiguration(configuration)}
-            <article>
-              <h3>{configuration.name || "Unnamed external configuration"}</h3>
-              <p>{runtimeHealthDetail(configuration)}</p>
-              {#if lastOperation}<small
-                  >Latest manager operation: {humanize(lastOperation.state)} —
-                  {lastOperation.reason}</small
-                >{/if}
-               <Button
-                variant="secondary"
-                type="button"
-                on:click={() => viewExternalContent(configuration)}
-                disabled={externalContentBusy ||
-                  !hasDesktopBinding("ConfigurationContent") ||
-                  !configuration.content_revision}
-                >{externalContentBusy ? "Loading source…" : "View raw source"}</Button
-               >
-               <Button
-                 variant="secondary"
-                 type="button"
-                 on:click={() => adoptExternalConfiguration(configuration)}
-                 disabled={adoptingConfigurationID !== "" || !configurationAdoption.available || !hasDesktopBinding("AdoptConfiguration")}
-                 >{adoptingConfigurationID === configuration.id ? "Adopting…" : "Adopt as managed"}</Button
-               >
-            </article>
-          {/each}
-        </div>
         {#if externalContent}
           <section class="raw-external-content">
             <div class="raw-external-heading">
-              <strong>Raw KMonad source · revision {externalContent.content_revision}</strong>
+              <strong
+                >Raw KMonad source · revision {externalContent.content_revision}</strong
+              >
               <small>{externalContent.digest}</small>
             </div>
-            <pre class="raw-configuration-content"><code>{formatKMonad(externalContent.content)}</code></pre>
+            <pre class="raw-configuration-content"><code
+                >{formatKMonad(externalContent.content)}</code
+              ></pre>
           </section>
+        {:else if externalContentBusy}
+          <p class="dialog-intro" role="status">Loading source…</p>
         {:else}
           <section class="raw-external-unavailable">
             <strong>Raw KMonad source is unavailable</strong>
             <p>
-              Select View raw source on an external configuration when the
-              manager advertises its access-controlled content API. KeyboarDeer
-              never reads manager-owned files directly.
+              The manager has not shared this configuration's source. Newer
+              manager versions provide it through an access-controlled API;
+              KeyboarDeer never reads manager-owned files directly.
             </p>
           </section>
         {/if}

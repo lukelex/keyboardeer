@@ -439,21 +439,28 @@ h1 {
 .device-card.attention {
   border-color: #dfd2ad;
 }
-.device-glyph {
+.device-preview {
   align-items: center;
-  background: #e4edda;
-  border-radius: 12px;
-  color: #47715c;
-  display: grid;
+  background: #e6eee0;
+  border-radius: 10px;
+  display: flex;
   flex: 0 0 auto;
-  font-size: 27px;
-  height: 64px;
-  place-items: center;
-  width: 82px;
+  justify-content: center;
+  padding: 10px;
+  width: 118px;
 }
-.offline .device-glyph {
+.offline .device-preview {
   background: #ecece3;
-  color: #8b9387;
+}
+.keyboard-preview {
+  display: block;
+  fill: #fffdf8;
+  stroke: #9fb495;
+  stroke-width: 0.6;
+  width: 100%;
+}
+.offline .keyboard-preview {
+  stroke: #b3b8ad;
 }
 .device-copy {
   flex: 1;
@@ -503,23 +510,57 @@ h1 {
 .configuration-state {
   background: #f4f7f0;
   border-left: 3px solid #8fbd79;
+  border-radius: 0 7px 7px 0;
   display: grid;
   gap: 4px;
-  margin-top: 9px;
-  padding: 8px 10px;
+  margin-top: 10px;
+  padding: 8px 11px;
 }
 .configuration-state.unhealthy {
   background: #fcf3e9;
   border-left-color: #c78c59;
 }
-.configuration-state strong {
-  color: #486453;
-  font-size: 11px;
+.device-copy .configuration-summary {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 0;
 }
-.configuration-state > span {
-  color: #73846b;
-  font-size: 10px;
-  text-transform: capitalize;
+.configuration-summary i {
+  background: #2f8a4b;
+  border-radius: 50%;
+  height: 8px;
+  width: 8px;
+}
+.configuration-state.unhealthy .configuration-summary i {
+  background: #c78c59;
+}
+.configuration-summary strong {
+  color: #234438;
+  font-size: 13px;
+}
+.configuration-summary span {
+  color: #486453;
+  font-size: 12px;
+  font-weight: 650;
+}
+.configuration-summary span::before {
+  color: #9aa49b;
+  content: "· ";
+}
+.configuration-summary .configuration-owner {
+  color: #6f5a32;
+}
+.configuration-details summary {
+  color: #35604c;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  width: max-content;
+}
+.configuration-details[open] summary {
+  margin-bottom: 6px;
 }
 .configuration-state dl {
   display: flex;
@@ -585,7 +626,7 @@ h1 {
   border-radius: 10px;
   padding: 13px 15px;
 }
-.external-configuration > div {
+.external-configuration-heading {
   align-items: center;
   display: flex;
   gap: 9px;
@@ -595,7 +636,7 @@ h1 {
   font-size: 14px;
   margin: 0;
 }
-.external-configuration > div > span {
+.external-configuration-heading > span {
   background: #eeeee8;
   border-radius: 99px;
   color: #647669;
@@ -628,8 +669,15 @@ h1 {
   line-height: 1.45;
   margin: 8px 0 0;
 }
-.external-open {
-  margin-top: 13px;
+.external-configuration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.external-configuration-actions .button {
+  min-height: 30px;
+  padding: 4px 11px;
 }
 .external-detail-list {
   display: grid;
