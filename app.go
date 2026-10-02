@@ -22,7 +22,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const appVersion = "1.1.0"
+const appVersion = "1.0.0-alpha.1"
 
 const (
 	workspaceRefreshInterval = 15 * time.Second

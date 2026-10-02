@@ -7,13 +7,16 @@
 # profile file opens it in the app.
 #
 # Requires dpkg-deb. Usage:
-#   BINARY=/path/to/keyboardeer VERSION=1.1.0 scripts/package-deb.sh
+#   BINARY=/path/to/keyboardeer VERSION=1.0.0-alpha.1 scripts/package-deb.sh
 # The default binary is build/bin/keyboardeer.
 set -euo pipefail
 
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-version="${VERSION:-1.1.0}"
+version="${VERSION:-1.0.0-alpha.1}"
 arch="${ARCH:-amd64}"
+# Debian sorts "~" before everything, so 1.0.0~rc.1 precedes 1.0.0. A plain
+# "-" would be read as a Debian revision instead.
+deb_version="${version/-/\~}"
 binary="${BINARY:-$repo_root/build/bin/keyboardeer}"
 
 if [[ ! -x "$binary" ]]; then
@@ -44,7 +47,7 @@ install -m644 "$repo_root/build/appicon.png" \
   "$pkgroot/usr/share/icons/hicolor/512x512/apps/keyboardeer.png"
 
 install -m644 "$repo_root/build/debian/control" "$pkgroot/DEBIAN/control"
-sed -i "s/^Version: .*/Version: $version/" "$pkgroot/DEBIAN/control"
+sed -i "s/^Version: .*/Version: $deb_version/" "$pkgroot/DEBIAN/control"
 install -m755 "$repo_root/build/debian/postinst" "$pkgroot/DEBIAN/postinst"
 install -m755 "$repo_root/build/debian/prerm" "$pkgroot/DEBIAN/prerm"
 

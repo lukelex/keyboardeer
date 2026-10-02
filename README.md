@@ -40,7 +40,7 @@ work are summarized below.
 
 ## Still growing its antlers
 
-**Status: Alpha release 1 (`v1.1.0`), Linux.** KeyboarDeer is a **Wails + Go +
+**Status: Alpha release 1 (`v1.0.0-alpha.1`), Linux.** KeyboarDeer is a **Wails + Go +
 Svelte 5 + TypeScript** desktop app and a client of
 [KMonad Device Manager](https://github.com/lukelex/kmonad-device-manager).
 Linux is the first release target. Builds target manager v1.2.1 or later, and

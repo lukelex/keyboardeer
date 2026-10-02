@@ -12,7 +12,7 @@
   "info": {
     "companyName": "KeyboarDeer",
     "productName": "KeyboarDeer",
-    "productVersion": "1.1.0",
+    "productVersion": "1.0.0-alpha.1",
     "comments": "Visual keyboard configuration companion for kmonad-device-manager"
   }
 }

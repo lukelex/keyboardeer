@@ -6,7 +6,7 @@ on:
       version:
         description: "Version without the v prefix"
         required: true
-        default: "1.1.0"
+        default: "1.0.0-alpha.1"
   push:
     tags:
       - "v*"
@@ -57,6 +57,26 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install Linux packaging dependencies
         run: sudo apt-get update && sudo apt-get install --yes libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config dpkg-dev
+      - name: Read release stage
+        env:
+          VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.version }}
+        run: |
+          # Versions are MAJOR.MINOR.PATCH, optionally followed by -alpha.N or
+          # -rc.N. Both stages publish as GitHub pre-releases.
+          version="${VERSION#v}"
+          if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-alpha\.([0-9]+)$ ]]; then
+            echo "RELEASE_TITLE=Alpha release ${BASH_REMATCH[1]}" >> "$GITHUB_ENV"
+            echo "RELEASE_FLAGS=--prerelease" >> "$GITHUB_ENV"
+          elif [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc\.([0-9]+)$ ]]; then
+            echo "RELEASE_TITLE=Release candidate ${BASH_REMATCH[1]}" >> "$GITHUB_ENV"
+            echo "RELEASE_FLAGS=--prerelease" >> "$GITHUB_ENV"
+          elif [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "RELEASE_TITLE=KeyboarDeer $version" >> "$GITHUB_ENV"
+            echo "RELEASE_FLAGS=" >> "$GITHUB_ENV"
+          else
+            echo "::error::Version $VERSION must be X.Y.Z, X.Y.Z-alpha.N, or X.Y.Z-rc.N."
+            exit 1
+          fi
       - name: Build release artifacts
         env:
           VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.version }}
@@ -71,15 +91,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Alpha releases are published as pre-releases with their own title.
-          case "$GITHUB_REF_NAME" in
-            v1.0.0) alpha="Alpha release 0" ;;
-            v1.1.0) alpha="Alpha release 1" ;;
-            *) alpha="" ;;
-          esac
-          if [[ -n "$alpha" ]]; then
-            gh release create "$GITHUB_REF_NAME" dist/* \
-              --title "$alpha" --prerelease --generate-notes
-          else
-            gh release create "$GITHUB_REF_NAME" dist/* --generate-notes
-          fi
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "$RELEASE_TITLE" $RELEASE_FLAGS --generate-notes

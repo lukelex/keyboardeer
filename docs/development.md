@@ -104,8 +104,21 @@ registration on removal.
 
 ```sh
 wails build
-BINARY=build/bin/keyboardeer VERSION=1.1.0 scripts/package-deb.sh
+BINARY=build/bin/keyboardeer VERSION=1.0.0-alpha.1 scripts/package-deb.sh
 ```
+
+## Release versions
+
+Versions follow semantic versioning. Pre-releases carry their stage in the
+version: `1.0.0-alpha.N` for alphas and `1.0.0-rc.N` for release candidates,
+both counting up towards the final `1.0.0`. Set the same version in `app.go`
+(`appVersion`), `wails.json` (`productVersion`), and `frontend/package.json`
+(`npm version <version> --no-git-tag-version`), then push an annotated
+`v<version>` tag. The release workflow rejects any other suffix, publishes
+alphas as "Alpha release N" and release candidates as "Release candidate N"
+GitHub pre-releases, and publishes plain versions as full releases. The Debian
+package uses `~` in place of the first `-` (`1.0.0~rc.1`) so that apt orders
+pre-releases before the final version.
 
 ## CI release artifacts
 
