@@ -6,7 +6,7 @@ on:
       version:
         description: "Version without the v prefix"
         required: true
-        default: "1.0.0"
+        default: "1.1.0"
   push:
     tags:
       - "v*"
@@ -71,9 +71,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [[ "$GITHUB_REF_NAME" == "v1.0.0" ]]; then
+          # Alpha releases are published as pre-releases with their own title.
+          case "$GITHUB_REF_NAME" in
+            v1.0.0) alpha="Alpha release 0" ;;
+            v1.1.0) alpha="Alpha release 1" ;;
+            *) alpha="" ;;
+          esac
+          if [[ -n "$alpha" ]]; then
             gh release create "$GITHUB_REF_NAME" dist/* \
-              --title "Alpha release 0" --prerelease --generate-notes
+              --title "$alpha" --prerelease --generate-notes
           else
             gh release create "$GITHUB_REF_NAME" dist/* --generate-notes
           fi

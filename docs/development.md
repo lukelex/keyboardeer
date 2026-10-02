@@ -46,7 +46,7 @@ manager capability has not been implemented are disabled and explain why.
 The Wails app connects to the same-user manager API, negotiates the available
 capabilities, and enables the corresponding device, editor, validation, profile,
 and lifecycle workflows. The Linux release targets KMonad Device Manager
-v1.2.0 or later. If the manager is missing or does not advertise a required
+v1.2.1 or later. If the manager is missing or does not advertise a required
 capability, KeyboarDeer explains the unavailable state and gates the affected
 actions. It does not substitute preview fixtures for live manager data. The
 browser Vite preview has no Wails bindings and therefore cannot connect to the
@@ -104,7 +104,7 @@ registration on removal.
 
 ```sh
 wails build
-BINARY=build/bin/keyboardeer VERSION=1.0.0 scripts/package-deb.sh
+BINARY=build/bin/keyboardeer VERSION=1.1.0 scripts/package-deb.sh
 ```
 
 ## CI release artifacts
@@ -116,7 +116,7 @@ writes `SHA256SUMS`. Tagged runs publish the artifacts as a GitHub Release;
 manual runs retain them as workflow artifacts.
 
 The release package targets Linux amd64 and requires GTK3 and WebKitGTK 4.1 at
-runtime, plus a running same-user `kmonad-device-manager` v1.2.0 or newer.
+runtime, plus a running same-user `kmonad-device-manager` v1.2.1 or newer.
 Installers register `*.kbdprofile.json` for KeyboarDeer. Updates replace the
 binary and registration files in place; uninstall with the package manager or
 `scripts/uninstall.sh` for a per-user installation.
